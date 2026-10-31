@@ -1,0 +1,97 @@
+{% load static gn %}<!doctype html>
+<html dir="rtl" lang="fa" data-bs-theme="dark">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="dark light">
+  <title>{% block title %}GameNet{% endblock %} · {% if is_edge %}مرکز کنترل محلی{% else %}پنل ابری{% endif %}</title>
+  <link rel="stylesheet" href="{% static 'vendor/css/tabler.rtl.min.css' %}">
+  <link rel="stylesheet" href="{% static 'vendor/css/tabler-icons.min.css' %}">
+  <link rel="stylesheet" href="{% static 'css/app.css' %}">
+  <script src="{% static 'vendor/js/htmx.min.js' %}" defer></script>
+  <script src="{% static 'js/app.js' %}" defer></script>
+</head>
+<body>
+<div class="gn-shell">
+  <aside class="gn-sidebar">
+    <div class="gn-brand">
+      <div class="gn-brand-mark">G</div>
+      <div>
+        <div class="gn-brand-name">GameNet</div>
+        <div class="gn-brand-sub">{% if is_edge %}Local Hub{% else %}Cloud{% endif %}</div>
+      </div>
+    </div>
+
+    <nav class="gn-nav">
+      {% with n=request.resolver_match.url_name %}
+      {% if is_edge %}
+        <a href="{% url 'edge_overview' %}" class="{% if n == 'edge_overview' %}active{% endif %}">
+          <i class="ti ti-layout-dashboard"></i><span>داشبورد</span>
+        </a>
+        <a href="{% url 'edge_devices' %}" class="{% if n|slice:':12' == 'edge_device_' or n == 'edge_devices' %}active{% endif %}">
+          <i class="ti ti-device-desktop"></i><span>کلاینت‌ها</span>
+        </a>
+        <a href="{% url 'edge_cloud' %}" class="{% if n|slice:':10' == 'edge_cloud' or n == 'edge_emit_test' %}active{% endif %}">
+          <i class="ti ti-cloud-upload"></i><span>همگام‌سازی ابر</span>
+        </a>
+      {% else %}
+        <a href="{% url 'cloud_overview' %}" class="{% if n == 'cloud_overview' %}active{% endif %}">
+          <i class="ti ti-radar"></i><span>نمای کل</span>
+        </a>
+        <a href="{% url 'cloud_edges' %}" class="{% if n|slice:':11' == 'cloud_edge' %}active{% endif %}">
+          <i class="ti ti-server-2"></i><span>Edge ها</span>
+        </a>
+        <a href="{% url 'cloud_commands' %}" class="{% if n == 'cloud_commands' %}active{% endif %}">
+          <i class="ti ti-terminal-2"></i><span>دستورها</span>
+        </a>
+        <a href="{% url 'cloud_events' %}" class="{% if n == 'cloud_events' %}active{% endif %}">
+          <i class="ti ti-arrows-exchange"></i><span>رویدادها</span>
+        </a>
+        <a href="{% url 'cloud_config' %}" class="{% if n == 'cloud_config' %}active{% endif %}">
+          <i class="ti ti-adjustments"></i><span>پیکربندی</span>
+        </a>
+      {% endif %}
+      <a href="/admin/" class="{% if n|slice:':5' == 'admin' %}active{% endif %}">
+        <i class="ti ti-shield-lock"></i><span>مدیریت</span>
+      </a>
+      {% endwith %}
+    </nav>
+
+    <div class="gn-sidebar-foot">
+      <div>v{{ gamenet_version }}</div>
+      <div>{% if is_edge %}Edge Node{% else %}Cloud Node{% endif %}</div>
+    </div>
+  </aside>
+
+  <div class="gn-main">
+    <header class="gn-topbar">
+      <div>
+        <h1 class="gn-title">{% block page_title %}داشبورد{% endblock %}</h1>
+        <p class="gn-subtitle">{% block page_subtitle %}{% endblock %}</p>
+      </div>
+      <div class="d-flex align-items-center gap-2">
+        {% block topbar_status %}{% endblock %}
+        <span class="gn-chip accent d-none d-md-inline-flex">
+          <i class="ti ti-fingerprint"></i>
+          {% if is_edge %}EDGE{% else %}CLOUD{% endif %}
+        </span>
+        <button class="gn-btn" type="button" onclick="gnToggleTheme()" title="تغییر تم">
+          <i class="ti ti-sun-moon"></i>
+        </button>
+      </div>
+    </header>
+
+    <main class="gn-content">
+      {% if messages %}
+        <div class="d-flex flex-column gap-2 mb-3">
+          {% for message in messages %}
+            <div class="gn-alert {{ message.tags }}">{{ message }}</div>
+          {% endfor %}
+        </div>
+      {% endif %}
+      {% block content %}{% endblock %}
+    </main>
+  </div>
+</div>
+</body>
+</html>

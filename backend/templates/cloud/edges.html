@@ -1,0 +1,65 @@
+{% extends "base.html" %}
+{% load gn %}
+
+{% block title %}Edge ها{% endblock %}
+{% block page_title %}Edge ها{% endblock %}
+{% block page_subtitle %}ثبت سایت جدید و مدیریت اتصال‌ها{% endblock %}
+
+{% block content %}
+<div class="gn-grid cols-2 mb-3">
+  <div class="gn-card">
+    <h6>کد ثبت Edge جدید</h6>
+    <p class="gn-muted" style="font-size: 12.5px">
+      کد را در صفحه «همگام‌سازی ابر» روی کامپیوتر مدیریت سایت وارد کنید.
+      ارتباط فقط از سمت سایت به بیرون برقرار می‌شود.
+    </p>
+    <form method="post" action="{% url 'cloud_create_code' %}" class="gn-form-row">
+      {% csrf_token %}
+      <div class="flex-grow-1">
+        <label class="gn-label">یادداشت</label>
+        <input class="gn-input" name="note" placeholder="شعبه مرکزی">
+      </div>
+      <button class="gn-btn primary"><i class="ti ti-key"></i> ساخت کد</button>
+    </form>
+  </div>
+  <div class="gn-card">
+    <h6>کدهای اخیر</h6>
+    <div class="gn-scroll" style="max-height: 160px">
+      {% for code in codes %}
+        <div class="d-flex justify-content-between align-items-center py-1">
+          <span class="gn-code" style="font-size: 14px">{{ code.code }}</span>
+          <span class="gn-muted num" style="font-size: 11.5px">
+            {% if code.used_by %}استفاده‌شده · {{ code.used_by.name }}{% else %}{{ code.expires_at|reltime }}{% endif %}
+          </span>
+        </div>
+      {% empty %}
+        <div class="gn-muted" style="font-size: 12.5px">کدی ساخته نشده است.</div>
+      {% endfor %}
+    </div>
+  </div>
+</div>
+
+<div class="gn-card">
+  <h6>Edge های ثبت‌شده</h6>
+  <table class="gn-table">
+    <thead><tr><th>نام</th><th>شناسه</th><th>وضعیت</th><th>نسخه</th><th>آخرین همگام</th><th class="text-end"></th></tr></thead>
+    <tbody>
+      {% for edge in edges %}
+        <tr>
+          <td><strong>{{ edge.name }}</strong><div class="gn-muted" style="font-size: 11px">{{ edge.site_name|default:"" }}</div></td>
+          <td class="mono gn-muted">{{ edge.id|shortid }}</td>
+          <td>
+            {% if edge.status == 'ONLINE' %}<span class="gn-status st-online"><span class="dot"></span>آنلاین</span>
+            {% else %}<span class="gn-status st-offline"><span class="dot"></span>{{ edge.status|status_fa }}</span>{% endif %}
+          </td>
+          <td class="gn-muted num">{{ edge.software_version|default:"—" }}</td>
+          <td class="gn-muted num">{{ edge.last_sync_at|reltime }}</td>
+          <td class="text-end"><a class="gn-btn sm" href="{% url 'cloud_edge_detail' edge.id %}">جزئیات</a></td>
+        </tr>
+      {% empty %}
+        <tr><td colspan="6"><div class="gn-empty"><i class="ti ti-server-off"></i>Edgeی ثبت نشده است.</div></td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endblock %}

@@ -1,0 +1,90 @@
+{% extends "base.html" %}
+{% load gn %}
+
+{% block title %}کلاینت‌ها{% endblock %}
+{% block page_title %}کلاینت‌ها{% endblock %}
+{% block page_subtitle %}ثبت، قفل و کنترل دستگاه‌های متصل به این Edge{% endblock %}
+
+{% block content %}
+<div class="gn-grid cols-2 mb-3">
+  <div class="gn-card">
+    <h6>ثبت کلاینت جدید</h6>
+    <p class="gn-muted" style="font-size: 12.5px">
+      کد یک‌بارمصرف بسازید و در صفحه ثبت کلاینت (روی خود دستگاه) وارد کنید.
+      کد تا {{ 30 }} دقیقه معتبر است.
+    </p>
+    <form method="post" action="{% url 'edge_create_code' %}" class="gn-form-row">
+      {% csrf_token %}
+      <input type="hidden" name="next" value="edge_devices">
+      <div class="flex-grow-1">
+        <label class="gn-label">برچسب (نام دستگاه)</label>
+        <input class="gn-input" name="label" placeholder="PC-01">
+      </div>
+      <button class="gn-btn primary" type="submit"><i class="ti ti-key"></i> ساخت کد ثبت</button>
+    </form>
+  </div>
+  <div class="gn-card">
+    <h6>کدهای اخیر</h6>
+    <div class="gn-scroll" style="max-height: 150px">
+      {% for code in codes %}
+        <div class="d-flex justify-content-between align-items-center py-1">
+          <span class="gn-code" style="font-size: 13px">{{ code.code }}</span>
+          <span class="gn-muted num" style="font-size: 11.5px">
+            {% if code.used_at %}استفاده‌شده{% else %}{{ code.expires_at|reltime }}{% endif %}
+          </span>
+        </div>
+      {% empty %}
+        <div class="gn-muted" style="font-size: 12.5px">کدی ساخته نشده است.</div>
+      {% endfor %}
+    </div>
+  </div>
+</div>
+
+<div class="gn-card">
+  <div class="d-flex justify-content-between align-items-center mb-2">
+    <h6 class="mb-0">همه دستگاه‌ها</h6>
+    <form method="get" class="d-flex gap-2">
+      <input class="gn-input" name="q" value="{{ q }}" placeholder="جستجو…" style="min-width: 200px">
+      <button class="gn-btn" type="submit"><i class="ti ti-search"></i></button>
+    </form>
+  </div>
+  <table class="gn-table">
+    <thead>
+      <tr>
+        <th>دستگاه</th><th>وضعیت</th><th>IP</th><th>سیستم‌عامل</th>
+        <th>آخرین ضربان</th><th class="text-end">عملیات</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for device in devices %}
+        <tr>
+          <td>
+            <a href="{% url 'edge_device_detail' device.id %}" style="color: var(--gn-text); text-decoration: none">
+              <strong>{{ device.name }}</strong>
+            </a>
+            {% if not device.is_active %}<span class="gn-status st-offline ms-1">غیرفعال</span>{% endif %}
+            <div class="gn-muted num" style="font-size: 11px">{{ device.id }}</div>
+          </td>
+          <td><span class="gn-status {{ device.status|status_tone }}"><span class="dot"></span>{{ device.status|status_fa }}</span></td>
+          <td class="num gn-muted">{{ device.ip_address|default:"—" }}</td>
+          <td class="gn-muted" style="font-size: 12px">{{ device.operating_system|default:"—" }}</td>
+          <td class="num gn-muted">{{ device.last_heartbeat_at|reltime }}</td>
+          <td class="text-end">
+            <div class="d-flex gap-1 justify-content-end">
+              <form method="post" action="{% url 'edge_device_action' device.id %}" class="gn-inline-form">
+                {% csrf_token %}
+                <button class="gn-btn sm" name="action" value="lock"><i class="ti ti-lock"></i></button>
+                <button class="gn-btn sm" name="action" value="unlock"><i class="ti ti-lock-open"></i></button>
+                <button class="gn-btn sm" name="action" value="ping"><i class="ti ti-activity"></i></button>
+                <button class="gn-btn sm" name="action" value="restart"><i class="ti ti-reload"></i></button>
+              </form>
+            </div>
+          </td>
+        </tr>
+      {% empty %}
+        <tr><td colspan="6"><div class="gn-empty"><i class="ti ti-plug-off"></i>دستگاهی یافت نشد.</div></td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endblock %}

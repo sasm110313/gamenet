@@ -1,0 +1,81 @@
+{% extends "base.html" %}
+{% load gn %}
+
+{% block title %}{{ device.name }}{% endblock %}
+{% block page_title %}{{ device.name }}{% endblock %}
+{% block page_subtitle %}{{ device.id }}{% endblock %}
+
+{% block content %}
+<div class="gn-grid cols-3 mb-3">
+  <div class="gn-card">
+    <h6>وضعیت</h6>
+    <div class="d-flex align-items-center gap-2 mb-2">
+      <span class="gn-status {{ device.status|status_tone }}" style="font-size: 13px">
+        <span class="dot"></span>{{ device.status|status_fa }}
+      </span>
+    </div>
+    <div class="d-flex flex-column gap-1" style="font-size: 12.5px">
+      <div class="d-flex justify-content-between"><span class="gn-muted">میزبان</span><span>{{ device.hostname|default:"—" }}</span></div>
+      <div class="d-flex justify-content-between"><span class="gn-muted">IP</span><span class="num">{{ device.ip_address|default:"—" }}</span></div>
+      <div class="d-flex justify-content-between"><span class="gn-muted">سیستم‌عامل</span><span>{{ device.operating_system|default:"—" }}</span></div>
+      <div class="d-flex justify-content-between"><span class="gn-muted">نسخه کلاینت</span><span class="num">{{ device.application_version|default:"—" }}</span></div>
+      <div class="d-flex justify-content-between"><span class="gn-muted">آخرین ضربان</span><span class="num">{{ device.last_heartbeat_at|reltime }}</span></div>
+      <div class="d-flex justify-content-between"><span class="gn-muted">ثبت</span><span class="num">{{ device.registered_at|date:"Y-m-d H:i" }}</span></div>
+    </div>
+  </div>
+
+  <div class="gn-card">
+    <h6>کنترل</h6>
+    <form method="post" action="{% url 'edge_device_action' device.id %}">
+      {% csrf_token %}
+      <div class="d-flex flex-wrap gap-2">
+        <button class="gn-btn" name="action" value="lock"><i class="ti ti-lock"></i> قفل</button>
+        <button class="gn-btn" name="action" value="unlock"><i class="ti ti-lock-open"></i> باز کردن</button>
+        <button class="gn-btn" name="action" value="ping"><i class="ti ti-activity"></i> پینگ</button>
+        <button class="gn-btn" name="action" value="restart"><i class="ti ti-reload"></i> ری‌استارت</button>
+      </div>
+    </form>
+    <div class="gn-divider"></div>
+    <form method="post" action="{% url 'edge_device_deactivate' device.id %}">
+      {% csrf_token %}
+      <button class="gn-btn danger w-100 justify-content-center"><i class="ti ti-user-off"></i> غیرفعال‌سازی دستگاه</button>
+    </form>
+  </div>
+
+  <div class="gn-card">
+    <h6>همگام‌سازی این دستگاه</h6>
+    <div class="gn-scroll" style="max-height: 160px">
+      {% for ev in outbox_events %}
+        <div class="d-flex justify-content-between py-1" style="font-size: 12px">
+          <span class="num gn-muted">#{{ ev.local_sequence }}</span>
+          <span>{{ ev.event_type }}</span>
+          <span class="gn-status {{ ev.status|status_tone }}"><span class="dot"></span>{{ ev.status|status_fa }}</span>
+        </div>
+      {% empty %}
+        <div class="gn-muted" style="font-size: 12.5px">رویدادی ثبت نشده است.</div>
+      {% endfor %}
+    </div>
+  </div>
+</div>
+
+<div class="gn-card">
+  <h6>دستورهای دستگاه</h6>
+  <table class="gn-table">
+    <thead><tr><th>نوع</th><th>وضعیت</th><th>صدور</th><th>انقضا</th><th>نتیجه</th><th>ID</th></tr></thead>
+    <tbody>
+      {% for cmd in commands %}
+        <tr>
+          <td>{{ cmd.command_type }}</td>
+          <td><span class="gn-status {{ cmd.status|status_tone }}"><span class="dot"></span>{{ cmd.status|status_fa }}</span></td>
+          <td class="num gn-muted">{{ cmd.issued_at|date:"H:i:s" }}</td>
+          <td class="num gn-muted">{{ cmd.expires_at|date:"H:i:s" }}</td>
+          <td class="gn-muted" style="font-size: 11.5px">{{ cmd.result|default:"—" }}</td>
+          <td class="mono gn-muted">{{ cmd.id|shortid }}</td>
+        </tr>
+      {% empty %}
+        <tr><td colspan="6"><div class="gn-empty">دستوری ثبت نشده است.</div></td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endblock %}

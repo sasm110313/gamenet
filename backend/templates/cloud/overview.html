@@ -1,0 +1,148 @@
+{% extends "base.html" %}
+{% load gn %}
+
+{% block title %}نمای کل{% endblock %}
+{% block page_title %}نمای کل{% endblock %}
+{% block page_subtitle %}وضعیت زنده سایت‌ها و دستگاه‌ها{% endblock %}
+
+{% block topbar_status %}
+  <span class="gn-chip {% if edges_online %}ok{% else %}warn{% endif %}">
+    <span class="dot"></span>{{ edges_online }} Edge متصل
+  </span>
+{% endblock %}
+
+{% block content %}
+<div class="gn-grid cols-4 mb-3">
+  <div class="gn-card gn-kpi">
+    <span class="label">Edge های آنلاین</span>
+    <span class="value num">{{ edges_online }}</span>
+    <span class="hint">از {{ edges_total }} ثبت‌شده</span>
+  </div>
+  <div class="gn-card gn-kpi accent">
+    <span class="label">دستگاه‌های فعال</span>
+    <span class="value num">{{ devices_online }}</span>
+    <span class="hint">از {{ devices_total }} دستگاه</span>
+  </div>
+  <div class="gn-card gn-kpi">
+    <span class="label">رویدادهای دریافتی</span>
+    <span class="value num">{{ events_total }}</span>
+    <span class="hint">{{ events_rejected }} رد‌شده</span>
+  </div>
+  <div class="gn-card gn-kpi {% if events_rejected %}bad{% endif %}">
+    <span class="label">دستورهای در انتظار</span>
+    <span class="value num">{{ commands_pending }}</span>
+    <span class="hint">آخرین همگام‌سازی {{ last_sync|reltime }}</span>
+  </div>
+</div>
+
+<div class="gn-grid cols-2">
+  <div class="d-flex flex-column gap-3">
+    <div class="gn-card">
+      <div class="d-flex justify-content-between align-items-center mb-2">
+        <h6 class="mb-0">Edge ها</h6>
+        <a class="gn-btn sm" href="{% url 'cloud_edges' %}">مدیریت</a>
+      </div>
+      <table class="gn-table">
+        <thead><tr><th>نام</th><th>وضعیت</th><th>نسخه</th><th>آخرین همگام</th><th></th></tr></thead>
+        <tbody>
+          {% for edge in edges %}
+            <tr>
+              <td><a href="{% url 'cloud_edge_detail' edge.id %}" style="color: var(--gn-text); text-decoration: none"><strong>{{ edge.name }}</strong></a></td>
+              <td>
+                {% if edge.status == 'ONLINE' %}
+                  <span class="gn-status st-online"><span class="dot"></span>آنلاین</span>
+                {% elif edge.status == 'REVOKED' %}
+                  <span class="gn-status st-revoked"><span class="dot"></span>لغو</span>
+                {% else %}
+                  <span class="gn-status st-offline"><span class="dot"></span>آفلاین</span>
+                {% endif %}
+              </td>
+              <td class="gn-muted num" style="font-size: 12px">{{ edge.software_version|default:"—" }}</td>
+              <td class="gn-muted num">{{ edge.last_sync_at|reltime }}</td>
+              <td class="text-end"><a class="gn-btn sm" href="{% url 'cloud_edge_detail' edge.id %}"><i class="ti ti-chevron-left"></i></a></td>
+            </tr>
+          {% empty %}
+            <tr><td colspan="5"><div class="gn-empty">Edgeی ثبت نشده است.</div></td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+
+    <div class="gn-card">
+      <h6>دستگاه‌ها (کپی همگام‌شده)</h6>
+      <div class="gn-scroll">
+        <table class="gn-table">
+          <thead><tr><th>دستگاه</th><th>وضعیت</th><th>Edge</th><th>ضربان</th><th class="text-end">کنترل از راه دور</th></tr></thead>
+          <tbody>
+            {% for device in devices %}
+              <tr>
+                <td>{{ device.name }}<div class="gn-muted mono" style="font-size: 10.5px">{{ device.id|shortid }}</div></td>
+                <td><span class="gn-status {{ device.status|status_tone }}"><span class="dot"></span>{{ device.status|status_fa }}</span></td>
+                <td class="mono gn-muted" style="font-size: 10.5px">{{ device.edge_id|shortid }}</td>
+                <td class="gn-muted num">{{ device.last_heartbeat_at|reltime }}</td>
+                <td class="text-end">
+                  <form method="post" action="{% url 'cloud_device_action' device.id %}" class="gn-inline-form">
+                    {% csrf_token %}
+                    <input type="hidden" name="next" value="cloud_overview">
+                    <button class="gn-btn sm" name="action" value="lock" title="قفل"><i class="ti ti-lock"></i></button>
+                    <button class="gn-btn sm" name="action" value="unlock" title="باز کردن"><i class="ti ti-lock-open"></i></button>
+                    <button class="gn-btn sm" name="action" value="ping" title="پینگ"><i class="ti ti-activity"></i></button>
+                  </form>
+                </td>
+              </tr>
+            {% empty %}
+              <tr><td colspan="5"><div class="gn-empty">دستگاهی همگام نشده است.</div></td></tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <div class="d-flex flex-column gap-3">
+    <div class="gn-card">
+      <div class="d-flex justify-content-between align-items-center mb-2">
+        <h6 class="mb-0">آخرین رویدادها</h6>
+        <a class="gn-btn sm" href="{% url 'cloud_events' %}">همه</a>
+      </div>
+      <div class="gn-scroll" style="max-height: 300px">
+        {% for ev in events %}
+          <div class="d-flex justify-content-between align-items-center py-1" style="font-size: 12px">
+            <span class="num gn-muted">#{{ ev.local_sequence }}</span>
+            <span class="flex-grow-1 ms-2">{{ ev.event_type }}</span>
+            <span class="gn-status {{ ev.status|status_tone }}"><span class="dot"></span>{{ ev.status|status_fa }}</span>
+          </div>
+        {% empty %}
+          <div class="gn-empty">رویدادی دریافت نشده است.</div>
+        {% endfor %}
+      </div>
+    </div>
+
+    <div class="gn-card">
+      <h6>پیکربندی فعال</h6>
+      {% if config %}
+        <div class="d-flex justify-content-between" style="font-size: 12.5px">
+          <span class="gn-muted">نسخه</span><span class="num">v{{ config.version }}</span>
+        </div>
+        <div class="gn-divider"></div>
+        <pre class="mono gn-muted" style="font-size: 11px; white-space: pre-wrap; margin: 0">{{ config.payload }}</pre>
+      {% else %}
+        <div class="gn-empty">پیکربندی منتشر نشده است.</div>
+      {% endif %}
+      <a href="{% url 'cloud_config' %}" class="gn-btn sm mt-2">تنظیمات</a>
+    </div>
+
+    <div class="gn-card">
+      <h6>آخرین دستورها</h6>
+      {% for cmd in commands %}
+        <div class="d-flex justify-content-between align-items-center py-1" style="font-size: 12px">
+          <span>{{ cmd.command_type }}</span>
+          <span class="gn-status {{ cmd.status|status_tone }}"><span class="dot"></span>{{ cmd.status|status_fa }}</span>
+        </div>
+      {% empty %}
+        <div class="gn-muted" style="font-size: 12.5px">دستوری صادر نشده است.</div>
+      {% endfor %}
+    </div>
+  </div>
+</div>
+{% endblock %}

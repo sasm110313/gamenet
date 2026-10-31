@@ -1,0 +1,210 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@font-face {
+  font-family: "Vazirmatn";
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url("./assets/fonts/vazirmatn-arabic-400.woff2") format("woff2");
+  unicode-range: U+0600-06FF, U+0750-077F, U+0870-088E, U+FB50-FDFF, U+FE70-FEFF;
+}
+@font-face {
+  font-family: "Vazirmatn";
+  font-style: normal;
+  font-weight: 600;
+  font-display: swap;
+  src: url("./assets/fonts/vazirmatn-arabic-600.woff2") format("woff2");
+  unicode-range: U+0600-06FF, U+0750-077F, U+0870-088E, U+FB50-FDFF, U+FE70-FEFF;
+}
+@font-face {
+  font-family: "Vazirmatn";
+  font-style: normal;
+  font-weight: 700;
+  font-display: swap;
+  src: url("./assets/fonts/vazirmatn-arabic-700.woff2") format("woff2");
+  unicode-range: U+0600-06FF, U+0750-077F, U+0870-088E, U+FB50-FDFF, U+FE70-FEFF;
+}
+@font-face {
+  font-family: "Vazirmatn";
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url("./assets/fonts/vazirmatn-latin-400.woff2") format("woff2");
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+2000-206F, U+2074, U+20AC, U+2122, U+2191, U+2193, U+2212;
+}
+@font-face {
+  font-family: "Vazirmatn";
+  font-style: normal;
+  font-weight: 600;
+  font-display: swap;
+  src: url("./assets/fonts/vazirmatn-latin-600.woff2") format("woff2");
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+2000-206F, U+2074, U+20AC, U+2122, U+2191, U+2193, U+2212;
+}
+@font-face {
+  font-family: "Vazirmatn";
+  font-style: normal;
+  font-weight: 700;
+  font-display: swap;
+  src: url("./assets/fonts/vazirmatn-latin-700.woff2") format("woff2");
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+2000-206F, U+2074, U+20AC, U+2122, U+2191, U+2193, U+2212;
+}
+
+@layer base {
+  html {
+    color-scheme: dark;
+  }
+
+  body {
+    @apply m-0 bg-ink font-sans text-paper antialiased;
+    font-feature-settings: "ss01";
+    text-rendering: optimizeLegibility;
+  }
+
+  ::selection {
+    @apply bg-neon/30 text-paper;
+  }
+
+  button,
+  input {
+    font: inherit;
+  }
+}
+
+@layer components {
+  .panel {
+    @apply rounded-3xl border border-line/80 bg-panel/80 backdrop-blur-xl;
+    box-shadow:
+      0 24px 80px -40px rgba(0, 0, 0, 0.9),
+      inset 0 1px 0 rgba(255, 255, 255, 0.03);
+  }
+
+  .chip {
+    @apply inline-flex items-center gap-2 rounded-full border border-line bg-ink/60 px-3 py-1 text-[11px] text-mist;
+  }
+
+  .chip-live {
+    @apply border-neon/25 bg-neon/10 text-neon;
+  }
+
+  .field {
+    @apply w-full rounded-xl border border-line bg-ink/70 px-4 py-3 text-sm text-paper outline-none transition placeholder:text-mist/40;
+  }
+
+  .field:focus {
+    @apply border-neon/60 ring-2 ring-neon/10;
+  }
+
+  .field:disabled {
+    @apply cursor-not-allowed opacity-60;
+  }
+
+  .btn {
+    @apply inline-flex items-center justify-center gap-2 rounded-xl px-5 py-3 text-sm font-semibold transition disabled:cursor-not-allowed disabled:opacity-40;
+  }
+
+  .btn-primary {
+    @apply bg-neon text-ink hover:bg-neon/90 active:translate-y-px;
+    box-shadow: 0 10px 30px -12px rgba(94, 234, 212, 0.55);
+  }
+
+  .btn-ghost {
+    @apply border border-line bg-raised/60 text-paper hover:border-neon/40 hover:bg-raised;
+  }
+
+  .timer {
+    font-variant-numeric: tabular-nums;
+    letter-spacing: 0.04em;
+  }
+}
+
+.backdrop {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  background:
+    radial-gradient(900px 520px at 82% -12%, rgba(94, 234, 212, 0.11), transparent 62%),
+    radial-gradient(760px 520px at 8% 112%, rgba(251, 191, 36, 0.055), transparent 60%),
+    linear-gradient(180deg, #070b10 0%, #080d13 100%);
+}
+
+.backdrop::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background-image:
+    linear-gradient(rgba(139, 163, 184, 0.045) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(139, 163, 184, 0.045) 1px, transparent 1px);
+  background-size: 44px 44px;
+  -webkit-mask-image: radial-gradient(ellipse at center, black 8%, transparent 72%);
+  mask-image: radial-gradient(ellipse at center, black 8%, transparent 72%);
+}
+
+.lock-orbit {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 116px;
+  height: 116px;
+  border-radius: 9999px;
+  border: 1px solid rgba(94, 234, 212, 0.28);
+  background: radial-gradient(circle at 50% 40%, rgba(94, 234, 212, 0.14), rgba(7, 11, 16, 0.2) 68%);
+  box-shadow:
+    0 0 0 10px rgba(94, 234, 212, 0.025),
+    0 0 70px -14px rgba(94, 234, 212, 0.45);
+}
+
+.lock-orbit::before {
+  content: "";
+  position: absolute;
+  inset: -9px;
+  border-radius: inherit;
+  border: 1px dashed rgba(94, 234, 212, 0.22);
+  animation: orbit 30s linear infinite;
+}
+
+@keyframes orbit {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.fade-up {
+  animation: fade-up 420ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+@keyframes fade-up {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.toast {
+  animation: toast-in 260ms cubic-bezier(0.22, 1, 0.36, 1) both;
+  box-shadow: 0 18px 40px -24px rgba(0, 0, 0, 0.9);
+}
+
+@keyframes toast-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .fade-up,
+  .toast,
+  .lock-orbit::before {
+    animation: none;
+  }
+}

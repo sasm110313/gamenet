@@ -1,0 +1,73 @@
+{
+  "name": "gamenet-client",
+  "productName": "GameNet",
+  "version": "0.1.0",
+  "private": true,
+  "description": "GameNet gaming PC client (Windows 7 SP1 / Electron 22)",
+  "author": "GameNet",
+  "license": "UNLICENSED",
+  "main": "dist-electron/main.js",
+  "scripts": {
+    "build": "npm run build:renderer && npm run build:main",
+    "build:renderer": "vite build",
+    "build:main": "node scripts/build-main.mjs",
+    "start": "npm run build && electron .",
+    "start:built": "electron .",
+    "typecheck": "tsc -p tsconfig.json --noEmit && tsc -p tsconfig.main.json --noEmit",
+    "dist:win7": "npm run build && electron-builder --win nsis --ia32",
+    "dist:win10": "npm run build && electron-builder --win nsis --x64",
+    "reset:dev": "node scripts/reset-dev-state.mjs"
+  },
+  "dependencies": {
+    "ws": "8.18.0"
+  },
+  "devDependencies": {
+    "@types/node": "20.14.10",
+    "@types/react": "18.3.3",
+    "@types/react-dom": "18.3.0",
+    "@types/ws": "8.5.10",
+    "@vitejs/plugin-react": "4.3.1",
+    "autoprefixer": "10.4.19",
+    "electron": "22.3.27",
+    "electron-builder": "24.13.3",
+    "esbuild": "0.21.5",
+    "postcss": "8.4.39",
+    "react": "18.3.1",
+    "react-dom": "18.3.1",
+    "tailwindcss": "3.4.6",
+    "typescript": "5.4.5",
+    "vite": "5.3.4"
+  },
+  "build": {
+    "appId": "ir.gamenet.client",
+    "productName": "GameNet",
+    "asar": true,
+    "directories": {
+      "output": "release"
+    },
+    "files": [
+      "dist/**/*",
+      "dist-electron/**/*",
+      "package.json"
+    ],
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "ia32"
+          ]
+        }
+      ],
+      "artifactName": "GameNet-${version}-win7-${arch}.${ext}"
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": true,
+      "allowElevation": true,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "shortcutName": "GameNet"
+    }
+  }
+}

@@ -1,0 +1,156 @@
+"""Edge runtime: heartbeat, command processing, config pull."""
+
+from __future__ import annotations
+
+import hashlib
+import logging
+from typing import Any
+
+from django.conf import settings
+from django.db import transaction
+from django.utils import timezone
+
+from apps.clients.models import ClientDevice
+from apps.core.roles import require_edge
+from apps.core.security import canonical_json
+from apps.synchronization import command_service
+from apps.synchronization.cloud_client import CloudClient, CloudRejected
+from apps.synchronization.config import apply_snapshot, current_config
+from apps.synchronization.events import emit
+from apps.synchronization.models import EdgeIdentity, OutboxEvent, OutboxStatus
+
+logger = logging.getLogger("gamenet.edge_runtime")
+
+
+def build_heartbeat() -> dict[str, Any]:
+    require_edge()
+    identity = EdgeIdentity.get_solo()
+    devices = [
+        {
+            "device_id": str(d.id),
+            "status": d.status,
+            "last_heartbeat_at": d.last_heartbeat_at.isoformat() if d.last_heartbeat_at else None,
+            "application_version": d.application_version,
+            "name": d.name,
+        }
+        for d in ClientDevice.objects.filter(is_active=True)
+    ]
+    counts = {
+        "pending": OutboxEvent.objects.filter(status=OutboxStatus.PENDING).count(),
+        "failed": OutboxEvent.objects.filter(status=OutboxStatus.FAILED).count(),
+        "total": OutboxEvent.objects.count(),
+    }
+    cfg = current_config()
+    return {
+        "edge_id": str(identity.edge_id),
+        "edge_name": identity.name,
+        "software_version": settings.GAMENET_VERSION,
+        "sent_at": timezone.now().isoformat(),
+        "config_version": cfg["version"],
+        "outbox": counts,
+        "devices": devices,
+    }
+
+
+def send_heartbeat(client: CloudClient) -> dict:
+    require_edge()
+    response = client.heartbeat(build_heartbeat())
+    EdgeIdentity.objects.filter(pk=1).update(
+        last_heartbeat_at=timezone.now(),
+        status="ONLINE",
+        cloud_base_url=client.base,
+    )
+    return response
+
+
+def pull_and_queue_commands(client: CloudClient) -> int:
+    """Safety net for commands pushed while the WSS was down."""
+    require_edge()
+    response = client.fetch_commands(limit=50)
+    items = response.get("commands", [])
+    queued = 0
+    for envelope in items:
+        row, is_new = command_service.receive_command(envelope)
+        if is_new:
+            queued += 1
+    return queued
+
+
+def execute_received_commands(*, limit: int = 20) -> int:
+    from apps.commands.models import InboundCommandStatus, InboundRemoteCommand
+
+    require_edge()
+    pending = list(
+        InboundRemoteCommand.objects.filter(status=InboundCommandStatus.RECEIVED)
+        .order_by("received_at")
+        .values_list("command_id", flat=True)[:limit]
+    )
+    for command_id in pending:
+        command_service.execute_command(command_id)
+    return len(pending)
+
+
+def sync_config(client: CloudClient, *, force: bool = False) -> dict[str, Any]:
+    require_edge()
+    identity = EdgeIdentity.get_solo()
+    response = client.fetch_config(after=0 if force else identity.config_version)
+    if response.get("up_to_date"):
+        return {"changed": False, "version": identity.config_version}
+    snapshot = response.get("snapshot") or {}
+    version = int(snapshot.get("version", 0))
+    payload = snapshot.get("payload") or {}
+    expected = hashlib.sha256(canonical_json(payload).encode()).hexdigest()
+    if snapshot.get("content_hash") != expected:
+        raise ValueError(f"config snapshot v{version} hash mismatch")
+    with transaction.atomic():
+        applied = apply_snapshot(version=version, content_hash=expected, payload=payload)
+    EdgeIdentity.objects.filter(pk=1).update(
+        config_version=applied.version, last_config_check_at=timezone.now()
+    )
+    return {"changed": True, "version": version}
+
+
+def run_once(*, client: CloudClient | None = None, pull_commands: bool = True) -> dict[str, Any]:
+    """One worker cycle. Exposed for tests and the --once mode."""
+    from apps.devices.services import mark_stale_devices_offline
+    from apps.synchronization.outbox import drain_outbox
+
+    require_edge()
+    identity = EdgeIdentity.get_solo()
+    result: dict[str, Any] = {}
+
+    queued = pull_and_queue_commands(client) if pull_commands else 0
+    executed = execute_received_commands()
+    result["commands"] = {"queued": queued, "executed": executed}
+
+    result["outbox"] = drain_outbox(client=client)
+
+    if identity.last_heartbeat_at is None or (
+        timezone.now() - identity.last_heartbeat_at
+    ).total_seconds() >= settings.EDGE_HEARTBEAT_SECONDS:
+        result["heartbeat"] = send_heartbeat(client)
+
+    if identity.last_config_check_at is None or (
+        timezone.now() - identity.last_config_check_at
+    ).total_seconds() >= 30:
+        try:
+            result["config"] = sync_config(client)
+        except CloudRejected as exc:
+            result["config"] = {"error": str(exc)}
+        EdgeIdentity.objects.filter(pk=1).update(last_config_check_at=timezone.now())
+
+    result["stale_devices"] = mark_stale_devices_offline()
+    result["expired_commands"] = command_service.expire_stale_commands()
+    return result
+
+
+def emit_test_event(note: str = "phase0 proof", extra: dict | None = None) -> OutboxEvent:
+    require_edge()
+    identity = EdgeIdentity.get_solo()
+    with transaction.atomic():
+        return emit(
+            "edge.test",
+            aggregate_type="edge",
+            aggregate_id=str(identity.edge_id),
+            payload={"note": note, "extra": extra or {}, "at": timezone.now().isoformat()},
+        )

@@ -1,0 +1,54 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+.venv-*/
+*.egg-info/
+.pytest_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+db.sqlite3
+db.sqlite3-*
+media/
+staticfiles/
+local_settings.py
+
+# Node / Electron
+node_modules/
+dist/
+dist-electron/
+release/
+.vite/
+*.tsbuildinfo
+npm-debug.log*
+pnpm-debug.log*
+
+# Environment / secrets
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.crt
+*.srl
+*.fingerprint
+!dev/certs/*.pem
+credentials.json
+edge-credentials.json
+*.db
+*.db-wal
+*.db-shm
+
+# Local runtime state (proof runs, logs)
+.artifacts/
+*.log
+run/
+pgdata/
+redis-data/
+
+# Editors / OS
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db

@@ -1,0 +1,117 @@
+{% extends "base.html" %}
+{% load gn %}
+
+{% block title %}داشبورد محلی{% endblock %}
+{% block page_title %}داشبورد محلی{% endblock %}
+{% block page_subtitle %}{{ identity.name }} · {{ identity.edge_id }}{% endblock %}
+
+{% block topbar_status %}
+  {% if cloud_online %}
+    <span class="gn-chip ok"><span class="dot"></span>ابر متصل</span>
+  {% else %}
+    <span class="gn-chip warn"><span class="dot"></span>ابر قطع</span>
+  {% endif %}
+{% endblock %}
+
+{% block content %}
+{% if not registered %}
+  <div class="gn-alert warning mb-3">
+    این Edge هنوز در Cloud ثبت نشده است. عملیات محلی ادامه دارد و رویدادها صف می‌شوند.
+    <a href="{% url 'edge_cloud' %}" class="ms-2">ثبت Edge</a>
+  </div>
+{% endif %}
+
+<div class="gn-grid cols-4 mb-3">
+  <div class="gn-card gn-kpi">
+    <span class="label">کلاینت‌های آنلاین</span>
+    <span class="value num">{{ online_count }}</span>
+    <span class="hint">از {{ devices|length }} دستگاه</span>
+  </div>
+  <div class="gn-card gn-kpi">
+    <span class="label">قفل</span>
+    <span class="value num">{{ locked_count }}</span>
+    <span class="hint">آماده ورود مشتری</span>
+  </div>
+  <div class="gn-card gn-kpi accent">
+    <span class="label">در حال بازی</span>
+    <span class="value num">{{ active_count }}</span>
+    <span class="hint">نشست فعال</span>
+  </div>
+  <div class="gn-card gn-kpi {% if counts.FAILED %}bad{% elif counts.PENDING %}warn{% endif %}">
+    <span class="label">صف همگام‌سازی</span>
+    <span class="value num">{{ counts.PENDING }}</span>
+    <span class="hint">{{ counts.FAILED }} ناموفق · آخرین {{ last_sync|reltime }}</span>
+  </div>
+</div>
+
+<div class="gn-grid cols-2">
+  <div class="gn-card" style="grid-column: span 1">
+    <div class="d-flex justify-content-between align-items-center mb-2">
+      <h6 class="mb-0">دستگاه‌ها</h6>
+      <a class="gn-btn sm" href="{% url 'edge_devices' %}">مدیریت</a>
+    </div>
+    <div hx-get="{% url 'edge_device_grid' %}" hx-trigger="every 3s" hx-swap="innerHTML">
+      {% include "edge/_device_grid.html" %}
+    </div>
+  </div>
+
+  <div class="d-flex flex-column gap-3">
+    <div class="gn-card">
+      <h6>وضعیت همگام‌سازی</h6>
+      <div class="d-flex flex-column gap-2" style="font-size: 12.5px">
+        <div class="d-flex justify-content-between">
+          <span class="gn-muted">وضعیت ابر</span>
+          <span class="gn-status {% if cloud_online %}st-online{% else %}st-offline{% endif %}">
+            <span class="dot"></span>{% if cloud_online %}آنلاین{% else %}قطع{% endif %}
+          </span>
+        </div>
+        <div class="d-flex justify-content-between"><span class="gn-muted">در انتظار</span><span class="num">{{ counts.PENDING }}</span></div>
+        <div class="d-flex justify-content-between"><span class="gn-muted">همگام‌شده</span><span class="num">{{ counts.SYNCED }}</span></div>
+        <div class="d-flex justify-content-between"><span class="gn-muted">ناموفق</span><span class="num">{{ counts.FAILED }}</span></div>
+        <div class="d-flex justify-content-between"><span class="gn-muted">آخرین همگام‌سازی</span><span class="num">{{ last_sync|reltime }}</span></div>
+        <div class="d-flex justify-content-between"><span class="gn-muted">نسخه پیکربندی</span><span class="num">v{{ config.version }}</span></div>
+      </div>
+      <div class="gn-divider"></div>
+      <form method="post" action="{% url 'edge_emit_test' %}">
+        {% csrf_token %}
+        <button class="gn-btn w-100 justify-content-center" type="submit">
+          <i class="ti ti-send"></i> ارسال رویداد آزمایشی
+        </button>
+      </form>
+    </div>
+
+    <div class="gn-card">
+      <h6>کدهای ثبت فعال</h6>
+      {% for code in codes %}
+        <div class="d-flex justify-content-between align-items-center py-1">
+          <span class="gn-code" style="font-size: 14px">{{ code.code }}</span>
+          <span class="gn-muted num">{{ code.expires_at|reltime }}</span>
+        </div>
+      {% empty %}
+        <div class="gn-muted" style="font-size: 12.5px">کد فعالی وجود ندارد.</div>
+      {% endfor %}
+      <div class="gn-divider"></div>
+      <form method="post" action="{% url 'edge_create_code' %}" class="gn-form-row">
+        {% csrf_token %}
+        <div class="flex-grow-1">
+          <label class="gn-label">کد جدید برای ثبت کلاینت</label>
+          <input class="gn-input" name="label" placeholder="مثلاً PC-01">
+        </div>
+        <button class="gn-btn primary" type="submit"><i class="ti ti-key"></i> ساخت کد</button>
+      </form>
+    </div>
+
+    <div class="gn-card">
+      <h6>آخرین دستورها</h6>
+      {% for cmd in recent_commands %}
+        <div class="d-flex justify-content-between align-items-center py-1" style="font-size: 12.5px">
+          <span>{{ cmd.client.name }} · <span class="gn-muted">{{ cmd.command_type }}</span></span>
+          <span class="gn-status {{ cmd.status|status_tone }}"><span class="dot"></span>{{ cmd.status|status_fa }}</span>
+        </div>
+      {% empty %}
+        <div class="gn-muted" style="font-size: 12.5px">دستوری ثبت نشده است.</div>
+      {% endfor %}
+    </div>
+  </div>
+</div>
+{% endblock %}

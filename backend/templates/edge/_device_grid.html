@@ -1,0 +1,60 @@
+{% load gn %}
+<table class="gn-table">
+  <thead>
+    <tr>
+      <th>دستگاه</th>
+      <th>وضعیت</th>
+      <th>نسخه</th>
+      <th>آخرین ضربان</th>
+      <th class="text-end">عملیات</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for device in devices %}
+      <tr>
+        <td>
+          <a href="{% url 'edge_device_detail' device.id %}" class="text-decoration-none" style="color: var(--gn-text)">
+            <strong>{{ device.name }}</strong>
+          </a>
+          <div class="gn-muted" style="font-size: 11px">{{ device.hostname|default:"—" }}</div>
+        </td>
+        <td>
+          <span class="gn-status {{ device.status|status_tone }}">
+            <span class="dot"></span>{{ device.status|status_fa }}
+          </span>
+        </td>
+        <td class="num gn-muted">{{ device.application_version|default:"—" }}</td>
+        <td class="num gn-muted">{{ device.last_heartbeat_at|reltime }}</td>
+        <td class="text-end">
+          <div class="d-flex gap-1 justify-content-end">
+            <form method="post" action="{% url 'edge_device_action' device.id %}" class="gn-inline-form">
+              {% csrf_token %}
+              <input type="hidden" name="next" value="edge_overview">
+              {% if device.status == 'LOCKED' or device.status == 'OFFLINE' %}
+                <button class="gn-btn sm" name="action" value="unlock" title="باز کردن قفل">
+                  <i class="ti ti-lock-open"></i>
+                </button>
+              {% else %}
+                <button class="gn-btn sm" name="action" value="lock" title="قفل کردن">
+                  <i class="ti ti-lock"></i>
+                </button>
+              {% endif %}
+              <button class="gn-btn sm" name="action" value="ping" title="پینگ">
+                <i class="ti ti-activity"></i>
+              </button>
+            </form>
+          </div>
+        </td>
+      </tr>
+    {% empty %}
+      <tr>
+        <td colspan="5">
+          <div class="gn-empty">
+            <i class="ti ti-device-desktop-off"></i>
+            هنوز کلاینتی ثبت نشده است. یک کد ثبت بسازید و روی دستگاه وارد کنید.
+          </div>
+        </td>
+      </tr>
+    {% endfor %}
+  </tbody>
+</table>
