@@ -4,12 +4,13 @@ transaction that creates the customer and its outbox event."""
 from __future__ import annotations
 
 from django.conf import settings
-from django.db import transaction
+from django.db import IntegrityError, transaction
 
 from apps.core.roles import require_edge
 from apps.customer_groups.models import CustomerGroup
 from apps.customers.models import Customer
 from apps.sessions.models import GamingSession, SessionStatus
+from apps.synchronization.config import current_config
 from apps.synchronization.edge_credentials import ensure_identity
 from apps.synchronization.events import emit
 from apps.wallets.models import Wallet
@@ -43,6 +44,7 @@ def _payload(customer: Customer, wallet: Wallet) -> dict:
     return {
         "customer_id": str(customer.id),
         "full_name": customer.full_name,
+        "username": customer.username,
         "phone": customer.phone,
         "group_id": str(customer.group_id) if customer.group_id else None,
         "credit_limit": customer.credit_limit,
@@ -68,6 +70,8 @@ def create_customer(
     *,
     full_name: str,
     phone: str = "",
+    username: str = "",
+    password: str = "",
     group: CustomerGroup | None = None,
     credit_limit: int | None = None,
     notes: str = "",
@@ -77,8 +81,6 @@ def create_customer(
     require_edge()
     identity = ensure_identity()
 
-    # A retried remote-create command carries the cloud-generated id. Returning
-    # the existing row makes the command idempotent without a second event.
     if customer_id is not None:
         existing = Customer.objects.filter(id=customer_id).first()
         if existing is not None:
@@ -87,23 +89,60 @@ def create_customer(
             Wallet.objects.get_or_create(customer=existing, defaults={"balance": 0})
             return existing
 
-    limit = settings.DEFAULT_CREDIT_LIMIT if credit_limit is None else credit_limit
+    limit = (
+        int(
+            current_config().get(
+                "default_credit_limit", settings.DEFAULT_CREDIT_LIMIT
+            )
+        )
+        if credit_limit is None
+        else credit_limit
+    )
     full_name, phone, limit, notes = _clean(
         full_name=full_name, phone=phone, credit_limit=limit, notes=notes
     )
+    username = (username or "").strip()
+    if username and Customer.objects.filter(edge_id=identity.edge_id, username__iexact=username).exists():
+        raise CustomerError("مشتری دیگری با این نام کاربری ثبت شده است.")
+
     group = _check_group(identity.edge_id, group)
     if phone and Customer.objects.filter(edge_id=identity.edge_id, phone=phone).exists():
         raise CustomerError("مشتری دیگری با این شماره تماس ثبت شده است.")
 
-    customer = Customer.objects.create(
-        id=customer_id,
-        edge_id=identity.edge_id,
-        full_name=full_name,
-        phone=phone,
-        group=group,
-        credit_limit=limit,
-        notes=notes,
-    )
+    try:
+        with transaction.atomic():
+            customer = Customer.objects.create(
+                id=customer_id,
+                edge_id=identity.edge_id,
+                full_name=full_name,
+                username=username,
+                phone=phone,
+                group=group,
+                credit_limit=limit,
+                notes=notes,
+            )
+            if password:
+                customer.set_password(password)
+                customer.save(update_fields=["password_hash"])
+    except IntegrityError as exc:
+        # A concurrent create won the unique keys. Return the winner for a
+        # retried remote command, otherwise surface a friendly error.
+        if customer_id is not None:
+            existing = Customer.objects.filter(id=customer_id).first()
+            if existing is not None:
+                if existing.edge_id != identity.edge_id:
+                    raise CustomerError("شناسه مشتری به این Edge تعلق ندارد.") from exc
+                Wallet.objects.get_or_create(customer=existing, defaults={"balance": 0})
+                return existing
+        if phone:
+            existing = Customer.objects.filter(
+                edge_id=identity.edge_id, phone=phone
+            ).first()
+            if existing is not None:
+                raise CustomerError(
+                    "مشتری دیگری با این شماره تماس ثبت شده است."
+                ) from exc
+        raise
     wallet = Wallet.objects.create(customer=customer, balance=0)
     emit(
         "customer.created",
@@ -119,6 +158,8 @@ def update_customer(
     customer: Customer,
     *,
     full_name: str | None = None,
+    username: str | None = None,
+    password: str | None = None,
     phone: str | None = None,
     group: CustomerGroup | None = None,
     clear_group: bool = False,
@@ -142,6 +183,15 @@ def update_customer(
         full_name=full_name, phone=phone, credit_limit=limit, notes=notes
     )
 
+    if username is not None:
+        username = username.strip()
+        if username and Customer.objects.filter(edge_id=customer.edge_id, username__iexact=username).exclude(pk=customer.pk).exists():
+            raise CustomerError("مشتری دیگری با این نام کاربری ثبت شده است.")
+        customer.username = username
+
+    if password:
+        customer.set_password(password)
+
     if clear_group:
         new_group = None
     elif group is not None:
@@ -161,8 +211,15 @@ def update_customer(
         customer=customer, status=SessionStatus.ACTIVE
     ).exists():
         raise CustomerError("برای مشتری نشست فعال وجود دارد؛ ابتدا نشست را پایان دهید.")
-    if wallet.balance < -limit:
-        raise CustomerError("سقف اعتبار جدید از بدهی فعلی کمتر است.")
+    reserved = sum(
+        GamingSession.objects.filter(
+            customer=customer, status=SessionStatus.ACTIVE
+        ).values_list("hourly_rate", flat=True)
+    )
+    if limit < customer.credit_limit and wallet.balance + limit < reserved:
+        raise CustomerError(
+            "سقف اعتبار جدید کمتر از بدهی و تعهد نشست‌های فعال است."
+        )
 
     customer.full_name = full_name
     customer.phone = phone

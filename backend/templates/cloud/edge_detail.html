@@ -58,7 +58,7 @@
           <td class="text-end">
             <form method="post" action="{% url 'cloud_device_action' device.id %}" class="gn-inline-form">
               {% csrf_token %}
-              <input type="hidden" name="next" value="cloud_edge_detail">
+                <input type="hidden" name="next" value="{% url 'cloud_edge_detail' edge.id %}">
               <button class="gn-btn sm" name="action" value="lock"><i class="ti ti-lock"></i></button>
               <button class="gn-btn sm" name="action" value="unlock"><i class="ti ti-lock-open"></i></button>
               <button class="gn-btn sm" name="action" value="ping"><i class="ti ti-activity"></i></button>

@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from apps.core.redirects import safe_redirect_next
+
 import logging
 from datetime import timedelta
 
@@ -16,6 +18,9 @@ from apps.audit.models import AuditLog
 from apps.clients.models import ClientDevice, ClientStatus
 from apps.commands.models import CommandStatus, RemoteCommand
 from apps.core.roles import require_cloud
+from apps.customers.models import Customer
+from apps.devices.models import RegistrationCode
+from apps.sessions.models import GamingSession, SessionStatus
 from apps.synchronization.command_service import issue_command
 from apps.synchronization.models import (
     ConfigSnapshot,
@@ -24,6 +29,8 @@ from apps.synchronization.models import (
     EdgeStatus,
     SyncEvent,
 )
+from django.db.models import Q
+import uuid
 
 logger = logging.getLogger("gamenet.dashboard.cloud")
 
@@ -37,6 +44,8 @@ def _counts():
             status__in=[ClientStatus.OFFLINE, ClientStatus.MAINTENANCE]
         ).count(),
         "devices_total": ClientDevice.objects.filter(is_active=True).count(),
+        "locked_count": ClientDevice.objects.filter(status=ClientStatus.LOCKED, is_active=True).count(),
+        "active_count": GamingSession.objects.filter(status=SessionStatus.ACTIVE).count(),
         "events_total": SyncEvent.objects.count(),
         "events_rejected": SyncEvent.objects.filter(status="REJECTED").count(),
         "commands_pending": RemoteCommand.objects.filter(status=CommandStatus.PENDING).count(),
@@ -46,20 +55,202 @@ def _counts():
     }
 
 
+def _annotate_devices(devices_qs):
+    devices = list(devices_qs)
+    if not devices:
+        return []
+    edge_ids = {d.edge_id for d in devices}
+    device_ids = {d.id for d in devices}
+
+    edges = {e.id: e for e in EdgeNode.objects.filter(id__in=edge_ids)}
+    active_sessions = {
+        s.device_id: s
+        for s in GamingSession.objects.filter(
+            device_id__in=device_ids, status=SessionStatus.ACTIVE
+        ).select_related("customer")
+    }
+
+    for d in devices:
+        d.edge_node = edges.get(d.edge_id)
+        d.active_session = active_sessions.get(d.id)
+    return devices
+
+
 @login_required
 def overview(request):
     require_cloud()
     ctx = _counts()
+    devices_raw = ClientDevice.objects.filter(is_active=True).order_by("name")[:50]
     ctx.update(
         {
             "edges": EdgeNode.objects.exclude(status=EdgeStatus.REVOKED).order_by("name"),
-            "devices": ClientDevice.objects.filter(is_active=True).order_by("name")[:50],
+            "devices": _annotate_devices(devices_raw),
             "commands": RemoteCommand.objects.select_related("edge").order_by("-issued_at")[:8],
             "events": SyncEvent.objects.select_related("edge").order_by("-local_sequence")[:8],
             "config": ConfigSnapshot.objects.filter(is_active=True).order_by("-version").first(),
         }
     )
     return render(request, "cloud/overview.html", ctx)
+
+
+@login_required
+def device_grid(request):
+    require_cloud()
+    edge_id = request.GET.get("edge")
+    q = request.GET.get("q", "").strip()
+    status_filter = request.GET.get("status", "").strip()
+
+    qs = ClientDevice.objects.filter(is_active=True)
+    if edge_id:
+        qs = qs.filter(edge_id=edge_id)
+    if q:
+        qs = qs.filter(Q(name__icontains=q) | Q(hostname__icontains=q) | Q(ip_address__icontains=q))
+    if status_filter:
+        qs = qs.filter(status=status_filter)
+
+    devices = _annotate_devices(qs.order_by("name")[:100])
+    return render(request, "cloud/_device_grid.html", {"devices": devices})
+
+
+@login_required
+def devices(request):
+    require_cloud()
+    ctx = _counts()
+    edge_id = request.GET.get("edge")
+    q = request.GET.get("q", "").strip()
+    status_filter = request.GET.get("status", "").strip()
+
+    qs = ClientDevice.objects.filter(is_active=True)
+    if edge_id:
+        qs = qs.filter(edge_id=edge_id)
+    if q:
+        qs = qs.filter(Q(name__icontains=q) | Q(hostname__icontains=q) | Q(ip_address__icontains=q))
+    if status_filter:
+        qs = qs.filter(status=status_filter)
+
+    devices_list = _annotate_devices(qs.order_by("name"))
+    edges_list = EdgeNode.objects.exclude(status=EdgeStatus.REVOKED).order_by("name")
+    customers_list = Customer.objects.filter(is_active=True).order_by("full_name")[:100]
+
+    ctx.update(
+        {
+            "devices": devices_list,
+            "edges": edges_list,
+            "selected_edge": edge_id,
+            "q": q,
+            "status_filter": status_filter,
+            "customers": customers_list,
+            "codes": RegistrationCode.objects.order_by("-created_at")[:10],
+        }
+    )
+    return render(request, "cloud/devices.html", ctx)
+
+
+@login_required
+def device_detail(request, device_id):
+    require_cloud()
+    device = get_object_or_404(ClientDevice, id=device_id)
+    edge = EdgeNode.objects.filter(id=device.edge_id).first()
+    active_session = (
+        GamingSession.objects.filter(device_id=device.id, status=SessionStatus.ACTIVE)
+        .select_related("customer")
+        .first()
+    )
+    recent_commands = (
+        RemoteCommand.objects.filter(edge=edge, payload__device_id=str(device.id)).order_by(
+            "-issued_at"
+        )[:30]
+        if edge
+        else []
+    )
+
+    customers_list = (
+        Customer.objects.filter(edge_id=device.edge_id, is_active=True).order_by("full_name")[:100]
+    )
+
+    ctx = _counts()
+    ctx.update(
+        {
+            "device": device,
+            "edge": edge,
+            "active_session": active_session,
+            "commands": recent_commands,
+            "customers": customers_list,
+        }
+    )
+    return render(request, "cloud/device_detail.html", ctx)
+
+
+@login_required
+@require_POST
+def device_start_session(request, device_id):
+    require_cloud()
+    device = get_object_or_404(ClientDevice, id=device_id)
+    edge = EdgeNode.objects.filter(id=device.edge_id).first()
+    if edge is None:
+        messages.error(request, "Edge مربوط به این دستگاه یافت نشد.")
+        return safe_redirect_next(request, "cloud_devices")
+
+    customer_id = request.POST.get("customer_id")
+    customer = get_object_or_404(Customer, id=customer_id)
+    session_id = uuid.uuid4()
+    rate_id = request.POST.get("customer_rate_id") or None
+
+    issue_command(
+        edge,
+        "session.start",
+        {
+            "session_id": str(session_id),
+            "customer_id": str(customer.id),
+            "device_id": str(device.id),
+            "customer_rate_id": str(rate_id) if rate_id else None,
+        },
+        actor=request.user,
+    )
+    AuditLog.objects.create(
+        actor=request.user,
+        actor_label=request.user.label,
+        action="remote.session.started",
+        object_type="device",
+        object_id=str(device.id),
+        metadata={
+            "edge_id": str(edge.id),
+            "device_name": device.name,
+            "customer_name": customer.full_name,
+        },
+        ip_address=request.META.get("REMOTE_ADDR"),
+    )
+    messages.success(
+        request, f"دستور شروع نشست برای {customer.full_name} روی {device.name} ارسال شد."
+    )
+    return safe_redirect_next(request, "cloud_devices")
+
+
+@login_required
+@require_POST
+def create_client_code(request):
+    require_cloud()
+    edge_id = request.POST.get("edge_id")
+    edge = get_object_or_404(EdgeNode, id=edge_id)
+    label = request.POST.get("label", "").strip()[:80]
+
+    issue_command(
+        edge,
+        "edge.create_client_code",
+        {"label": label},
+        actor=request.user,
+    )
+    AuditLog.objects.create(
+        actor=request.user,
+        actor_label=request.user.label,
+        action="remote.client_code.create",
+        object_type="edge",
+        object_id=str(edge.id),
+        metadata={"edge_name": edge.name, "label": label},
+        ip_address=request.META.get("REMOTE_ADDR"),
+    )
+    messages.success(request, f"دستور ساخت کد ثبت کلاینت برای «{edge.name}» صادر شد.")
+    return safe_redirect_next(request, "cloud_devices")
 
 
 @login_required
@@ -175,7 +366,7 @@ def device_action(request, device_id):
         ip_address=request.META.get("REMOTE_ADDR"),
     )
     messages.success(request, f"دستور {action} برای {device.name} ارسال شد.")
-    return redirect(request.POST.get("next") or "cloud_overview")
+    return safe_redirect_next(request, "cloud_overview")
 
 
 @login_required

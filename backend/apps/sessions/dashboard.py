@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from apps.core.redirects import safe_redirect_next
+
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.db.models import Q
@@ -124,4 +126,4 @@ def session_stop(request, session_id):
         request,
         f"نشست پایان یافت؛ مدت {session.elapsed_seconds or 0} ثانیه و هزینه {session.cost or 0:,} تومان.",
     )
-    return redirect(request.POST.get("next") or "edge_sessions")
+    return safe_redirect_next(request, "edge_sessions")

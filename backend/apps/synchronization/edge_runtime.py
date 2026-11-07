@@ -14,7 +14,7 @@ from apps.clients.models import ClientDevice
 from apps.core.roles import require_edge
 from apps.core.security import canonical_json
 from apps.synchronization import command_service
-from apps.synchronization.cloud_client import CloudClient, CloudRejected
+from apps.synchronization.cloud_client import CloudClient, CloudRejected, CloudUnavailable
 from apps.synchronization.config import apply_snapshot, current_config
 from apps.synchronization.events import emit
 from apps.synchronization.models import EdgeIdentity, OutboxEvent, OutboxStatus
@@ -119,7 +119,12 @@ def run_once(*, client: CloudClient | None = None, pull_commands: bool = True) -
     identity = EdgeIdentity.get_solo()
     result: dict[str, Any] = {}
 
-    queued = pull_and_queue_commands(client) if pull_commands else 0
+    queued = 0
+    if pull_commands:
+        try:
+            queued = pull_and_queue_commands(client)
+        except (CloudUnavailable, CloudRejected) as exc:
+            result["command_pull_error"] = str(exc)
     executed = execute_received_commands()
     result["commands"] = {"queued": queued, "executed": executed}
 
@@ -128,14 +133,17 @@ def run_once(*, client: CloudClient | None = None, pull_commands: bool = True) -
     if identity.last_heartbeat_at is None or (
         timezone.now() - identity.last_heartbeat_at
     ).total_seconds() >= settings.EDGE_HEARTBEAT_SECONDS:
-        result["heartbeat"] = send_heartbeat(client)
+        try:
+            result["heartbeat"] = send_heartbeat(client)
+        except (CloudUnavailable, CloudRejected) as exc:
+            result["heartbeat"] = {"error": str(exc)}
 
     if identity.last_config_check_at is None or (
         timezone.now() - identity.last_config_check_at
     ).total_seconds() >= 30:
         try:
             result["config"] = sync_config(client)
-        except CloudRejected as exc:
+        except (CloudUnavailable, CloudRejected) as exc:
             result["config"] = {"error": str(exc)}
         EdgeIdentity.objects.filter(pk=1).update(last_config_check_at=timezone.now())
 

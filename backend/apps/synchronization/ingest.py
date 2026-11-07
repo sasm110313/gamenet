@@ -51,8 +51,12 @@ def _parse_event(raw: dict[str, Any]) -> dict[str, Any]:
         raise InvalidEvent("local_sequence must be positive")
     if not isinstance(raw["payload"], dict):
         raise InvalidEvent("payload must be an object")
-    if int(raw["schema_version"]) != 1:
-        raise InvalidEvent(f"unsupported schema_version {raw['schema_version']}")
+    try:
+        schema_version = int(raw["schema_version"])
+    except (TypeError, ValueError) as exc:
+        raise InvalidEvent("schema_version must be an integer") from exc
+    if schema_version != 1:
+        raise InvalidEvent(f"unsupported schema_version {schema_version}")
     try:
         occurred_at = datetime.fromisoformat(str(raw["occurred_at"]))
     except ValueError as exc:
@@ -138,7 +142,7 @@ def ingest_batch(edge: EdgeNode, raw_events: list[dict]) -> dict:
 
         try:
             apply_event(record)
-        except Exception as exc:  # projection bug -> transient, edge must retry
+        except Exception as exc:  # DB/transport/projection bug -> edge must retry
             logger.exception("projection failed for %s", event["event_id"])
             raise RuntimeError(f"projection failed for {event['event_id']}: {exc}") from exc
 

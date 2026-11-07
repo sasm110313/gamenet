@@ -6,7 +6,7 @@ price edit can never reprice a live or historical session.
 
 from __future__ import annotations
 
-from django.db import transaction
+from django.db import IntegrityError, transaction
 
 from apps.core.roles import require_edge
 from apps.customers.models import Customer
@@ -86,9 +86,22 @@ def create_tariff(
     name, hourly_rate = _clean_tariff(name, hourly_rate)
     if Tariff.objects.filter(edge_id=identity.edge_id, name=name).exists():
         raise TariffError("تعرفه‌ای با این نام قبلاً ثبت شده است.")
-    tariff = Tariff.objects.create(
-        id=tariff_id, edge_id=identity.edge_id, name=name, hourly_rate=hourly_rate
-    )
+    try:
+        with transaction.atomic():
+            tariff = Tariff.objects.create(
+                id=tariff_id,
+                edge_id=identity.edge_id,
+                name=name,
+                hourly_rate=hourly_rate,
+            )
+    except IntegrityError as exc:
+        if tariff_id is not None:
+            existing = Tariff.objects.filter(id=tariff_id).first()
+            if existing is not None:
+                if existing.edge_id != identity.edge_id:
+                    raise TariffError("شناسه تعرفه به این Edge تعلق ندارد.") from exc
+                return existing
+        raise TariffError("تعرفه‌ای با این نام قبلاً ثبت شده است.") from exc
     emit(
         "tariff.created",
         aggregate_type="tariff",
@@ -207,8 +220,17 @@ def update_customer_rate(
     actor=None,
 ) -> CustomerRate:
     require_edge()
+    # Lock order is customer -> rate everywhere. Locking the rate first here
+    # deadlocks against create_customer_rate/promote-default paths.
+    customer_id = (
+        CustomerRate.objects.filter(pk=rate.pk)
+        .values_list("customer_id", flat=True)
+        .first()
+    )
+    if customer_id is None:
+        raise CustomerRateError("نرخ یافت نشد.")
+    customer = Customer.objects.select_for_update().get(pk=customer_id)
     rate = CustomerRate.objects.select_for_update().get(pk=rate.pk)
-    customer = Customer.objects.select_for_update().get(pk=rate.customer_id)
     if expected_revision is not None and rate.revision != expected_revision:
         raise CustomerRateError("نسخه نرخ تغییر کرده است؛ صفحه را تازه کنید و دوباره تلاش کنید.")
 
@@ -231,16 +253,28 @@ def update_customer_rate(
         raise CustomerRateError("نرخ پیش‌فرض باید فعال باشد.")
     if not new_active:
         new_default = False
-    if was_default and not new_default:
-        # Never leave active rates without a default. If no other active rate
-        # exists, this rate keeps the default flag while it stays active.
-        has_other_active = (
-            CustomerRate.objects.filter(customer=customer, is_active=True)
+    if new_active and not new_default:
+        # Never leave active rates without a default. If another active rate is
+        # already default, an explicit uncheck is allowed (the post-save block
+        # promotes it). Otherwise keep/restore the default.
+        other_default = (
+            CustomerRate.objects.filter(
+                customer=customer, is_active=True, is_default=True
+            )
             .exclude(pk=rate.pk)
             .exists()
         )
-        if new_active and not has_other_active:
-            new_default = True
+        if not other_default:
+            if not was_default:
+                new_default = True
+            else:
+                has_other_active = (
+                    CustomerRate.objects.filter(customer=customer, is_active=True)
+                    .exclude(pk=rate.pk)
+                    .exists()
+                )
+                if not has_other_active:
+                    new_default = True
     if new_default:
         CustomerRate.objects.filter(customer=customer, is_default=True).exclude(
             pk=rate.pk

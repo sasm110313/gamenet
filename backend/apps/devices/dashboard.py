@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from apps.core.redirects import safe_redirect_next
+
 import logging
 
 from django.conf import settings
@@ -132,7 +134,7 @@ def device_action(request, device_id):
         ip_address=request.META.get("REMOTE_ADDR"),
     )
     messages.success(request, f"دستور «{action}» برای {device.name} ثبت شد.")
-    return redirect(request.POST.get("next") or "edge_devices")
+    return safe_redirect_next(request, "edge_devices")
 
 
 @login_required
@@ -149,7 +151,7 @@ def create_code(request):
         ip_address=request.META.get("REMOTE_ADDR"),
     )
     messages.success(request, f"کد ثبت دستگاه: {reg.code} — تا {reg.expires_at:%H:%M} معتبر است.")
-    return redirect(request.POST.get("next") or "edge_devices")
+    return safe_redirect_next(request, "edge_devices")
 
 
 @login_required

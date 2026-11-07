@@ -40,6 +40,7 @@ export interface PublicState {
   platform: string;
   suggestedName: string;
   canUnpair: boolean;
+  canPreview: boolean;
   updatedAt: string;
 }
 

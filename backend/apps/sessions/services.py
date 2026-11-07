@@ -144,13 +144,15 @@ def start_session(
         customer, customer_rate
     )
 
-    # Reserve one billable hour for every live session. This is the credit check
-    # that concurrent starts must not both pass.
-    reserved = sum(
-        GamingSession.objects.filter(
-            customer=customer, status=SessionStatus.ACTIVE
-        ).values_list("hourly_rate", flat=True)
-    )
+    # Reserve the accrued cost of every live session, not just one hour. A long
+    # running session can already be over the limit; a second start must not
+    # increase that exposure.
+    reserved = 0
+    for active_rate, started_at in GamingSession.objects.filter(
+        customer=customer, status=SessionStatus.ACTIVE
+    ).values_list("hourly_rate", "started_at"):
+        elapsed = max(0, int((now - started_at).total_seconds()))
+        reserved += max(active_rate, session_cost(active_rate, elapsed))
     available = wallet.balance + customer.credit_limit - reserved
     if available < hourly_rate:
         raise SessionError(

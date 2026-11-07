@@ -48,9 +48,23 @@ def apply_event(event: SyncEvent) -> None:
         handler(event)
 
 
+def _owned(model, pk, edge_id, label: str):
+    """Return the row only when it belongs to the event's edge.
+
+    The same UUID can legitimately exist on two independent edges (cloned disk
+    images, restored installs). A projection must never let one edge overwrite
+    another edge's row; that is treated as a rejected event.
+    """
+    obj = model.objects.filter(pk=pk).first()
+    if obj is not None and obj.edge_id != edge_id:
+        raise ValueError(f"{label} {pk} belongs to another edge")
+    return obj
+
+
 @handles("device.registered")
 def device_registered(event: SyncEvent) -> None:
     p = event.payload
+    _owned(ClientDevice, p["device_id"], event.edge_id, "device")
     ClientDevice.objects.update_or_create(
         id=p["device_id"],
         defaults={
@@ -71,7 +85,7 @@ def device_registered(event: SyncEvent) -> None:
 @handles("device.status_changed")
 def device_status_changed(event: SyncEvent) -> None:
     p = event.payload
-    ClientDevice.objects.filter(id=p["device_id"]).update(
+    ClientDevice.objects.filter(id=p["device_id"], edge_id=event.edge_id).update(
         status=p["status"],
         last_heartbeat_at=p.get("last_heartbeat_at") or event.occurred_at,
         application_version=p.get("application_version", ""),
@@ -81,7 +95,9 @@ def device_status_changed(event: SyncEvent) -> None:
 
 @handles("device.deactivated")
 def device_deactivated(event: SyncEvent) -> None:
-    ClientDevice.objects.filter(id=event.payload["device_id"]).update(
+    ClientDevice.objects.filter(
+        id=event.payload["device_id"], edge_id=event.edge_id
+    ).update(
         is_active=False, status=ClientStatus.OFFLINE, updated_at=timezone.now()
     )
 
@@ -92,10 +108,24 @@ def device_command_result(event: SyncEvent) -> None:
     in the event stream (queryable for support). Nothing to project here."""
 
 
+@handles("device.code_created")
+def device_code_created(event: SyncEvent) -> None:
+    from apps.devices.models import RegistrationCode
+    p = event.payload
+    RegistrationCode.objects.get_or_create(
+        id=event.aggregate_id,
+        defaults={
+            "code": p["code"],
+            "label": p.get("label", ""),
+            "expires_at": p["expires_at"],
+        },
+    )
+
+
 @handles("command.result")
 def command_result(event: SyncEvent) -> None:
     p = event.payload
-    command = RemoteCommand.objects.filter(id=p.get("command_id")).first()
+    command = _owned(RemoteCommand, p.get("command_id"), event.edge_id, "command")
     if command is None:
         logger.warning("command.result for unknown command %s", p.get("command_id"))
         return
@@ -140,6 +170,7 @@ def _iso(value, fallback):
 @handles("tariff.updated")
 def tariff_upsert(event: SyncEvent) -> None:
     p = event.payload
+    _owned(Tariff, p["tariff_id"], event.edge_id, "tariff")
     Tariff.objects.update_or_create(
         id=p["tariff_id"],
         defaults={
@@ -157,9 +188,10 @@ def tariff_upsert(event: SyncEvent) -> None:
 @handles("customer_group.updated")
 def customer_group_upsert(event: SyncEvent) -> None:
     p = event.payload
+    _owned(CustomerGroup, p["group_id"], event.edge_id, "group")
     tariff = None
     if p.get("tariff_id"):
-        tariff = Tariff.objects.filter(id=p["tariff_id"]).first()
+        tariff = _owned(Tariff, p["tariff_id"], event.edge_id, "tariff")
         if tariff is None:
             raise ValueError(f"group {p['group_id']} references unknown tariff {p['tariff_id']}")
     CustomerGroup.objects.update_or_create(
@@ -179,9 +211,10 @@ def customer_group_upsert(event: SyncEvent) -> None:
 @handles("customer.updated")
 def customer_upsert(event: SyncEvent) -> None:
     p = event.payload
+    _owned(Customer, p["customer_id"], event.edge_id, "customer")
     group = None
     if p.get("group_id"):
-        group = CustomerGroup.objects.filter(id=p["group_id"]).first()
+        group = _owned(CustomerGroup, p["group_id"], event.edge_id, "group")
         if group is None:
             raise ValueError(f"customer {p['customer_id']} references unknown group {p['group_id']}")
     customer, _ = Customer.objects.update_or_create(
@@ -210,7 +243,8 @@ def customer_upsert(event: SyncEvent) -> None:
 @handles("customer_rate.updated")
 def customer_rate_upsert(event: SyncEvent) -> None:
     p = event.payload
-    customer = Customer.objects.filter(id=p["customer_id"]).first()
+    customer = _owned(Customer, p["customer_id"], event.edge_id, "customer")
+    _owned(CustomerRate, p["customer_rate_id"], event.edge_id, "customer rate")
     if customer is None:
         raise ValueError(
             f"customer_rate {p['customer_rate_id']} references unknown customer "
@@ -242,17 +276,18 @@ def customer_rate_upsert(event: SyncEvent) -> None:
 @handles("ledger.entry_created")
 def ledger_entry_created(event: SyncEvent) -> None:
     p = event.payload
-    customer = Customer.objects.filter(id=p["customer_id"]).first()
+    _owned(LedgerEntry, p["entry_id"], event.edge_id, "ledger entry")
+    customer = _owned(Customer, p["customer_id"], event.edge_id, "customer")
     if customer is None:
         raise ValueError(f"ledger entry for unknown customer {p['customer_id']}")
     session = None
     if p.get("session_id"):
-        session = GamingSession.objects.filter(id=p["session_id"]).first()
+        session = _owned(GamingSession, p["session_id"], event.edge_id, "session")
         if session is None:
             raise ValueError(f"ledger entry references unknown session {p['session_id']}")
     reverses = None
     if p.get("reverses_id"):
-        reverses = LedgerEntry.objects.filter(id=p["reverses_id"]).first()
+        reverses = _owned(LedgerEntry, p["reverses_id"], event.edge_id, "ledger entry")
         if reverses is None:
             raise ValueError(f"ledger entry reverses unknown entry {p['reverses_id']}")
 
@@ -283,20 +318,21 @@ def ledger_entry_created(event: SyncEvent) -> None:
 @handles("session.started")
 def session_started(event: SyncEvent) -> None:
     p = event.payload
-    customer = Customer.objects.filter(id=p["customer_id"]).first()
-    device = ClientDevice.objects.filter(id=p["device_id"]).first()
+    _owned(GamingSession, p["session_id"], event.edge_id, "session")
+    customer = _owned(Customer, p["customer_id"], event.edge_id, "customer")
+    device = _owned(ClientDevice, p["device_id"], event.edge_id, "device")
     if customer is None or device is None:
         raise ValueError(
             f"session {p['session_id']} references unknown customer/device"
         )
     tariff = None
     if p.get("tariff_id"):
-        tariff = Tariff.objects.filter(id=p["tariff_id"]).first()
+        tariff = _owned(Tariff, p["tariff_id"], event.edge_id, "tariff")
         if tariff is None:
             raise ValueError(f"session {p['session_id']} references unknown tariff {p['tariff_id']}")
     customer_rate = None
     if p.get("customer_rate_id"):
-        customer_rate = CustomerRate.objects.filter(id=p["customer_rate_id"]).first()
+        customer_rate = _owned(CustomerRate, p["customer_rate_id"], event.edge_id, "customer rate")
         if customer_rate is None:
             raise ValueError(
                 f"session {p['session_id']} references unknown customer_rate "
@@ -326,7 +362,7 @@ def session_started(event: SyncEvent) -> None:
 @handles("session.ended")
 def session_ended(event: SyncEvent) -> None:
     p = event.payload
-    session = GamingSession.objects.filter(id=p["session_id"]).first()
+    session = _owned(GamingSession, p["session_id"], event.edge_id, "session")
     if session is None:
         raise ValueError(f"session.ended for unknown session {p['session_id']}")
     session.status = p.get("status", SessionStatus.COMPLETED)

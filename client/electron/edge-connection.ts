@@ -158,7 +158,6 @@ export class EdgeConnection {
     this.socket = socket;
 
     socket.on("open", () => {
-      this.attempt = 0;
       this.send({
         type: "hello",
         device_id: this.deviceId,

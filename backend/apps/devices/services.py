@@ -17,7 +17,7 @@ from apps.core.roles import require_edge
 from apps.core.security import constant_time_equal
 from apps.devices.models import RegistrationCode
 from apps.synchronization.crypto import hash_token
-from apps.synchronization.edge_credentials import load_credentials
+from apps.synchronization.edge_credentials import ensure_identity, load_credentials
 from apps.synchronization.events import emit
 from apps.synchronization.models import EdgeIdentity
 
@@ -73,7 +73,7 @@ def register_device(
     The token is stored only as a SHA-256 hash; losing it means re-pairing.
     """
     require_edge()
-    identity = EdgeIdentity.get_solo()
+    identity = ensure_identity()
 
     reg = (
         RegistrationCode.objects.select_for_update()

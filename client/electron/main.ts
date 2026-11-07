@@ -26,6 +26,7 @@ import { StateStore, type StoredState } from "./state-store";
 
 app.setName("GameNet");
 const canUnpair = process.env.GAMENET_DEV_UNPAIR === "1";
+const canPreview = !app.isPackaged && process.env.GAMENET_DEV_PREVIEW === "1";
 
 interface RegistrationBody {
   device_id?: string;
@@ -55,6 +56,7 @@ function emptyState(): PublicState {
     platform: `${os.type()} ${os.release()} ${os.arch()}`,
     suggestedName: os.hostname().replace(/[^\p{L}\p{N}_.-]/gu, "-").slice(0, 80) || "PC-01",
     canUnpair,
+    canPreview,
     updatedAt: new Date().toISOString(),
   };
 }
@@ -139,7 +141,7 @@ class AppController {
             configVersion: details.configVersion,
             pendingCommands: details.pendingCommands,
             lastError: "",
-            locked: details.desiredState !== "ONLINE",
+            locked: !["ONLINE", "ACTIVE", "STARTING", "IDLE"].includes(details.desiredState),
           });
         },
         onDisconnect: (detail) => {
@@ -319,7 +321,7 @@ class AppController {
   }
 
   setPreview(enabled: boolean): PublicState {
-    if (!this.state.paired || this.state.phase !== "connected") {
+    if (!canPreview || !this.state.paired || this.state.phase !== "connected") {
       return this.snapshot();
     }
     this.update({ locked: !enabled });

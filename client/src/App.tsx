@@ -360,7 +360,7 @@ function LockedScreen({
 
         <OfflineBanner state={state} />
 
-        <div className="relative mt-6 flex flex-col items-stretch justify-center gap-3 sm:flex-row">
+        {state.canPreview ? <div className="relative mt-6 flex flex-col items-stretch justify-center gap-3 sm:flex-row">
           <button
             type="button"
             className="btn btn-primary sm:min-w-64"
@@ -370,12 +370,12 @@ function LockedScreen({
             {busy ? <Spinner className="h-4 w-4" /> : <UnlockIcon className="h-4 w-4" />}
             پیش‌نمایش بدون صورتحساب
           </button>
-        </div>
-        <p className="relative mt-3 text-[11px] leading-5 text-mist">
+        </div> : null}
+        {state.canPreview ? <p className="relative mt-3 text-[11px] leading-5 text-mist">
           {ready
             ? "پیش‌نمایش فقط برای آزمایش صفحه است؛ نشست و صورتحساب ایجاد نمی‌کند."
             : "پیش‌نمایش پس از برقراری ارتباط با هاب فعال می‌شود."}
-        </p>
+        </p> : null}
       </div>
 
       <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-3">
@@ -413,21 +413,20 @@ function UnlockedScreen({
           <div className="min-w-0">
             <span className="chip chip-live">
               <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-neon" />
-              پیش‌نمایش فعال — بدون صورتحساب
+              رایانه از طرف هاب باز شده است
             </span>
             <h1 className="mt-5 text-3xl font-bold sm:text-4xl">
               آماده بازی، <span className="text-neon">{state.deviceName || "رایانه"}</span>
             </h1>
             <p className="mt-3 max-w-lg text-sm leading-7 text-mist">
-              این رایانه از طرف هاب باز شده است. در فاز صفر، این حالت یک پیش‌نمایش
-              است و هیچ نشست یا هزینه‌ای در دفتر کل ثبت نمی‌کند.
+              وضعیت نشست و هزینه را از مسئول سالن پیگیری کنید.
             </p>
           </div>
 
           <div className="shrink-0 rounded-2xl border border-neon/20 bg-neon/[0.06] px-6 py-5 text-center">
-            <p className="text-[10px] uppercase tracking-[0.18em] text-mist">مدت پیش‌نمایش</p>
+            <p className="text-[10px] uppercase tracking-[0.18em] text-mist">زمان از باز شدن صفحه</p>
             <p className="timer mt-2 text-3xl font-bold text-neon">{elapsed}</p>
-            <p className="mt-1 text-[10px] text-mist">بدون تأثیر بر صورتحساب</p>
+            <p className="mt-1 text-[10px] text-mist">مبنای صورتحساب نیست</p>
           </div>
         </div>
 

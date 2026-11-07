@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from django.db import transaction
+from django.db import IntegrityError, transaction
 
 from apps.core.roles import require_edge
 from apps.customer_groups.models import CustomerGroup
@@ -53,9 +53,19 @@ def create_group(
         raise GroupError("تعرفه غیرفعال است.")
     if CustomerGroup.objects.filter(edge_id=identity.edge_id, name=name).exists():
         raise GroupError("گروهی با این نام قبلاً ثبت شده است.")
-    group = CustomerGroup.objects.create(
-        id=group_id, edge_id=identity.edge_id, name=name, tariff=tariff
-    )
+    try:
+        with transaction.atomic():
+            group = CustomerGroup.objects.create(
+                id=group_id, edge_id=identity.edge_id, name=name, tariff=tariff
+            )
+    except IntegrityError as exc:
+        if group_id is not None:
+            existing = CustomerGroup.objects.filter(id=group_id).first()
+            if existing is not None:
+                if existing.edge_id != identity.edge_id:
+                    raise GroupError("شناسه گروه به این Edge تعلق ندارد.") from exc
+                return existing
+        raise GroupError("گروهی با این نام قبلاً ثبت شده است.") from exc
     emit(
         "customer_group.created",
         aggregate_type="customer_group",

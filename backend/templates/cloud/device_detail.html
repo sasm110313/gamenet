@@ -1,0 +1,149 @@
+{% extends "base.html" %}
+{% load gn %}
+
+{% block title %}{{ device.name }} · کلاینت ابری{% endblock %}
+{% block page_title %}{{ device.name }}{% endblock %}
+{% block page_subtitle %}
+  {{ device.id }} · هاب: {% if edge %}<a href="{% url 'cloud_edge_detail' edge.id %}">{{ edge.name }}</a>{% else %}{{ device.edge_id|shortid }}{% endif %}
+{% endblock %}
+
+{% block topbar_status %}
+  <span class="gn-status {{ device.status|status_tone }}" style="font-size: 13px">
+    <span class="dot"></span>{{ device.status|status_fa }}
+  </span>
+{% endblock %}
+
+{% block content %}
+<div class="gn-grid cols-3 mb-3">
+  <!-- Card 1: Technical & State Details -->
+  <div class="gn-card">
+    <h6>وضعیت و مشخصات کلاینت</h6>
+    <div class="d-flex align-items-center gap-2 mb-2">
+      <span class="gn-status {{ device.status|status_tone }}" style="font-size: 13px">
+        <span class="dot"></span>{{ device.status|status_fa }}
+      </span>
+      {% if not device.is_active %}
+        <span class="gn-status st-offline ms-1">غیرفعال‌شده</span>
+      {% endif %}
+    </div>
+    <div class="d-flex flex-column gap-1" style="font-size: 12.5px">
+      <div class="d-flex justify-content-between"><span class="gn-muted">نام میزبان</span><span>{{ device.hostname|default:"—" }}</span></div>
+      <div class="d-flex justify-content-between"><span class="gn-muted">آدرس IP</span><span class="num">{{ device.ip_address|default:"—" }}</span></div>
+      <div class="d-flex justify-content-between"><span class="gn-muted">سیستم‌عامل</span><span>{{ device.operating_system|default:"—" }}</span></div>
+      <div class="d-flex justify-content-between"><span class="gn-muted">نسخه نرم‌افزار کلاینت</span><span class="num">{{ device.application_version|default:"—" }}</span></div>
+      <div class="d-flex justify-content-between"><span class="gn-muted">آخرین ضربان (Heartbeat)</span><span class="num">{{ device.last_heartbeat_at|reltime }}</span></div>
+      <div class="d-flex justify-content-between"><span class="gn-muted">تاریخ ثبت</span><span class="num">{{ device.registered_at|date:"Y-m-d H:i" }}</span></div>
+      <div class="d-flex justify-content-between"><span class="gn-muted">هاب متصل</span><span>{{ edge.name|default:"ناشناخته" }}</span></div>
+    </div>
+  </div>
+
+  <!-- Card 2: Remote Controls -->
+  <div class="gn-card">
+    <h6>کنترل از راه دور کلاینت</h6>
+    <p class="gn-muted" style="font-size: 12px">
+      دستورهای زیر از طریق کانال امن WebSocket به هاب محلی و سپس مستقیماً به کلاینت ویندوزی ارسال و اعمال می‌شوند.
+    </p>
+    <form method="post" action="{% url 'cloud_device_action' device.id %}">
+      {% csrf_token %}
+      <input type="hidden" name="next" value="{{ request.path }}">
+      <div class="d-flex flex-wrap gap-2">
+        <button class="gn-btn" name="action" value="lock"><i class="ti ti-lock"></i> قفل کردن صفحه</button>
+        <button class="gn-btn" name="action" value="unlock"><i class="ti ti-lock-open"></i> باز کردن قفل</button>
+        <button class="gn-btn" name="action" value="ping"><i class="ti ti-activity"></i> ارسال پینگ</button>
+        <button class="gn-btn" name="action" value="restart"><i class="ti ti-reload"></i> راه‌اندازی مجدد (Restart)</button>
+      </div>
+    </form>
+  </div>
+
+  <!-- Card 3: Session Info / Start Session -->
+  <div class="gn-card">
+    {% if active_session %}
+      <h6>نشست در حال بازی روی این دستگاه</h6>
+      <div class="d-flex flex-column gap-2" style="font-size: 12.5px">
+        <div class="d-flex justify-content-between">
+          <span class="gn-muted">مشتری</span>
+          <strong>{{ active_session.customer.full_name }}</strong>
+        </div>
+        <div class="d-flex justify-content-between">
+          <span class="gn-muted">شماره تماس</span>
+          <span class="num">{{ active_session.customer.phone|default:"—" }}</span>
+        </div>
+        <div class="d-flex justify-content-between">
+          <span class="gn-muted">تعرفه / نرخ</span>
+          <span>{{ active_session.tariff_name }} ({{ active_session.hourly_rate|toman }} / ساعت)</span>
+        </div>
+        <div class="d-flex justify-content-between">
+          <span class="gn-muted">زمان شروع</span>
+          <span class="num">{{ active_session.started_at|date:"H:i:s" }} ({{ active_session.started_at|reltime }})</span>
+        </div>
+      </div>
+      <div class="gn-divider"></div>
+      <form method="post" action="{% url 'cloud_manage_session_stop' active_session.id %}">
+        {% csrf_token %}
+        <input type="hidden" name="next" value="{{ request.path }}">
+        <button class="gn-btn danger w-100 justify-content-center" type="submit">
+          <i class="ti ti-player-stop"></i> پایان نشست و محاسبه هزینه
+        </button>
+      </form>
+    {% else %}
+      <h6>شروع نشست روی این دستگاه</h6>
+      <p class="gn-muted" style="font-size: 12px">این دستگاه در حال حاضر در حال بازی نیست. می‌توانید از اینجا نشست جدیدی آغاز کنید.</p>
+      {% if customers %}
+        <form method="post" action="{% url 'cloud_device_start_session' device.id %}" class="d-flex flex-column gap-2">
+          {% csrf_token %}
+          <input type="hidden" name="next" value="{{ request.path }}">
+          <div>
+            <label class="gn-label">انتخاب مشتری</label>
+            <select class="gn-select w-100" name="customer_id" required>
+              <option value="">-- مشتری را انتخاب کنید --</option>
+              {% for c in customers %}
+                <option value="{{ c.id }}">{{ c.full_name }} ({{ c.phone|default:"بدون شماره" }})</option>
+              {% endfor %}
+            </select>
+          </div>
+          <button class="gn-btn ok w-100 justify-content-center" type="submit">
+            <i class="ti ti-player-play"></i> شروع نشست از ابر
+          </button>
+        </form>
+      {% else %}
+        <div class="gn-muted" style="font-size: 12px">مشتری فعالی روی این هاب یافت نشد.</div>
+      {% endif %}
+    {% endif %}
+  </div>
+</div>
+
+<!-- Commands history table -->
+<div class="gn-card">
+  <h6>تاریخچه دستورهای از راه دور صادرشده برای این دستگاه</h6>
+  <table class="gn-table">
+    <thead>
+      <tr>
+        <th>دستور</th>
+        <th>وضعیت</th>
+        <th>زمان صدور</th>
+        <th>زمان تایید</th>
+        <th>نتیجه</th>
+        <th>شناسه</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for cmd in commands %}
+        <tr>
+          <td><strong>{{ cmd.command_type }}</strong></td>
+          <td><span class="gn-status {{ cmd.status|status_tone }}"><span class="dot"></span>{{ cmd.status|status_fa }}</span></td>
+          <td class="num gn-muted">{{ cmd.issued_at|date:"Y-m-d H:i:s" }}</td>
+          <td class="num gn-muted">{{ cmd.acknowledged_at|date:"H:i:s"|default:"—" }}</td>
+          <td class="gn-muted" style="font-size: 12px">{{ cmd.result|default:cmd.error|default:"—" }}</td>
+          <td class="mono gn-muted" style="font-size: 11px">{{ cmd.id|shortid }}</td>
+        </tr>
+      {% empty %}
+        <tr>
+          <td colspan="6">
+            <div class="gn-empty">هنوز دستوری برای این دستگاه صادر نشده است.</div>
+          </td>
+        </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endblock %}

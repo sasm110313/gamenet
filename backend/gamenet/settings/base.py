@@ -148,7 +148,7 @@ CSRF_COOKIE_SAMESITE = "Lax"
 CSRF_COOKIE_SECURE = env.bool("DJANGO_SECURE_COOKIES", default=False)
 X_FRAME_OPTIONS = "DENY"
 SECURE_CONTENT_TYPE_NOSNIFF = True
-SECURE_REFERRER_POLICY = "no-referrer"
+SECURE_REFERRER_POLICY = "same-origin"
 SECURE_SSL_REDIRECT = env.bool("DJANGO_SECURE_SSL_REDIRECT", default=False)
 
 # --- DRF --------------------------------------------------------------------
@@ -181,6 +181,7 @@ else:
 
 # --- Edge runtime -----------------------------------------------------------
 EDGE_NAME = env("EDGE_NAME", default="Main Gaming Floor")
+EDGE_REGISTRATION_CODE = env("EDGE_REGISTRATION_CODE", default="")
 EDGE_LAN_BIND = env("EDGE_LAN_BIND", default="0.0.0.0")
 EDGE_LAN_PORT = env.int("EDGE_LAN_PORT", default=9443)
 EDGE_CREDENTIALS_FILE = env(
@@ -231,6 +232,7 @@ LOGGING = {
     "loggers": {
         "gamenet": {"handlers": ["console"], "level": env("GAMENET_LOG_LEVEL", default="INFO")},
         "django.request": {"handlers": ["console"], "level": "WARNING"},
+        "django.security": {"handlers": ["console"], "level": "DEBUG"},
     },
 }
 

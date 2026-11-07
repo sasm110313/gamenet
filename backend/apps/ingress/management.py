@@ -7,6 +7,8 @@ event flows back into the cloud projections.
 
 from __future__ import annotations
 
+from apps.core.redirects import safe_redirect_next
+
 import uuid
 
 from django.contrib import messages
@@ -580,4 +582,4 @@ def session_stop(request, session_id):
         )
     except ValueError as exc:
         messages.error(request, str(exc))
-    return redirect(request.POST.get("next") or "cloud_sessions")
+    return safe_redirect_next(request, "cloud_sessions")

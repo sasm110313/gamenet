@@ -50,6 +50,7 @@ EDGE_COMMAND_TYPES = {
     "edge.sync_now",
     "edge.config_refresh",
     "edge.test_event",
+    "edge.create_client_code",
 } | CATALOG_COMMAND_TYPES | SESSION_COMMAND_TYPES | WALLET_COMMAND_TYPES
 
 
@@ -253,7 +254,10 @@ def execute_command(command_id: uuid.UUID) -> dict[str, Any]:
         row_token = str(row.command_id)
 
         try:
-            result, status = _dispatch(command_type, payload, origin=row_token)
+            # Roll back any partial dispatch effects before recording failure.
+            # The outer transaction can then safely persist the terminal result.
+            with transaction.atomic():
+                result, status = _dispatch(command_type, payload, origin=row_token)
             error = ""
         except Exception as exc:
             logger.exception("command %s failed", row_token)
@@ -396,6 +400,22 @@ def _dispatch(command_type: str, payload: dict, *, origin: str) -> tuple[dict[st
                 payload={"note": payload.get("note", "manual test"), "origin": "cloud_command"},
             )
         return {"event_id": str(event.event_id), "sequence": event.local_sequence}, "succeeded"
+
+    if command_type == "edge.create_client_code":
+        from apps.devices.services import create_registration_code
+        label = str(payload.get("label") or "").strip()
+        reg = create_registration_code(label=label)
+        emit(
+            "device.code_created",
+            aggregate_type="registration_code",
+            aggregate_id=str(reg.id),
+            payload={
+                "code": reg.code,
+                "label": reg.label,
+                "expires_at": reg.expires_at.isoformat(),
+            },
+        )
+        return {"code": reg.code, "label": reg.label, "expires_at": reg.expires_at.isoformat()}, "succeeded"
 
     if command_type == "catalog.customer.upsert":
         from apps.customers.services import create_customer, update_customer

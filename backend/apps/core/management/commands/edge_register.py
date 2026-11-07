@@ -26,6 +26,7 @@ class Command(BaseCommand):
             name=options["name"] or identity.name,
             software_version=settings.GAMENET_VERSION,
             ca_bundle=settings.CLOUD_CA_BUNDLE,
+            edge_id=str(identity.edge_id),
         )
         save_registration(
             edge_id=response["edge_id"],

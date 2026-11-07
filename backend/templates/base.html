@@ -50,6 +50,9 @@
         <a href="{% url 'cloud_overview' %}" class="{% if n == 'cloud_overview' %}active{% endif %}">
           <i class="ti ti-radar"></i><span>نمای کل</span>
         </a>
+        <a href="{% url 'cloud_devices' %}" class="{% if n|slice:':13' == 'cloud_device_' or n == 'cloud_devices' %}active{% endif %}">
+          <i class="ti ti-device-desktop"></i><span>کلاینت‌ها</span>
+        </a>
         <a href="{% url 'cloud_edges' %}" class="{% if n|slice:':11' == 'cloud_edge' %}active{% endif %}">
           <i class="ti ti-server-2"></i><span>Edge ها</span>
         </a>

@@ -19,7 +19,7 @@
     "reset:dev": "node scripts/reset-dev-state.mjs"
   },
   "dependencies": {
-    "ws": "8.18.0"
+    "ws": "8.22.1"
   },
   "devDependencies": {
     "@types/node": "20.14.10",

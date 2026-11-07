@@ -1,0 +1,132 @@
+{% extends "base.html" %}
+{% load gn %}
+
+{% block title %}کلاینت‌ها{% endblock %}
+{% block page_title %}مدیریت کلاینت‌ها (دستگاه‌های بازی){% endblock %}
+{% block page_subtitle %}نظارت زنده، قفل و بازگشایی، راه‌اندازی و شروع نشست از طریق ابر{% endblock %}
+
+{% block content %}
+<div class="gn-grid cols-2 mb-3">
+  <div class="gn-card">
+    <h6>ساخت کد ثبت کلاینت برای هاب محلی (Edge)</h6>
+    <p class="gn-muted" style="font-size: 12.5px">
+      از طریق این فرم می‌توانید برای هر کدام از هاب‌های محلی خود، کد ثبت دستگاه جدید ایجاد کنید.
+      اپراتور محلی این کد را روی کلاینت جدید وارد می‌کند تا به هاب متصل شود.
+    </p>
+    <form method="post" action="{% url 'cloud_create_client_code' %}" class="d-flex flex-column gap-2">
+      {% csrf_token %}
+      <input type="hidden" name="next" value="cloud_devices">
+      <div class="d-flex gap-2">
+        <div class="flex-grow-1">
+          <label class="gn-label">انتخاب هاب محلی (Edge)</label>
+          <select class="gn-select" name="edge_id" required>
+            <option value="">-- انتخاب هاب --</option>
+            {% for e in edges %}
+              <option value="{{ e.id }}" {% if selected_edge == e.id|stringformat:"s" %}selected{% endif %}>
+                {{ e.name }} ({% if e.status == 'ONLINE' %}آنلاین{% else %}آفلاین{% endif %})
+              </option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="flex-grow-1">
+          <label class="gn-label">برچسب (مثلاً PC-06)</label>
+          <input class="gn-input" name="label" placeholder="PC-01" required>
+        </div>
+      </div>
+      <div class="d-flex justify-content-end">
+        <button class="gn-btn primary" type="submit"><i class="ti ti-key"></i> صدور کد ثبت از راه دور</button>
+      </div>
+    </form>
+  </div>
+
+  <div class="gn-card">
+    <h6>شروع سریع نشست از راه دور</h6>
+    <p class="gn-muted" style="font-size: 12.5px">
+      انتخاب مستقیم مشتری و دستگاه جهت باز شدن قفل و شروع بلافاصله زمان بازی مشتری.
+    </p>
+    {% if customers and devices %}
+      <form method="post" action="" id="quickSessionForm" class="d-flex flex-column gap-2">
+        {% csrf_token %}
+        <input type="hidden" name="next" value="cloud_devices">
+        <div class="d-flex gap-2">
+          <div class="flex-grow-1">
+            <label class="gn-label">انتخاب دستگاه</label>
+            <select class="gn-select" name="device_id" id="quickDeviceSelect" required onchange="updateStartAction(this)">
+              <option value="">-- انتخاب دستگاه --</option>
+              {% for d in devices %}
+                {% if not d.active_session %}
+                  <option value="{{ d.id }}" data-action-url="{% url 'cloud_device_start_session' d.id %}">
+                    {{ d.name }} · {{ d.status|status_fa }} ({{ d.edge_node.name|default:"هاب" }})
+                  </option>
+                {% endif %}
+              {% endfor %}
+            </select>
+          </div>
+          <div class="flex-grow-1">
+            <label class="gn-label">انتخاب مشتری</label>
+            <select class="gn-select" name="customer_id" required>
+              <option value="">-- انتخاب مشتری --</option>
+              {% for c in customers %}
+                <option value="{{ c.id }}">{{ c.full_name }} ({{ c.phone|default:"بدون شماره" }})</option>
+              {% endfor %}
+            </select>
+          </div>
+        </div>
+        <div class="d-flex justify-content-end">
+          <button class="gn-btn ok" type="submit" id="btnQuickStartSession"><i class="ti ti-player-play"></i> شروع نشست از ابر</button>
+        </div>
+      </form>
+      <script>
+        function updateStartAction(selectEl) {
+          const opt = selectEl.options[selectEl.selectedIndex];
+          const form = document.getElementById('quickSessionForm');
+          if (opt && opt.dataset.actionUrl) {
+            form.action = opt.dataset.actionUrl;
+          }
+        }
+      </script>
+    {% else %}
+      <div class="gn-muted" style="font-size: 12.5px">مشتری یا دستگاه فعالی برای شروع نشست در دسترس نیست.</div>
+    {% endif %}
+  </div>
+</div>
+
+<div class="gn-card">
+  <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
+    <div class="d-flex align-items-center gap-2">
+      <h6 class="mb-0">لیست کامل دستگاه‌ها</h6>
+      <span class="gn-muted num" style="font-size: 12px">({{ devices|length }} دستگاه)</span>
+    </div>
+
+    <!-- Filters -->
+    <form method="get" class="d-flex gap-2 flex-wrap">
+      <select class="gn-select" name="edge" onchange="this.form.submit()" style="min-width: 160px">
+        <option value="">همه هاب‌ها (Edges)</option>
+        {% for e in edges %}
+          <option value="{{ e.id }}" {% if selected_edge == e.id|stringformat:"s" %}selected{% endif %}>
+            {{ e.name }}
+          </option>
+        {% endfor %}
+      </select>
+
+      <select class="gn-select" name="status" onchange="this.form.submit()" style="min-width: 140px">
+        <option value="">همه وضعیت‌ها</option>
+        <option value="ONLINE" {% if status_filter == 'ONLINE' %}selected{% endif %}>آنلاین (ONLINE)</option>
+        <option value="LOCKED" {% if status_filter == 'LOCKED' %}selected{% endif %}>قفل (LOCKED)</option>
+        <option value="ACTIVE" {% if status_filter == 'ACTIVE' %}selected{% endif %}>در حال بازی (ACTIVE)</option>
+        <option value="OFFLINE" {% if status_filter == 'OFFLINE' %}selected{% endif %}>آفلاین (OFFLINE)</option>
+      </select>
+
+      <input class="gn-input" name="q" value="{{ q }}" placeholder="جستجو بر اساس نام، IP…" style="min-width: 200px">
+      <button class="gn-btn" type="submit"><i class="ti ti-search"></i></button>
+      {% if q or selected_edge or status_filter %}
+        <a href="{% url 'cloud_devices' %}" class="gn-btn" title="حذف فیلترها"><i class="ti ti-x"></i></a>
+      {% endif %}
+    </form>
+  </div>
+
+  <div hx-get="{% url 'cloud_device_grid' %}?edge={{ selected_edge|default:'' }}&q={{ q|default:'' }}&status={{ status_filter|default:'' }}" hx-trigger="every 3s" hx-swap="innerHTML">
+    {% include "cloud/_device_grid.html" %}
+  </div>
+</div>
+{% endblock %}

@@ -172,6 +172,9 @@ def reverse_entry(
         reverses=entry,
         note=note or f"برگشت تراکنش {str(entry.id)[:8]}",
         actor=actor,
+        # A reversal undoes a fact that should never have been applied; it must
+        # be possible even when the original deposit was already spent.
+        allow_over_limit=True,
     )
 
 

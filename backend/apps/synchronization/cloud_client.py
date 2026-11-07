@@ -66,9 +66,11 @@ class CloudClient:
     # -- protocol ----------------------------------------------------------
     @classmethod
     def register(cls, *, base_url: str, code: str, name: str, software_version: str,
-                 ca_bundle: str = "") -> dict:
+                 ca_bundle: str = "", edge_id: str | None = None) -> dict:
         session = requests.Session()
         payload = {"code": code, "name": name, "software_version": software_version}
+        if edge_id:
+            payload["edge_id"] = edge_id
         try:
             resp = session.post(
                 f"{base_url.rstrip('/')}/api/v1/edge/register",

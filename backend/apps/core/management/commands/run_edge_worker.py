@@ -15,6 +15,7 @@ import signal
 import time
 
 from django.conf import settings
+from django.core.management import call_command
 from django.core.management.base import BaseCommand
 
 from apps.core.roles import require_edge
@@ -58,6 +59,16 @@ class Command(BaseCommand):
         while not stop:
             registered = is_registered()
             if not registered:
+                if settings.EDGE_REGISTRATION_CODE:
+                    try:
+                        call_command("edge_register", code=settings.EDGE_REGISTRATION_CODE)
+                        registered = is_registered()
+                    except Exception:
+                        logger.exception("automatic edge registration failed")
+                        if once:
+                            raise
+                if registered:
+                    continue
                 if once:
                     self.stdout.write("edge is not registered; nothing to do")
                     return
