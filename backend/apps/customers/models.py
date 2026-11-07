@@ -26,6 +26,7 @@ class Customer(models.Model):
     is_active = models.BooleanField(default=True)
     notes = models.CharField(max_length=255, blank=True)
     is_replica = models.BooleanField(default=False)
+    revision = models.PositiveIntegerField(default=1)
     created_at = models.DateTimeField(default=timezone.now)
     updated_at = models.DateTimeField(auto_now=True)
 

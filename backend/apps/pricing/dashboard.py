@@ -69,6 +69,9 @@ def tariff_update(request, tariff_id):
             name=request.POST.get("name", tariff.name),
             hourly_rate=_int(request.POST.get("hourly_rate")),
             is_active=request.POST.get("is_active") == "1",
+            expected_revision=_int(request.POST.get("expected_revision"))
+            if request.POST.get("expected_revision")
+            else None,
         )
     except (TariffError, ValueError) as exc:
         messages.error(request, str(exc))
@@ -127,6 +130,9 @@ def group_update(request, group_id):
             name=request.POST.get("name", group.name),
             tariff=tariff,
             is_active=request.POST.get("is_active") == "1",
+            expected_revision=_int(request.POST.get("expected_revision"))
+            if request.POST.get("expected_revision")
+            else None,
         )
     except GroupError as exc:
         messages.error(request, str(exc))

@@ -34,6 +34,8 @@ KNOWN_EVENT_TYPES = {
     "customer_group.updated",
     "customer.created",
     "customer.updated",
+    "customer_rate.created",
+    "customer_rate.updated",
     "ledger.entry_created",
     "session.started",
     "session.ended",

@@ -30,6 +30,9 @@ class RemoteCommand(models.Model):
     expires_at = models.DateTimeField()
     signature = models.TextField()
     nonce = models.CharField(max_length=64, unique=True)
+    # Cloud UI idempotency key: a double-click reuses the same command instead
+    # of issuing a second financial operation.
+    request_id = models.UUIDField(null=True, blank=True, db_index=True)
     created_by = models.ForeignKey(
         settings.AUTH_USER_MODEL, null=True, on_delete=models.SET_NULL, related_name="+"
     )
@@ -40,6 +43,13 @@ class RemoteCommand(models.Model):
 
     class Meta:
         ordering = ["-issued_at"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["edge", "request_id"],
+                condition=models.Q(request_id__isnull=False),
+                name="commands_unique_request_per_edge",
+            )
+        ]
 
     def __str__(self) -> str:
         return f"{self.command_type} -> {self.edge.name} [{self.status}]"

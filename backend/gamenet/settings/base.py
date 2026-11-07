@@ -27,11 +27,14 @@ GAMENET_ROLE = env("GAMENET_ROLE", default="edge")
 if GAMENET_ROLE not in {"cloud", "edge"}:
     raise SystemExit(f"GAMENET_ROLE must be cloud|edge, got {GAMENET_ROLE!r}")
 GAMENET_ENV = env("GAMENET_ENV", default="dev")
-GAMENET_VERSION = "0.1.0-phase1"
+GAMENET_VERSION = "0.2.0-phase2"
 
 ALLOWED_HOSTS = env.list("DJANGO_ALLOWED_HOSTS", default=["127.0.0.1", "localhost"])
 CSRF_TRUSTED_ORIGINS = env.list("DJANGO_CSRF_TRUSTED_ORIGINS", default=[])
 USE_X_FORWARDED_HOST = env.bool("DJANGO_USE_X_FORWARDED_HOST", default=False)
+if env.bool("DJANGO_BEHIND_PROXY", default=False):
+    # Nginx terminates TLS and forwards X-Forwarded-Proto.
+    SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
 
 # --- Applications -----------------------------------------------------------
 INSTALLED_APPS = [
@@ -130,7 +133,7 @@ USE_TZ = True
 
 # --- Static ----------------------------------------------------------------
 STATIC_URL = "/static/"
-STATIC_ROOT = ROOT_DIR / ".artifacts" / "static"
+STATIC_ROOT = Path(env("DJANGO_STATIC_ROOT", default=str(ROOT_DIR / ".artifacts" / "static")))
 STATICFILES_DIRS = [BASE_DIR / "static"]
 STORAGES = {
     "default": {"BACKEND": "django.core.files.storage.FileSystemStorage"},

@@ -12,6 +12,7 @@ from apps.audit.models import AuditLog
 from apps.clients.models import ClientDevice, ClientStatus
 from apps.core.dashboard import edge_common
 from apps.customers.models import Customer
+from apps.pricing.models import CustomerRate
 from apps.sessions.models import GamingSession, SessionStatus
 from apps.sessions.services import SessionError, start_session, stop_session
 
@@ -53,12 +54,18 @@ def sessions(request):
         .exclude(sessions__status=SessionStatus.ACTIVE)
         .order_by("name")
     )
+    rates = (
+        CustomerRate.objects.filter(customer__is_active=True, is_active=True)
+        .select_related("customer")
+        .order_by("customer__full_name", "-is_default", "name")
+    )
     ctx.update(
         {
             "active_sessions": active,
             "recent_sessions": recent[:80],
             "customers": customers[:200],
             "devices": devices,
+            "rates": rates,
             "q": q,
         }
     )
@@ -73,17 +80,26 @@ def session_start(request):
     if customer is None or device is None:
         messages.error(request, "مشتری یا دستگاه انتخاب‌شده معتبر نیست.")
         return redirect("edge_sessions")
+    rate = None
+    rate_id = request.POST.get("customer_rate_id", "").strip()
+    if rate_id:
+        rate = CustomerRate.objects.filter(id=rate_id).first()
+        if rate is None or rate.customer_id != customer.id:
+            messages.error(request, "نرخ انتخاب‌شده معتبر نیست.")
+            return redirect("edge_sessions")
     try:
-        session = start_session(customer, device, actor=request.user)
+        session = start_session(customer, device, customer_rate=rate, actor=request.user)
     except SessionError as exc:
         messages.error(request, str(exc))
         return redirect("edge_sessions")
     _audit(
         request, "session.started", session,
-        {"customer": customer.full_name, "device": device.name, "rate": session.hourly_rate},
+        {"customer": customer.full_name, "device": device.name, "rate": session.hourly_rate,
+         "rate_name": session.tariff_name},
     )
     messages.success(
-        request, f"نشست {customer.full_name} روی {device.name} شروع شد."
+        request,
+        f"نشست {customer.full_name} روی {device.name} با نرخ {session.tariff_name} شروع شد.",
     )
     return redirect("edge_sessions")
 

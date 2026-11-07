@@ -1,0 +1,40 @@
+[Unit]
+Description=GameNet cloud control plane (Django ASGI)
+Documentation=file:/opt/gamenet/docs/PHASE2.md
+After=network-online.target postgresql.service redis-server.service
+Wants=network-online.target postgresql.service redis-server.service
+
+[Service]
+Type=simple
+User=gamenet
+Group=gamenet
+WorkingDirectory=/opt/gamenet/backend
+EnvironmentFile=/opt/gamenet/.env
+Environment=DJANGO_SETTINGS_MODULE=gamenet.settings.cloud
+ExecStart=/opt/gamenet/venv/bin/python -m uvicorn gamenet.asgi:application \
+    --host 127.0.0.1 \
+    --port 18443 \
+    --workers 1 \
+    --proxy-headers \
+    --forwarded-allow-ips=127.0.0.1 \
+    --no-server-header \
+    --timeout-keep-alive 30
+Restart=always
+RestartSec=3
+TimeoutStopSec=20
+KillSignal=SIGINT
+
+# Keep the shared 1-vCPU server responsive next to the existing apps.
+Nice=5
+MemoryHigh=256M
+MemoryMax=384M
+CPUQuota=80%
+
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=full
+ProtectHome=true
+ReadWritePaths=/opt/gamenet/static /opt/gamenet/backend/.runtime
+
+[Install]
+WantedBy=multi-user.target

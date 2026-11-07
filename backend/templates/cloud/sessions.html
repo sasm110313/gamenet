@@ -31,7 +31,7 @@
 
 <div class="gn-card">
   <table class="gn-table">
-    <thead><tr><th>مشتری</th><th>دستگاه</th><th>Edge</th><th>شروع</th><th>مدت</th><th>هزینه</th><th>وضعیت</th><th>تعرفه</th></tr></thead>
+    <thead><tr><th>مشتری</th><th>دستگاه</th><th>Edge</th><th>شروع</th><th>مدت</th><th>هزینه</th><th>وضعیت</th><th>تعرفه</th><th class="text-end">عملیات</th></tr></thead>
     <tbody>
       {% for session in sessions %}
         <tr>
@@ -43,9 +43,23 @@
           <td class="num">{{ session.cost|default:0|toman }}</td>
           <td><span class="gn-status {{ session.status|status_tone }}"><span class="dot"></span>{{ session.status|status_fa }}</span></td>
           <td class="gn-muted">{{ session.tariff_name }}<div class="num" style="font-size: 10.5px">{{ session.hourly_rate|toman }}</div></td>
+          <td class="text-end">
+            {% if session.status == 'ACTIVE' %}
+              <form method="post" action="{% url 'cloud_manage_session_stop' session.id %}">
+                {% csrf_token %}
+                {% uuid4 as request_id %}
+                <input type="hidden" name="request_id" value="{{ request_id }}">
+                <input type="hidden" name="reason" value="پایان از ابر">
+                <input type="hidden" name="next" value="/sessions/">
+                <button class="gn-btn sm danger" type="submit"><i class="ti ti-player-stop"></i> پایان</button>
+              </form>
+            {% else %}
+              <span class="gn-muted">—</span>
+            {% endif %}
+          </td>
         </tr>
       {% empty %}
-        <tr><td colspan="8"><div class="gn-empty"><i class="ti ti-clock-off"></i>نشستی همگام نشده است.</div></td></tr>
+        <tr><td colspan="9"><div class="gn-empty"><i class="ti ti-clock-off"></i>نشستی همگام نشده است.</div></td></tr>
       {% endfor %}
     </tbody>
   </table>

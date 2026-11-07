@@ -35,6 +35,10 @@ class GamingSession(models.Model):
         "pricing.Tariff", null=True, blank=True, on_delete=models.PROTECT,
         related_name="sessions",
     )
+    customer_rate = models.ForeignKey(
+        "pricing.CustomerRate", null=True, blank=True, on_delete=models.PROTECT,
+        related_name="sessions",
+    )
     tariff_name = models.CharField(max_length=80)
     hourly_rate = models.PositiveIntegerField()
     started_at = models.DateTimeField(default=timezone.now, db_index=True)
@@ -70,6 +74,12 @@ class GamingSession(models.Model):
                 fields=["device"],
                 condition=models.Q(status=SessionStatus.ACTIVE),
                 name="gaming_sessions_one_active_per_device",
+            ),
+            models.CheckConstraint(
+                condition=~(
+                    models.Q(tariff__isnull=False) & models.Q(customer_rate__isnull=False)
+                ),
+                name="gaming_sessions_single_rate_source",
             ),
         ]
         indexes = [

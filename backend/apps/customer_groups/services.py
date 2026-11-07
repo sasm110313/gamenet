@@ -21,6 +21,7 @@ def _payload(group: CustomerGroup) -> dict:
         "name": group.name,
         "tariff_id": str(group.tariff_id) if group.tariff_id else None,
         "is_active": group.is_active,
+        "revision": group.revision,
     }
 
 
@@ -34,9 +35,17 @@ def _clean_name(name: str) -> str:
 
 
 @transaction.atomic
-def create_group(*, name: str, tariff: Tariff, actor=None) -> CustomerGroup:
+def create_group(
+    *, name: str, tariff: Tariff, group_id=None, actor=None
+) -> CustomerGroup:
     require_edge()
     identity = ensure_identity()
+    if group_id is not None:
+        existing = CustomerGroup.objects.filter(id=group_id).first()
+        if existing is not None:
+            if existing.edge_id != identity.edge_id:
+                raise GroupError("شناسه گروه به این Edge تعلق ندارد.")
+            return existing
     name = _clean_name(name)
     if tariff.edge_id != identity.edge_id:
         raise GroupError("تعرفه به این Edge تعلق ندارد.")
@@ -45,7 +54,7 @@ def create_group(*, name: str, tariff: Tariff, actor=None) -> CustomerGroup:
     if CustomerGroup.objects.filter(edge_id=identity.edge_id, name=name).exists():
         raise GroupError("گروهی با این نام قبلاً ثبت شده است.")
     group = CustomerGroup.objects.create(
-        edge_id=identity.edge_id, name=name, tariff=tariff
+        id=group_id, edge_id=identity.edge_id, name=name, tariff=tariff
     )
     emit(
         "customer_group.created",
@@ -59,10 +68,12 @@ def create_group(*, name: str, tariff: Tariff, actor=None) -> CustomerGroup:
 @transaction.atomic
 def update_group(
     group: CustomerGroup, *, name: str | None = None, tariff: Tariff | None = None,
-    is_active: bool | None = None,
+    is_active: bool | None = None, expected_revision: int | None = None,
 ) -> CustomerGroup:
     require_edge()
     group = CustomerGroup.objects.select_for_update().get(pk=group.pk)
+    if expected_revision is not None and group.revision != expected_revision:
+        raise GroupError("نسخه گروه تغییر کرده است؛ صفحه را تازه کنید و دوباره تلاش کنید.")
     if name is not None:
         group.name = _clean_name(name)
     if tariff is not None:
@@ -79,7 +90,8 @@ def update_group(
         .exists()
     ):
         raise GroupError("گروهی با این نام قبلاً ثبت شده است.")
-    group.save(update_fields=["name", "tariff", "is_active", "updated_at"])
+    group.revision += 1
+    group.save(update_fields=["name", "tariff", "is_active", "revision", "updated_at"])
     emit(
         "customer_group.updated",
         aggregate_type="customer_group",

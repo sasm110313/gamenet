@@ -17,6 +17,7 @@ class CustomerGroup(models.Model):
     )
     is_active = models.BooleanField(default=True)
     is_replica = models.BooleanField(default=False)
+    revision = models.PositiveIntegerField(default=1)
     created_at = models.DateTimeField(default=timezone.now)
     updated_at = models.DateTimeField(auto_now=True)
 

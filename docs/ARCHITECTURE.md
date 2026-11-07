@@ -1,7 +1,7 @@
 # Architecture
 
-Status: Phase 1 (customers, wallets, ledger, sessions). Decisions here are
-load-bearing for Phases 2–6.
+Status: Phase 2 (personal rates, revision-checked remote management, cloud
+deployment). Decisions here are load-bearing for Phases 3–6.
 
 ## 1. Components and trust boundaries
 
@@ -76,6 +76,19 @@ PENDING/FAILED and retries after the cause is fixed, so the cloud never stores a
 partial customer or money fact. Customer events never overwrite an existing
 cloud wallet balance; only the ledger stream may move a replica balance.
 
+### 3.2 Phase 2 replication rules
+
+| Edge fact | Cloud projection | Missing-reference policy |
+|---|---|---|
+| `customer_rate.created/updated` | `pricing.CustomerRate` upsert and default clearing | Unknown customer, or a rate owned by another customer, rejects the event |
+| `session.started` (rate fields) | session `customer_rate`, `tariff_name`, `hourly_rate` | Unknown/foreign customer rate rejects the event |
+| `ledger.entry_created` (`source_command_id`) | replica ledger row keeps the command id | Unknown customer/session still rejects the event |
+
+Personal rates are edge-authoritative like tariffs. The cloud copy exists so an
+operator can choose or edit a rate remotely, but the command is applied by the
+edge. A session stores the chosen rate as a snapshot; later rate edits never
+change it.
+
 ## 4. Edge → Cloud sync (Transactional Outbox)
 
 ```
@@ -113,14 +126,26 @@ Failure handling:
 ## 5. Cloud → Edge (commands and configuration)
 
 Cloud issues a `RemoteCommand` with `command_id`, `edge_id`, `type`, `payload`,
-`issued_at`, `expires_at`, `nonce`, and `signature = HMAC-SHA256(edge_secret,
-canonical_json(envelope))`.
+`issued_at`, `expires_at`, `nonce`, and `signature = Ed25519(edge_command_private_key,
+canonical_json(envelope))`. The edge verifies it with the matching public key.
+
+Phase 2 adds catalog/session/wallet command types and two idempotency keys:
+
+- `RemoteCommand.request_id` (unique per edge) is filled by the cloud form, so a
+  double-click reuses one command instead of issuing two financial operations.
+- `LedgerEntry.source_command_id` (unique) makes a wallet posting idempotent even
+  if the command executor is replayed.
+
+Catalog commands carry `base_revision`. The edge compares it inside the
+transaction; a stale base fails the command without writing anything. `0` means
+create-if-missing, which keeps retries safe.
 
 Delivery is at-least-once; execution is exactly-once:
 
 - Edge verifies signature, expiry, edge id, and `nonce` uniqueness (DB unique
-  constraint on `inbound_commands.command_id`), inside one transaction that also
-  records the result.
+  constraint on `inbound_commands.command_id`). Claim → dispatch → terminal
+  status → `command.result` run in one transaction, so a crash before commit is
+  retryable and a committed command can never execute twice.
 - Replayed or expired commands are acknowledged as `rejected` with a reason, never
   executed.
 - Result is reported back as a `command.result` sync event, which flips the cloud

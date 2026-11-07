@@ -1,0 +1,10 @@
+[Unit]
+Description=GameNet cloud database backup
+After=postgresql.service
+Requires=postgresql.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/gamenet-backup
+Nice=10
+IOSchedulingClass=idle

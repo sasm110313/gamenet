@@ -18,6 +18,7 @@ from apps.core.money import session_cost
 from apps.core.roles import require_edge
 from apps.customers.models import Customer
 from apps.ledger.models import LedgerEntry, LedgerEntryType
+from apps.pricing.models import CustomerRate
 from apps.sessions.models import GamingSession, SessionStatus
 from apps.synchronization.command_service import queue_device_command
 from apps.synchronization.config import current_config
@@ -34,8 +35,29 @@ class SessionError(ValueError):
 STARTABLE_DEVICE_STATES = {ClientStatus.ONLINE, ClientStatus.LOCKED, ClientStatus.IDLE}
 
 
-def _resolve_tariff(customer: Customer):
-    """Return (tariff, hourly_rate, tariff_name) for a new session."""
+def resolve_rate(customer: Customer, customer_rate: CustomerRate | None = None):
+    """Return (tariff, customer_rate, hourly_rate, rate_name) for a new session.
+
+    Priority: explicitly selected personal rate -> customer's default personal
+    rate -> group tariff -> global default.
+    """
+    if customer_rate is not None:
+        if customer_rate.customer_id != customer.id:
+            raise SessionError("نرخ انتخاب‌شده به این مشتری تعلق ندارد.")
+        if not customer_rate.is_active:
+            raise SessionError("نرخ انتخاب‌شده غیرفعال است.")
+        if customer_rate.hourly_rate <= 0:
+            raise SessionError("نرخ انتخاب‌شده نامعتبر است.")
+        return None, customer_rate, customer_rate.hourly_rate, customer_rate.name
+
+    personal = CustomerRate.objects.filter(
+        customer=customer, is_active=True, is_default=True
+    ).first()
+    if personal is not None:
+        if personal.hourly_rate <= 0:
+            raise SessionError("نرخ پیش‌فرض مشتری نامعتبر است.")
+        return None, personal, personal.hourly_rate, personal.name
+
     group = customer.group
     if group is not None and not group.is_active:
         raise SessionError("گروه مشتری غیرفعال است.")
@@ -45,11 +67,11 @@ def _resolve_tariff(customer: Customer):
             raise SessionError("تعرفه گروه غیرفعال است.")
         if tariff.hourly_rate <= 0:
             raise SessionError("نرخ تعرفه نامعتبر است.")
-        return tariff, tariff.hourly_rate, tariff.name
+        return tariff, None, tariff.hourly_rate, tariff.name
     rate = int(current_config().get("default_hourly_rate", settings.DEFAULT_HOURLY_RATE))
     if rate <= 0:
         raise SessionError("نرخ پیش‌فرض نامعتبر است.")
-    return None, rate, "تعرفه پیش‌فرض"
+    return None, None, rate, "تعرفه پیش‌فرض"
 
 
 def _session_payload(session: GamingSession) -> dict:
@@ -58,6 +80,9 @@ def _session_payload(session: GamingSession) -> dict:
         "customer_id": str(session.customer_id),
         "device_id": str(session.device_id),
         "tariff_id": str(session.tariff_id) if session.tariff_id else None,
+        "customer_rate_id": (
+            str(session.customer_rate_id) if session.customer_rate_id else None
+        ),
         "tariff_name": session.tariff_name,
         "hourly_rate": session.hourly_rate,
         "started_at": session.started_at.isoformat(),
@@ -65,10 +90,30 @@ def _session_payload(session: GamingSession) -> dict:
 
 
 @transaction.atomic
-def start_session(customer: Customer, device: ClientDevice, *, actor=None) -> GamingSession:
+def start_session(
+    customer: Customer,
+    device: ClientDevice,
+    *,
+    customer_rate: CustomerRate | None = None,
+    session_id=None,
+    actor=None,
+) -> GamingSession:
     require_edge()
     identity = ensure_identity()
     now = timezone.now()
+
+    # A retried remote-start command carries a cloud-generated session id. The
+    # session status and this lookup make the command idempotent.
+    if session_id is not None:
+        existing = GamingSession.objects.filter(id=session_id).first()
+        if existing is not None:
+            if (
+                existing.edge_id != identity.edge_id
+                or existing.customer_id != customer.id
+                or existing.device_id != device.id
+            ):
+                raise SessionError("شناسه نشست با مشتری یا دستگاه مطابقت ندارد.")
+            return existing
 
     customer = Customer.objects.select_for_update().get(pk=customer.pk)
     if not customer.is_active:
@@ -92,7 +137,12 @@ def start_session(customer: Customer, device: ClientDevice, *, actor=None) -> Ga
     if GamingSession.objects.filter(device=device, status=SessionStatus.ACTIVE).exists():
         raise SessionError("این دستگاه در یک نشست فعال است.")
 
-    tariff, hourly_rate, tariff_name = _resolve_tariff(customer)
+    if customer_rate is not None:
+        customer_rate = CustomerRate.objects.get(pk=customer_rate.pk)
+
+    tariff, customer_rate, hourly_rate, tariff_name = resolve_rate(
+        customer, customer_rate
+    )
 
     # Reserve one billable hour for every live session. This is the credit check
     # that concurrent starts must not both pass.
@@ -108,11 +158,13 @@ def start_session(customer: Customer, device: ClientDevice, *, actor=None) -> Ga
         )
 
     session = GamingSession.objects.create(
+        id=session_id,
         edge_id=identity.edge_id,
         customer=customer,
         device=device,
         status=SessionStatus.ACTIVE,
         tariff=tariff,
+        customer_rate=customer_rate,
         tariff_name=tariff_name,
         hourly_rate=hourly_rate,
         started_at=now,
@@ -129,6 +181,7 @@ def start_session(customer: Customer, device: ClientDevice, *, actor=None) -> Ga
             "session_id": str(session.id),
             "customer_id": str(customer.id),
             "hourly_rate": hourly_rate,
+            "rate_name": tariff_name,
         },
         actor=actor,
     )

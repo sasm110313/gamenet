@@ -52,7 +52,7 @@
         {% for tariff in tariffs %}
           <tr>
             <td>
-              <form id="tariff-{{ tariff.id }}" method="post" action="{% url 'edge_tariff_update' tariff.id %}">{% csrf_token %}</form>
+              <form id="tariff-{{ tariff.id }}" method="post" action="{% url 'edge_tariff_update' tariff.id %}">{% csrf_token %}<input type="hidden" name="expected_revision" value="{{ tariff.revision }}"></form>
               <input class="gn-input" form="tariff-{{ tariff.id }}" name="name" value="{{ tariff.name }}" maxlength="80" style="min-width: 130px">
             </td>
             <td><input class="gn-input num" form="tariff-{{ tariff.id }}" name="hourly_rate" value="{{ tariff.hourly_rate }}" inputmode="numeric" style="min-width: 100px"></td>
@@ -78,7 +78,7 @@
         {% for group in groups %}
           <tr>
             <td>
-              <form id="group-{{ group.id }}" method="post" action="{% url 'edge_group_update' group.id %}">{% csrf_token %}</form>
+              <form id="group-{{ group.id }}" method="post" action="{% url 'edge_group_update' group.id %}">{% csrf_token %}<input type="hidden" name="expected_revision" value="{{ group.revision }}"></form>
               <input class="gn-input" form="group-{{ group.id }}" name="name" value="{{ group.name }}" maxlength="80" style="min-width: 120px">
             </td>
             <td>

@@ -6,6 +6,12 @@
 {% block page_subtitle %}{{ customer.id }} · کپی همگام‌شده (فقط خواندنی){% endblock %}
 
 {% block content %}
+<div class="gn-card mb-3">
+  <div class="d-flex justify-content-between align-items-center flex-wrap gap-2">
+    <span class="gn-subtitle">این صفحه کپی همگام‌شده از Edge است. تغییرات مالی و کاتالوگ فقط از طریق فرمان مدیریت از راه دور اعمال می‌شوند.</span>
+    <a class="gn-btn primary" href="{% url 'cloud_manage_customer' customer.id %}"><i class="ti ti-settings-automation"></i> مدیریت از راه دور</a>
+  </div>
+</div>
 <div class="gn-grid cols-3 mb-3">
   <div class="gn-card">
     <h6>کیف پول</h6>

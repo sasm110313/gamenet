@@ -46,6 +46,7 @@ class LedgerEntry(models.Model):
         related_name="reversal",
     )
     note = models.CharField(max_length=255, blank=True)
+    source_command_id = models.UUIDField(null=True, blank=True, unique=True, db_index=True)
     created_by = models.ForeignKey(
         settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL, related_name="+"
     )

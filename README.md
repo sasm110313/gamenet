@@ -3,15 +3,18 @@
 Hybrid edge-cloud management for Windows gaming clients: cloud backend, on-site
 Control Hub (Windows 10), and an Electron client for Windows 7 SP1.
 
-**Status: Phase 1 — customers, groups/tariffs, wallets, append-only ledger and
-gaming sessions are implemented on the edge and projected read-only to the
-cloud. The backend suite passes 109 tests; the Phase 0 connectivity proof passed
-10/10 on the Linux dev host. Windows hardware acceptance is still pending.**
+**Status: Phase 2 — named per-customer rates, revision-checked remote management
+and a lightweight cloud deployment. Customers, groups/tariffs, wallets,
+append-only ledger and gaming sessions remain edge-authoritative and are
+projected read-only to the cloud. The backend suite passes 119 tests; the cloud
+role is deployed at `https://gamenet.hammasjedy.ir`. Windows hardware acceptance
+is still pending.**
 
-See [docs/PHASE1.md](docs/PHASE1.md) for the Phase 1 scope and money/session
-rules, [docs/PHASE0.md](docs/PHASE0.md) for the connectivity proof and the
-on-site checklist, and [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for the
-design.
+See [docs/PHASE2.md](docs/PHASE2.md) for personal rates, remote commands and the
+production deployment, [docs/PHASE1.md](docs/PHASE1.md) for the Phase 1 scope and
+money/session rules, [docs/PHASE0.md](docs/PHASE0.md) for the connectivity proof
+and the on-site checklist, and [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for
+the design.
 
 ## Repository layout
 
@@ -52,6 +55,23 @@ Cloud (read-only replica and remote control):
   never records a partial financial fact.
 - Duplicate delivery is idempotent on `(edge, event_id)`; sequence reuse and
   per-aggregate regression are rejected.
+
+## Phase 2 features
+
+- Named per-customer rates with one active default and automatic promotion when
+  a default is cleared or deactivated. Precedence at session start is
+  personal selected → personal default → group tariff → global default.
+- Rate and tariff names/amounts are snapshotted into the session; editing a rate
+  never reprices a live or historical session.
+- `revision` on customers, groups, tariffs and rates. Remote catalog commands
+  carry `base_revision` and fail closed when stale.
+- Cloud remote management of catalog, sessions and wallet under `/manage/`:
+  every action is a signed, expiring, exactly-once command. Wallet postings use
+  `LedgerEntry.source_command_id` as the idempotency key.
+- Cloud read-only session list exposes a stop command for active sessions.
+- Production artifacts under `deploy/`: systemd unit with memory/CPU guards,
+  isolated Nginx site, small-host PostgreSQL/Redis tuning, daily backups and an
+  idempotent installer.
 
 ## Run the Phase 0 proof
 
@@ -97,7 +117,22 @@ Local dashboards:
 - Edge: `https://127.0.0.1:19443/` — overview, devices, customers, sessions,
   ledger, pricing and cloud health.
 - Cloud: `https://127.0.0.1:18443/` — overview, edges, commands, events, config,
-  and read-only customers, sessions, ledger and pricing.
+  read-only customers, sessions, ledger and pricing, plus remote management at
+  `/manage/`.
+
+## Deploy the cloud role
+
+The cloud installer is idempotent and targets `/opt/gamenet`:
+
+```bash
+sudo deploy/install_cloud.sh
+```
+
+It installs PostgreSQL, Redis, Nginx, the venv, applies migrations,
+collects static files, bootstraps the admin, enables the systemd unit and the
+daily backup timer, then requests a certificate for the configured domain. It
+never modifies the existing `hammasjedy.ir` Nginx site. See
+[docs/PHASE2.md](docs/PHASE2.md) for the resource limits and verification steps.
 
 ## Tests
 

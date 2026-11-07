@@ -65,6 +65,9 @@
         <a href="{% url 'cloud_pricing' %}" class="{% if n == 'cloud_pricing' %}active{% endif %}">
           <i class="ti ti-tags"></i><span>تعرفه‌ها</span>
         </a>
+        <a href="{% url 'cloud_manage_customers' %}" class="{% if n|slice:':13' == 'cloud_manage_' %}active{% endif %}">
+          <i class="ti ti-settings-automation"></i><span>مدیریت از راه دور</span>
+        </a>
         <a href="{% url 'cloud_commands' %}" class="{% if n == 'cloud_commands' %}active{% endif %}">
           <i class="ti ti-terminal-2"></i><span>دستورها</span>
         </a>

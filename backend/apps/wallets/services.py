@@ -44,6 +44,9 @@ def _entry_payload(entry: LedgerEntry) -> dict:
         "balance_after": entry.balance_after,
         "reverses_id": str(entry.reverses_id) if entry.reverses_id else None,
         "note": entry.note,
+        "source_command_id": (
+            str(entry.source_command_id) if entry.source_command_id else None
+        ),
         "created_at": entry.created_at.isoformat(),
     }
 
@@ -60,6 +63,7 @@ def post_entry(
     reverses: LedgerEntry | None = None,
     allow_over_limit: bool = False,
     created_at=None,
+    source_command_id=None,
 ) -> LedgerEntry:
     require_edge()
     if isinstance(amount, bool) or not isinstance(amount, int):
@@ -70,6 +74,13 @@ def post_entry(
         raise WalletError("نوع تراکنش نامعتبر است.")
     if session is not None and session.customer_id != customer.id:
         raise WalletError("نشست به مشتری دیگری تعلق دارد.")
+
+    if source_command_id is not None:
+        existing = LedgerEntry.objects.filter(
+            source_command_id=source_command_id
+        ).first()
+        if existing is not None:
+            return existing
 
     identity = ensure_identity()
     customer, wallet = _locked_wallet(customer)
@@ -86,6 +97,7 @@ def post_entry(
         balance_after=new_balance,
         reverses=reverses,
         note=(note or "")[:255],
+        source_command_id=source_command_id,
         created_by=actor if getattr(actor, "pk", None) else None,
         created_at=created_at or timezone.now(),
     )
@@ -101,7 +113,12 @@ def post_entry(
 
 
 def deposit(
-    customer: Customer, amount: int, *, actor=None, note: str = ""
+    customer: Customer,
+    amount: int,
+    *,
+    actor=None,
+    note: str = "",
+    source_command_id=None,
 ) -> LedgerEntry:
     if isinstance(amount, bool) or not isinstance(amount, int) or amount <= 0:
         raise WalletError("مبلغ شارژ باید عدد صحیح بزرگ‌تر از صفر باشد.")
@@ -111,11 +128,17 @@ def deposit(
         entry_type=LedgerEntryType.DEPOSIT,
         note=note or "شارژ کیف پول",
         actor=actor,
+        source_command_id=source_command_id,
     )
 
 
 def adjust(
-    customer: Customer, amount: int, *, actor=None, note: str = ""
+    customer: Customer,
+    amount: int,
+    *,
+    actor=None,
+    note: str = "",
+    source_command_id=None,
 ) -> LedgerEntry:
     if isinstance(amount, bool) or not isinstance(amount, int) or amount == 0:
         raise WalletError("مبلغ اصلاح باید عدد صحیح و غیرصفر باشد.")
@@ -125,6 +148,7 @@ def adjust(
         entry_type=LedgerEntryType.ADJUSTMENT,
         note=note or "اصلاح دستی",
         actor=actor,
+        source_command_id=source_command_id,
     )
 
 

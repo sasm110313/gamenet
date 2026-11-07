@@ -16,7 +16,16 @@ from apps.customers.models import Customer
 from apps.customers.services import CustomerError, create_customer, update_customer
 from apps.customer_groups.models import CustomerGroup
 from apps.ledger.models import LedgerEntry, LedgerEntryType
+from apps.pricing.models import CustomerRate
+from apps.pricing.services import (
+    CustomerRateError,
+    create_customer_rate,
+    deactivate_customer_rate,
+    set_default_customer_rate,
+    update_customer_rate,
+)
 from apps.sessions.models import GamingSession, SessionStatus
+from apps.sessions.services import SessionError, resolve_rate
 from apps.wallets.models import Wallet
 from apps.wallets.services import WalletError, adjust, deposit, reverse_entry
 
@@ -108,6 +117,15 @@ def customer_detail(request, customer_id):
     devices = ClientDevice.objects.filter(
         is_active=True, status__in=[ClientStatus.ONLINE, ClientStatus.LOCKED, ClientStatus.IDLE]
     ).exclude(sessions__status=SessionStatus.ACTIVE).order_by("name")
+    rates = customer.rates.order_by("-is_default", "-is_active", "name")
+    edit_rate = None
+    edit_id = request.GET.get("edit", "").strip()
+    if edit_id:
+        edit_rate = rates.filter(id=edit_id).first()
+    try:
+        _, _, effective_hourly_rate, effective_rate_name = resolve_rate(customer)
+    except SessionError:
+        effective_hourly_rate, effective_rate_name = None, "نرخ نامعتبر"
     ctx.update(
         {
             "customer": customer,
@@ -120,9 +138,102 @@ def customer_detail(request, customer_id):
             "groups": CustomerGroup.objects.filter(
                 Q(is_active=True) | Q(id=customer.group_id)
             ).select_related("tariff"),
+            "rates": rates,
+            "active_rates": rates.filter(is_active=True),
+            "edit_rate": edit_rate,
+            "effective_hourly_rate": effective_hourly_rate,
+            "effective_rate_name": effective_rate_name,
         }
     )
     return render(request, "edge/customer_detail.html", ctx)
+
+
+@login_required
+@require_POST
+def customer_rate_create(request, customer_id):
+    customer = get_object_or_404(Customer, id=customer_id)
+    try:
+        rate = create_customer_rate(
+            customer=customer,
+            name=request.POST.get("name", ""),
+            hourly_rate=_int(request.POST.get("hourly_rate")),
+            is_default=request.POST.get("is_default") == "1",
+            actor=request.user,
+        )
+    except (CustomerRateError, ValueError) as exc:
+        messages.error(request, str(exc))
+        return redirect("edge_customer_detail", customer_id=customer.id)
+    _audit(
+        request, "customer_rate.created", "customer_rate", rate.id,
+        {"customer": customer.full_name, "name": rate.name, "rate": rate.hourly_rate},
+    )
+    messages.success(request, f"نرخ «{rate.name}» ثبت شد.")
+    return redirect("edge_customer_detail", customer_id=customer.id)
+
+
+@login_required
+@require_POST
+def customer_rate_update(request, customer_id, rate_id):
+    customer = get_object_or_404(Customer, id=customer_id)
+    rate = get_object_or_404(CustomerRate, id=rate_id, customer=customer)
+    try:
+        expected = _int(request.POST.get("expected_revision"))
+        rate = update_customer_rate(
+            rate,
+            name=request.POST.get("name", ""),
+            hourly_rate=_int(request.POST.get("hourly_rate")),
+            is_active=request.POST.get("is_active") == "1",
+            is_default=request.POST.get("is_default") == "1",
+            expected_revision=expected,
+            actor=request.user,
+        )
+    except (CustomerRateError, ValueError) as exc:
+        messages.error(request, str(exc))
+        return redirect("edge_customer_detail", customer_id=customer.id)
+    _audit(
+        request, "customer_rate.updated", "customer_rate", rate.id,
+        {"customer": customer.full_name, "name": rate.name, "rate": rate.hourly_rate,
+         "active": rate.is_active, "default": rate.is_default},
+    )
+    messages.success(request, f"نرخ «{rate.name}» به‌روزرسانی شد؛ نشست‌های فعال تغییر نمی‌کنند.")
+    return redirect("edge_customer_detail", customer_id=customer.id)
+
+
+@login_required
+@require_POST
+def customer_rate_default(request, customer_id, rate_id):
+    customer = get_object_or_404(Customer, id=customer_id)
+    rate = get_object_or_404(CustomerRate, id=rate_id, customer=customer)
+    try:
+        rate = set_default_customer_rate(rate, actor=request.user)
+    except CustomerRateError as exc:
+        messages.error(request, str(exc))
+        return redirect("edge_customer_detail", customer_id=customer.id)
+    _audit(
+        request, "customer_rate.default", "customer_rate", rate.id,
+        {"customer": customer.full_name, "name": rate.name},
+    )
+    messages.success(request, f"نرخ «{rate.name}» پیش‌فرض این مشتری شد.")
+    return redirect("edge_customer_detail", customer_id=customer.id)
+
+
+@login_required
+@require_POST
+def customer_rate_deactivate(request, customer_id, rate_id):
+    customer = get_object_or_404(Customer, id=customer_id)
+    rate = get_object_or_404(CustomerRate, id=rate_id, customer=customer)
+    try:
+        expected = _int(request.POST.get("expected_revision"))
+        rate = deactivate_customer_rate(rate, expected_revision=expected, actor=request.user)
+    except (CustomerRateError, ValueError) as exc:
+        messages.error(request, str(exc))
+        return redirect("edge_customer_detail", customer_id=customer.id)
+    _audit(
+        request, "customer_rate.deactivated", "customer_rate", rate.id,
+        {"customer": customer.full_name, "name": rate.name},
+    )
+    messages.warning(request, f"نرخ «{rate.name}» غیرفعال شد.")
+    return redirect("edge_customer_detail", customer_id=customer.id)
 
 
 @login_required
@@ -138,6 +249,7 @@ def customer_update(request, customer_id):
             return redirect("edge_customer_detail", customer_id=customer_id)
     try:
         credit_limit = _int(request.POST.get("credit_limit"))
+        expected = request.POST.get("expected_revision")
         update_customer(
             customer,
             full_name=request.POST.get("full_name", ""),
@@ -146,6 +258,7 @@ def customer_update(request, customer_id):
             clear_group=not bool(group),
             credit_limit=credit_limit,
             notes=request.POST.get("notes", ""),
+            expected_revision=_int(expected) if expected else None,
             actor=request.user,
         )
     except (CustomerError, ValueError) as exc:
@@ -162,7 +275,8 @@ def customer_toggle(request, customer_id):
     customer = get_object_or_404(Customer, id=customer_id)
     try:
         customer = update_customer(
-            customer, is_active=not customer.is_active, actor=request.user
+            customer, is_active=not customer.is_active,
+            expected_revision=customer.revision, actor=request.user,
         )
     except CustomerError as exc:
         messages.error(request, str(exc))

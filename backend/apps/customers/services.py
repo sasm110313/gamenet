@@ -49,6 +49,7 @@ def _payload(customer: Customer, wallet: Wallet) -> dict:
         "is_active": customer.is_active,
         "notes": customer.notes,
         "wallet_balance": wallet.balance,
+        "revision": customer.revision,
     }
 
 
@@ -70,10 +71,22 @@ def create_customer(
     group: CustomerGroup | None = None,
     credit_limit: int | None = None,
     notes: str = "",
+    customer_id=None,
     actor=None,
 ) -> Customer:
     require_edge()
     identity = ensure_identity()
+
+    # A retried remote-create command carries the cloud-generated id. Returning
+    # the existing row makes the command idempotent without a second event.
+    if customer_id is not None:
+        existing = Customer.objects.filter(id=customer_id).first()
+        if existing is not None:
+            if existing.edge_id != identity.edge_id:
+                raise CustomerError("شناسه مشتری به این Edge تعلق ندارد.")
+            Wallet.objects.get_or_create(customer=existing, defaults={"balance": 0})
+            return existing
+
     limit = settings.DEFAULT_CREDIT_LIMIT if credit_limit is None else credit_limit
     full_name, phone, limit, notes = _clean(
         full_name=full_name, phone=phone, credit_limit=limit, notes=notes
@@ -83,6 +96,7 @@ def create_customer(
         raise CustomerError("مشتری دیگری با این شماره تماس ثبت شده است.")
 
     customer = Customer.objects.create(
+        id=customer_id,
         edge_id=identity.edge_id,
         full_name=full_name,
         phone=phone,
@@ -111,10 +125,13 @@ def update_customer(
     credit_limit: int | None = None,
     notes: str | None = None,
     is_active: bool | None = None,
+    expected_revision: int | None = None,
     actor=None,
 ) -> Customer:
     require_edge()
     customer = Customer.objects.select_for_update().get(pk=customer.pk)
+    if expected_revision is not None and customer.revision != expected_revision:
+        raise CustomerError("نسخه مشتری تغییر کرده است؛ صفحه را تازه کنید و دوباره تلاش کنید.")
     wallet = Wallet.objects.select_for_update().get(customer=customer)
 
     full_name = customer.full_name if full_name is None else full_name
@@ -153,9 +170,11 @@ def update_customer(
     customer.credit_limit = limit
     customer.notes = notes
     customer.is_active = will_be_active
+    customer.revision += 1
     customer.save(
         update_fields=[
-            "full_name", "phone", "group", "credit_limit", "notes", "is_active", "updated_at",
+            "full_name", "phone", "group", "credit_limit", "notes", "is_active",
+            "revision", "updated_at",
         ]
     )
     emit(

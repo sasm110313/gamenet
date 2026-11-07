@@ -19,9 +19,18 @@
       {% csrf_token %}
       <div class="flex-grow-1">
         <label class="gn-label">مشتری</label>
-        <select class="gn-select" name="customer_id" required>
+        <select class="gn-select" name="customer_id" required data-gn-customer-select>
           {% for customer in customers %}
             <option value="{{ customer.id }}">{{ customer.full_name }}{% if customer.wallet %} — {{ customer.wallet.balance|toman }} تومان{% endif %}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="flex-grow-1">
+        <label class="gn-label">نرخ (اختیاری)</label>
+        <select class="gn-select" name="customer_rate_id" data-gn-rate-select>
+          <option value="">پیش‌فرض مشتری / گروه</option>
+          {% for rate in rates %}
+            <option value="{{ rate.id }}" data-customer="{{ rate.customer_id }}">{{ rate.customer.full_name }} — {{ rate.name }} ({{ rate.hourly_rate|toman }}){% if rate.is_default %} ★{% endif %}</option>
           {% endfor %}
         </select>
       </div>
@@ -73,7 +82,7 @@
     </form>
   </div>
   <table class="gn-table">
-    <thead><tr><th>مشتری</th><th>دستگاه</th><th>شروع</th><th>مدت</th><th>هزینه</th><th>وضعیت</th><th>دلیل پایان</th></tr></thead>
+    <thead><tr><th>مشتری</th><th>دستگاه</th><th>شروع</th><th>مدت</th><th>نرخ</th><th>هزینه</th><th>وضعیت</th><th>دلیل پایان</th></tr></thead>
     <tbody>
       {% for session in recent_sessions %}
         <tr>
@@ -81,12 +90,13 @@
           <td>{{ session.device.name }}</td>
           <td class="num gn-muted">{{ session.started_at|date:"m-d H:i" }}</td>
           <td class="num gn-muted">{% if session.elapsed_seconds is not None %}{{ session.elapsed_seconds }}s{% else %}—{% endif %}</td>
+          <td class="gn-muted">{{ session.tariff_name }}<div class="num" style="font-size: 10.5px">{{ session.hourly_rate|toman }}</div></td>
           <td class="num">{{ session.cost|default:0|toman }}</td>
           <td><span class="gn-status {{ session.status|status_tone }}"><span class="dot"></span>{{ session.status|status_fa }}</span></td>
           <td class="gn-muted" style="font-size: 11.5px">{{ session.end_reason|default:"—" }}</td>
         </tr>
       {% empty %}
-        <tr><td colspan="7"><div class="gn-empty">نشستی ثبت نشده است.</div></td></tr>
+        <tr><td colspan="8"><div class="gn-empty">نشستی ثبت نشده است.</div></td></tr>
       {% endfor %}
     </tbody>
   </table>

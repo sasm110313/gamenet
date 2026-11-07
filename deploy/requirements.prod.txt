@@ -1,0 +1,16 @@
+# Production runtime dependencies for the cloud role.
+# Pinned to the same versions the test suite runs against.
+Django==6.1.2
+djangorestframework==3.18.3
+channels==4.3.2
+channels-redis==4.3.0
+# channels-redis 4.3.0 expects BRPOP(timeout=...) to return None; redis-py 8.x
+# raises TimeoutError instead, which tears down every idle WSS after 5s.
+redis==5.2.1
+uvicorn[standard]==0.54.0
+psycopg[binary]==3.3.6
+django-environ==0.14.0
+whitenoise==6.12.0
+cryptography==50.0.2
+# Edge runtime uses requests for the cloud client; harmless for the cloud role.
+requests==2.32.5

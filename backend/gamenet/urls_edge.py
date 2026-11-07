@@ -20,6 +20,26 @@ urlpatterns = [
     path("customers/<uuid:customer_id>/deposit", customers_dash.customer_deposit, name="edge_customer_deposit"),
     path("customers/<uuid:customer_id>/adjust", customers_dash.customer_adjust, name="edge_customer_adjust"),
     path(
+        "customers/<uuid:customer_id>/rates/create",
+        customers_dash.customer_rate_create,
+        name="edge_customer_rate_create",
+    ),
+    path(
+        "customers/<uuid:customer_id>/rates/<uuid:rate_id>/update",
+        customers_dash.customer_rate_update,
+        name="edge_customer_rate_update",
+    ),
+    path(
+        "customers/<uuid:customer_id>/rates/<uuid:rate_id>/default",
+        customers_dash.customer_rate_default,
+        name="edge_customer_rate_default",
+    ),
+    path(
+        "customers/<uuid:customer_id>/rates/<uuid:rate_id>/deactivate",
+        customers_dash.customer_rate_deactivate,
+        name="edge_customer_rate_deactivate",
+    ),
+    path(
         "customers/<uuid:customer_id>/reverse/<uuid:entry_id>",
         customers_dash.customer_reverse,
         name="edge_customer_reverse",

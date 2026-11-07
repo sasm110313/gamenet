@@ -20,7 +20,7 @@ from apps.core.roles import require_cloud
 from apps.customer_groups.models import CustomerGroup
 from apps.customers.models import Customer
 from apps.ledger.models import LedgerEntry
-from apps.pricing.models import Tariff
+from apps.pricing.models import CustomerRate, Tariff
 from apps.sessions.models import GamingSession, SessionStatus
 from apps.synchronization.models import EdgeNode, EdgeStatus, SyncEvent
 from apps.wallets.models import Wallet
@@ -147,6 +147,7 @@ def tariff_upsert(event: SyncEvent) -> None:
             "name": p["name"],
             "hourly_rate": int(p["hourly_rate"]),
             "is_active": bool(p.get("is_active", True)),
+            "revision": int(p.get("revision", 1)),
             "is_replica": True,
         },
     )
@@ -168,6 +169,7 @@ def customer_group_upsert(event: SyncEvent) -> None:
             "name": p["name"],
             "tariff": tariff,
             "is_active": bool(p.get("is_active", True)),
+            "revision": int(p.get("revision", 1)),
             "is_replica": True,
         },
     )
@@ -192,6 +194,7 @@ def customer_upsert(event: SyncEvent) -> None:
             "credit_limit": int(p.get("credit_limit", 0)),
             "is_active": bool(p.get("is_active", True)),
             "notes": p.get("notes", ""),
+            "revision": int(p.get("revision", 1)),
             "is_replica": True,
         },
     )
@@ -200,6 +203,39 @@ def customer_upsert(event: SyncEvent) -> None:
     Wallet.objects.get_or_create(
         customer=customer,
         defaults={"balance": int(p.get("wallet_balance", 0)), "is_replica": True},
+    )
+
+
+@handles("customer_rate.created")
+@handles("customer_rate.updated")
+def customer_rate_upsert(event: SyncEvent) -> None:
+    p = event.payload
+    customer = Customer.objects.filter(id=p["customer_id"]).first()
+    if customer is None:
+        raise ValueError(
+            f"customer_rate {p['customer_rate_id']} references unknown customer "
+            f"{p['customer_id']}"
+        )
+    is_active = bool(p.get("is_active", True))
+    is_default = bool(p.get("is_default", False)) and is_active
+    if is_default:
+        # Clear the old default first so the partial unique constraint holds no
+        # matter which order the created/updated events arrive in.
+        CustomerRate.objects.filter(customer=customer, is_default=True).exclude(
+            id=p["customer_rate_id"]
+        ).update(is_default=False)
+    CustomerRate.objects.update_or_create(
+        id=p["customer_rate_id"],
+        defaults={
+            "edge_id": event.edge_id,
+            "customer": customer,
+            "name": p["name"],
+            "hourly_rate": int(p["hourly_rate"]),
+            "is_default": is_default,
+            "is_active": is_active,
+            "revision": int(p.get("revision", 1)),
+            "is_replica": True,
+        },
     )
 
 
@@ -231,6 +267,7 @@ def ledger_entry_created(event: SyncEvent) -> None:
             "balance_after": int(p["balance_after"]),
             "reverses": reverses,
             "note": p.get("note", ""),
+            "source_command_id": p.get("source_command_id"),
             "is_replica": True,
             "created_at": _iso(p.get("created_at"), event.occurred_at),
         },
@@ -257,6 +294,18 @@ def session_started(event: SyncEvent) -> None:
         tariff = Tariff.objects.filter(id=p["tariff_id"]).first()
         if tariff is None:
             raise ValueError(f"session {p['session_id']} references unknown tariff {p['tariff_id']}")
+    customer_rate = None
+    if p.get("customer_rate_id"):
+        customer_rate = CustomerRate.objects.filter(id=p["customer_rate_id"]).first()
+        if customer_rate is None:
+            raise ValueError(
+                f"session {p['session_id']} references unknown customer_rate "
+                f"{p['customer_rate_id']}"
+            )
+        if customer_rate.customer_id != customer.id:
+            raise ValueError(
+                f"session {p['session_id']} rate belongs to another customer"
+            )
     GamingSession.objects.get_or_create(
         id=p["session_id"],
         defaults={
@@ -265,6 +314,7 @@ def session_started(event: SyncEvent) -> None:
             "device": device,
             "status": SessionStatus.ACTIVE,
             "tariff": tariff,
+            "customer_rate": customer_rate,
             "tariff_name": p.get("tariff_name", ""),
             "hourly_rate": int(p["hourly_rate"]),
             "started_at": _iso(p.get("started_at"), event.occurred_at),

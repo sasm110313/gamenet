@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import uuid
+
 from django import template
 from django.utils import timezone
 
@@ -58,6 +60,11 @@ TONES = {
 }
 
 FA_DIGITS = str.maketrans("0123456789", "۰۱۲۳۴۵۶۷۸۹")
+
+
+@register.simple_tag
+def uuid4():
+    return str(uuid.uuid4())
 
 
 @register.filter

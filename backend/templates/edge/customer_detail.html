@@ -42,6 +42,7 @@
     <h6>مشخصات</h6>
     <form method="post" action="{% url 'edge_customer_update' customer.id %}">
       {% csrf_token %}
+      <input type="hidden" name="expected_revision" value="{{ customer.revision }}">
       <label class="gn-label">نام</label>
       <input class="gn-input" name="full_name" value="{{ customer.full_name }}" required maxlength="120">
       <label class="gn-label mt-2">شماره تماس</label>
@@ -93,6 +94,15 @@
         <select class="gn-select" name="device_id" required>
           {% for device in devices %}<option value="{{ device.id }}">{{ device.name }} — {{ device.status|status_fa }}</option>{% endfor %}
         </select>
+        {% if active_rates %}
+          <label class="gn-label mt-2">نرخ</label>
+          <select class="gn-select" name="customer_rate_id">
+            <option value="">پیش‌فرض مشتری / گروه — {{ effective_rate_name }} ({{ effective_hourly_rate|toman }})</option>
+            {% for rate in active_rates %}
+              <option value="{{ rate.id }}">{{ rate.name }} — {{ rate.hourly_rate|toman }}{% if rate.is_default %} (پیش‌فرض){% endif %}</option>
+            {% endfor %}
+          </select>
+        {% endif %}
         <button class="gn-btn primary mt-2 w-100 justify-content-center" type="submit"><i class="ti ti-player-play"></i> شروع نشست</button>
       </form>
     {% else %}
@@ -101,23 +111,119 @@
   </div>
 </div>
 
+<div class="gn-card mb-3">
+  <div class="d-flex justify-content-between align-items-center mb-1">
+    <h6 class="mb-0">نرخ‌های شخصی</h6>
+    <span class="gn-chip"><i class="ti ti-tags"></i>{{ rates|length }} نرخ</span>
+  </div>
+  <p class="gn-subtitle mb-2">
+    نرخ مؤثر فعلی: <strong>{{ effective_rate_name }}</strong>
+    {% if effective_hourly_rate is not None %}— <span class="num">{{ effective_hourly_rate|toman }}</span> تومان/ساعت{% endif %}
+  </p>
+  <div class="gn-scroll" style="max-height: 280px">
+    <table class="gn-table">
+      <thead><tr><th>نام</th><th>نرخ ساعتی</th><th>پیش‌فرض</th><th>وضعیت</th><th>نسخه</th><th class="text-end">عملیات</th></tr></thead>
+      <tbody>
+        {% for rate in rates %}
+          <tr>
+            <td><strong>{{ rate.name }}</strong></td>
+            <td class="num">{{ rate.hourly_rate|toman }}</td>
+            <td>{% if rate.is_default %}<span class="gn-status st-online"><span class="dot"></span>پیش‌فرض</span>{% else %}<span class="gn-muted">—</span>{% endif %}</td>
+            <td>{% if rate.is_active %}<span class="gn-status st-online"><span class="dot"></span>فعال</span>{% else %}<span class="gn-status st-offline"><span class="dot"></span>غیرفعال</span>{% endif %}</td>
+            <td class="num gn-muted">{{ rate.revision }}</td>
+            <td class="text-end">
+              <div class="d-inline-flex gap-1">
+                {% if rate.is_active %}
+                  <a class="gn-btn sm" href="?edit={{ rate.id }}"><i class="ti ti-edit"></i></a>
+                  {% if not rate.is_default %}
+                    <form method="post" action="{% url 'edge_customer_rate_default' customer.id rate.id %}" class="gn-inline-form">
+                      {% csrf_token %}
+                      <button class="gn-btn sm" type="submit" title="پیش‌فرض شود"><i class="ti ti-star"></i></button>
+                    </form>
+                  {% endif %}
+                  <form method="post" action="{% url 'edge_customer_rate_deactivate' customer.id rate.id %}" class="gn-inline-form">
+                    {% csrf_token %}
+                    <input type="hidden" name="expected_revision" value="{{ rate.revision }}">
+                    <button class="gn-btn sm danger" type="submit" title="غیرفعال کردن"><i class="ti ti-ban"></i></button>
+                  </form>
+                {% endif %}
+              </div>
+            </td>
+          </tr>
+        {% empty %}
+          <tr><td colspan="6"><div class="gn-empty">هنوز نرخ شخصی ثبت نشده است؛ نرخ گروه یا نرخ پیش‌فرض اعمال می‌شود.</div></td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  <div class="gn-divider"></div>
+  {% if edit_rate %}
+    <form method="post" action="{% url 'edge_customer_rate_update' customer.id edit_rate.id %}" class="gn-form-row">
+      {% csrf_token %}
+      <input type="hidden" name="expected_revision" value="{{ edit_rate.revision }}">
+      <div class="flex-grow-1">
+        <label class="gn-label">نام نرخ</label>
+        <input class="gn-input" name="name" value="{{ edit_rate.name }}" required maxlength="80">
+      </div>
+      <div>
+        <label class="gn-label">نرخ ساعتی (تومان)</label>
+        <input class="gn-input num" name="hourly_rate" value="{{ edit_rate.hourly_rate }}" required inputmode="numeric">
+      </div>
+      <div>
+        <label class="gn-label">وضعیت</label>
+        <label class="d-flex align-items-center gap-1" style="font-size: 12px">
+          <input type="checkbox" name="is_active" value="1" {% if edit_rate.is_active %}checked{% endif %}> فعال
+        </label>
+      </div>
+      <div>
+        <label class="gn-label">پیش‌فرض</label>
+        <label class="d-flex align-items-center gap-1" style="font-size: 12px">
+          <input type="checkbox" name="is_default" value="1" {% if edit_rate.is_default %}checked{% endif %}> پیش‌فرض
+        </label>
+      </div>
+      <button class="gn-btn primary" type="submit"><i class="ti ti-device-floppy"></i> ذخیره</button>
+      <a class="gn-btn" href="{% url 'edge_customer_detail' customer.id %}">انصراف</a>
+    </form>
+  {% else %}
+    <form method="post" action="{% url 'edge_customer_rate_create' customer.id %}" class="gn-form-row">
+      {% csrf_token %}
+      <div class="flex-grow-1">
+        <label class="gn-label">نام نرخ جدید</label>
+        <input class="gn-input" name="name" required maxlength="80" placeholder="مثلاً شب‌کار VIP">
+      </div>
+      <div>
+        <label class="gn-label">نرخ ساعتی (تومان)</label>
+        <input class="gn-input num" name="hourly_rate" inputmode="numeric" required placeholder="50000">
+      </div>
+      <div>
+        <label class="gn-label">پیش‌فرض</label>
+        <label class="d-flex align-items-center gap-1" style="font-size: 12px">
+          <input type="checkbox" name="is_default" value="1"> پیش‌فرض شود
+        </label>
+      </div>
+      <button class="gn-btn primary" type="submit"><i class="ti ti-plus"></i> ثبت نرخ</button>
+    </form>
+  {% endif %}
+</div>
+
 <div class="gn-grid cols-2">
   <div class="gn-card">
     <h6>نشست‌های اخیر</h6>
     <div class="gn-scroll" style="max-height: 340px">
       <table class="gn-table">
-        <thead><tr><th>دستگاه</th><th>شروع</th><th>مدت</th><th>هزینه</th><th>وضعیت</th></tr></thead>
+        <thead><tr><th>دستگاه</th><th>شروع</th><th>مدت</th><th>نرخ</th><th>هزینه</th><th>وضعیت</th></tr></thead>
         <tbody>
           {% for session in sessions %}
             <tr>
               <td>{{ session.device.name }}</td>
               <td class="num gn-muted">{{ session.started_at|date:"m-d H:i" }}</td>
               <td class="num gn-muted">{% if session.elapsed_seconds is not None %}{{ session.elapsed_seconds }}s{% else %}—{% endif %}</td>
+              <td class="gn-muted">{{ session.tariff_name }}<div class="num" style="font-size: 10.5px">{{ session.hourly_rate|toman }}</div></td>
               <td class="num">{{ session.cost|default:0|toman }}</td>
               <td><span class="gn-status {{ session.status|status_tone }}"><span class="dot"></span>{{ session.status|status_fa }}</span></td>
             </tr>
           {% empty %}
-            <tr><td colspan="5"><div class="gn-empty">نشستی ثبت نشده است.</div></td></tr>
+            <tr><td colspan="6"><div class="gn-empty">نشستی ثبت نشده است.</div></td></tr>
           {% endfor %}
         </tbody>
       </table>

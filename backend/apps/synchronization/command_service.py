@@ -11,7 +11,7 @@ from typing import Any
 from asgiref.sync import async_to_sync
 from channels.layers import get_channel_layer
 from django.conf import settings
-from django.db import transaction
+from django.db import IntegrityError, transaction
 from django.utils import timezone
 
 from apps.clients.models import ClientDevice, ClientStatus
@@ -25,6 +25,10 @@ from apps.commands.models import (
 )
 from apps.core.roles import require_cloud, require_edge
 from apps.core.security import canonical_json
+from apps.customer_groups.models import CustomerGroup
+from apps.customers.models import Customer
+from apps.pricing.models import CustomerRate, Tariff
+from apps.sessions.models import GamingSession
 from apps.synchronization.crypto import sign_command, verify_command
 from apps.synchronization.events import emit
 from apps.synchronization.models import EdgeIdentity, EdgeNode
@@ -32,7 +36,21 @@ from apps.synchronization.models import EdgeIdentity, EdgeNode
 logger = logging.getLogger("gamenet.commands")
 
 DEVICE_COMMAND_TYPES = {"client.lock", "client.unlock", "client.ping", "client.restart"}
-EDGE_COMMAND_TYPES = {"edge.ping", "edge.sync_now", "edge.config_refresh", "edge.test_event"}
+CATALOG_COMMAND_TYPES = {
+    "catalog.customer.upsert",
+    "catalog.customer_rate.upsert",
+    "catalog.customer_rate.deactivate",
+    "catalog.group.upsert",
+    "catalog.tariff.upsert",
+}
+SESSION_COMMAND_TYPES = {"session.start", "session.stop"}
+WALLET_COMMAND_TYPES = {"wallet.deposit", "wallet.adjust"}
+EDGE_COMMAND_TYPES = {
+    "edge.ping",
+    "edge.sync_now",
+    "edge.config_refresh",
+    "edge.test_event",
+} | CATALOG_COMMAND_TYPES | SESSION_COMMAND_TYPES | WALLET_COMMAND_TYPES
 
 
 def edge_group(edge_id) -> str:
@@ -53,11 +71,17 @@ def issue_command(
     *,
     ttl_seconds: int | None = None,
     actor=None,
+    request_id=None,
     push: bool = True,
 ) -> RemoteCommand:
     require_cloud()
     if command_type not in DEVICE_COMMAND_TYPES | EDGE_COMMAND_TYPES:
         raise ValueError(f"unsupported command type {command_type!r}")
+
+    if request_id is not None:
+        existing = RemoteCommand.objects.filter(edge=edge, request_id=request_id).first()
+        if existing is not None:
+            return existing
 
     now = timezone.now()
     ttl = ttl_seconds or settings.DEVICE_COMMAND_TTL_SECONDS
@@ -69,11 +93,18 @@ def issue_command(
         expires_at=now + timedelta(seconds=ttl),
         nonce=secrets.token_hex(16),
         created_by=actor if getattr(actor, "pk", None) else None,
+        request_id=request_id,
         signature="",
     )
     envelope = command.envelope()
     command.signature = sign_command(edge.command_private_key_enc, canonical_json(envelope).encode())
-    command.save()
+    try:
+        with transaction.atomic():
+            command.save()
+    except IntegrityError:
+        if request_id is not None:
+            return RemoteCommand.objects.get(edge=edge, request_id=request_id)
+        raise
 
     if push:
         try:
@@ -174,40 +205,60 @@ def receive_command(envelope: dict) -> tuple[InboundRemoteCommand, bool]:
 
 
 def execute_command(command_id: uuid.UUID) -> dict[str, Any]:
-    """Execute a stored RECEIVED command. Safe to call twice: the row is claimed
-    with a row lock and moved to EXECUTING before any side effect, so a concurrent
-    or duplicate call is a no-op."""
+    """Execute a stored RECEIVED command exactly once.
+
+    The whole claim -> dispatch -> status update -> result event runs in one
+    transaction. If the process dies before commit, the command row stays
+    RECEIVED and can be retried. If it commits, a replay sees a terminal status
+    and does nothing.
+    """
     require_edge()
+    command_id = uuid.UUID(str(command_id))
     with transaction.atomic():
         row = (
             InboundRemoteCommand.objects.select_for_update()
-            .filter(command_id=command_id, status=InboundCommandStatus.RECEIVED)
+            .filter(command_id=command_id)
             .first()
         )
         if row is None:
+            return {"status": "unknown"}
+
+        if row.status in {
+            InboundCommandStatus.SUCCEEDED,
+            InboundCommandStatus.FAILED,
+            InboundCommandStatus.REJECTED,
+            InboundCommandStatus.EXPIRED,
+        }:
             return {"status": "already_handled"}
+
+        if row.status == InboundCommandStatus.EXECUTING:
+            # Older code committed EXECUTING before dispatch. We hold the row
+            # lock now, so no live executor can exist; only reclaim after a
+            # grace period to avoid racing a process that just crashed.
+            if row.received_at > timezone.now() - timedelta(minutes=5):
+                return {"status": "busy"}
+            row.status = InboundCommandStatus.RECEIVED
+            row.save(update_fields=["status"])
+
         if row.expires_at <= timezone.now():
             row.status = InboundCommandStatus.EXPIRED
             row.reject_reason = "expired before execution"
             row.save(update_fields=["status", "reject_reason"])
             return {"status": "expired"}
+
         row.status = InboundCommandStatus.EXECUTING
         row.save(update_fields=["status"])
         command_type = row.command_type
         payload = row.payload
         row_token = str(row.command_id)
 
-    status = "succeeded"
-    result: dict[str, Any]
-    error = ""
-    try:
-        result, status = _dispatch(command_type, payload, origin=row_token)
-    except Exception as exc:
-        logger.exception("command %s failed", row_token)
-        status, result, error = "failed", {}, str(exc)
+        try:
+            result, status = _dispatch(command_type, payload, origin=row_token)
+            error = ""
+        except Exception as exc:
+            logger.exception("command %s failed", row_token)
+            status, result, error = "failed", {}, str(exc)
 
-    with transaction.atomic():
-        row = InboundRemoteCommand.objects.select_for_update().get(command_id=command_id)
         row.status = {
             "succeeded": InboundCommandStatus.SUCCEEDED,
             "forwarded": InboundCommandStatus.SUCCEEDED,
@@ -231,6 +282,100 @@ def execute_command(command_id: uuid.UUID) -> dict[str, Any]:
     return {"status": status, "result": result, "error": error}
 
 
+def _require(payload: dict, key: str):
+    value = payload.get(key)
+    if value in (None, ""):
+        raise ValueError(f"payload.{key} is required")
+    return value
+
+
+def _require_int(payload: dict, key: str) -> int:
+    value = _require(payload, key)
+    if isinstance(value, bool):
+        raise ValueError(f"payload.{key} must be an integer")
+    try:
+        return int(value)
+    except (TypeError, ValueError) as exc:
+        raise ValueError(f"payload.{key} must be an integer") from exc
+
+
+def _base_revision(payload: dict) -> int:
+    value = payload.get("base_revision")
+    if value is None:
+        raise ValueError("payload.base_revision is required")
+    if isinstance(value, bool):
+        raise ValueError("payload.base_revision must be an integer")
+    try:
+        return int(value)
+    except (TypeError, ValueError) as exc:
+        raise ValueError("payload.base_revision must be an integer") from exc
+
+
+def _check_revision(obj, base: int) -> None:
+    if obj.revision != base:
+        raise ValueError(
+            f"stale revision: edge has {obj.revision}, command based on {base}"
+        )
+
+
+def _customer_result(customer: Customer) -> dict:
+    return {
+        "customer_id": str(customer.id),
+        "revision": customer.revision,
+        "is_active": customer.is_active,
+    }
+
+
+def _rate_result(rate: CustomerRate) -> dict:
+    return {
+        "customer_rate_id": str(rate.id),
+        "customer_id": str(rate.customer_id),
+        "name": rate.name,
+        "hourly_rate": rate.hourly_rate,
+        "is_default": rate.is_default,
+        "is_active": rate.is_active,
+        "revision": rate.revision,
+    }
+
+
+def _tariff_result(tariff: Tariff) -> dict:
+    return {
+        "tariff_id": str(tariff.id),
+        "name": tariff.name,
+        "hourly_rate": tariff.hourly_rate,
+        "is_active": tariff.is_active,
+        "revision": tariff.revision,
+    }
+
+
+def _group_result(group: CustomerGroup) -> dict:
+    return {
+        "group_id": str(group.id),
+        "name": group.name,
+        "tariff_id": str(group.tariff_id) if group.tariff_id else None,
+        "is_active": group.is_active,
+        "revision": group.revision,
+    }
+
+
+def _session_result(session: GamingSession) -> dict:
+    return {
+        "session_id": str(session.id),
+        "customer_id": str(session.customer_id),
+        "device_id": str(session.device_id),
+        "status": session.status,
+        "hourly_rate": session.hourly_rate,
+        "rate_name": session.tariff_name,
+        "customer_rate_id": (
+            str(session.customer_rate_id) if session.customer_rate_id else None
+        ),
+        "started_at": session.started_at.isoformat(),
+        "ended_at": session.ended_at.isoformat() if session.ended_at else None,
+        "elapsed_seconds": session.elapsed_seconds,
+        "cost": session.cost,
+    }
+
+
 def _dispatch(command_type: str, payload: dict, *, origin: str) -> tuple[dict[str, Any], str]:
     identity = EdgeIdentity.get_solo()
     if command_type == "edge.ping":
@@ -251,6 +396,270 @@ def _dispatch(command_type: str, payload: dict, *, origin: str) -> tuple[dict[st
                 payload={"note": payload.get("note", "manual test"), "origin": "cloud_command"},
             )
         return {"event_id": str(event.event_id), "sequence": event.local_sequence}, "succeeded"
+
+    if command_type == "catalog.customer.upsert":
+        from apps.customers.services import create_customer, update_customer
+
+        customer_id = _require(payload, "customer_id")
+        base = _base_revision(payload)
+        existing = Customer.objects.filter(id=customer_id).first()
+        group = None
+        if payload.get("group_id"):
+            group = CustomerGroup.objects.filter(id=payload["group_id"]).first()
+            if group is None:
+                raise ValueError(f"unknown group {payload['group_id']}")
+            if group.edge_id != identity.edge_id:
+                raise ValueError("group belongs to another edge")
+
+        credit_limit = (
+            _require_int(payload, "credit_limit")
+            if payload.get("credit_limit") is not None
+            else None
+        )
+        if existing is None:
+            if base != 0:
+                raise ValueError("customer does not exist on this edge")
+            customer = create_customer(
+                customer_id=customer_id,
+                full_name=_require(payload, "full_name"),
+                phone=payload.get("phone", ""),
+                group=group,
+                credit_limit=credit_limit,
+                notes=payload.get("notes", ""),
+            )
+            return {**_customer_result(customer), "created": True}, "succeeded"
+
+        if existing.edge_id != identity.edge_id:
+            raise ValueError("customer belongs to another edge")
+        if base == 0:
+            return {**_customer_result(existing), "created": False}, "succeeded"
+        _check_revision(existing, base)
+        customer = update_customer(
+            existing,
+            full_name=_require(payload, "full_name"),
+            phone=payload.get("phone", ""),
+            group=group,
+            clear_group=not bool(payload.get("group_id")),
+            credit_limit=credit_limit,
+            notes=payload.get("notes", ""),
+            is_active=bool(payload.get("is_active", True)),
+            expected_revision=base,
+        )
+        return {**_customer_result(customer), "created": False}, "succeeded"
+
+    if command_type == "catalog.customer_rate.upsert":
+        from apps.pricing.services import create_customer_rate, update_customer_rate
+
+        rate_id = _require(payload, "customer_rate_id")
+        customer_id = _require(payload, "customer_id")
+        customer = Customer.objects.filter(id=customer_id).first()
+        if customer is None:
+            raise ValueError(f"unknown customer {customer_id}")
+        if customer.edge_id != identity.edge_id:
+            raise ValueError("customer belongs to another edge")
+        base = _base_revision(payload)
+        existing = CustomerRate.objects.filter(id=rate_id).first()
+        is_default = payload.get("is_default")
+        is_active = payload.get("is_active")
+
+        if existing is None:
+            if base != 0:
+                raise ValueError("customer rate does not exist on this edge")
+            rate = create_customer_rate(
+                customer=customer,
+                name=_require(payload, "name"),
+                hourly_rate=_require_int(payload, "hourly_rate"),
+                is_default=bool(is_default) if is_default is not None else False,
+                rate_id=rate_id,
+            )
+            return {**_rate_result(rate), "created": True}, "succeeded"
+
+        if existing.customer_id != customer.id:
+            raise ValueError("customer rate belongs to another customer")
+        if base == 0:
+            return {**_rate_result(existing), "created": False}, "succeeded"
+        _check_revision(existing, base)
+        rate = update_customer_rate(
+            existing,
+            name=_require(payload, "name"),
+            hourly_rate=_require_int(payload, "hourly_rate"),
+            is_active=None if is_active is None else bool(is_active),
+            is_default=None if is_default is None else bool(is_default),
+            expected_revision=base,
+        )
+        return {**_rate_result(rate), "created": False}, "succeeded"
+
+    if command_type == "catalog.customer_rate.deactivate":
+        from apps.pricing.services import deactivate_customer_rate
+
+        rate = CustomerRate.objects.filter(
+            id=_require(payload, "customer_rate_id")
+        ).first()
+        if rate is None:
+            raise ValueError("customer rate does not exist on this edge")
+        if rate.edge_id != identity.edge_id:
+            raise ValueError("customer rate belongs to another edge")
+        base = _base_revision(payload)
+        _check_revision(rate, base)
+        rate = deactivate_customer_rate(rate, expected_revision=base)
+        return _rate_result(rate), "succeeded"
+
+    if command_type == "catalog.group.upsert":
+        from apps.customer_groups.services import create_group, update_group
+
+        group_id = _require(payload, "group_id")
+        base = _base_revision(payload)
+        tariff = None
+        if payload.get("tariff_id"):
+            tariff = Tariff.objects.filter(id=payload["tariff_id"]).first()
+            if tariff is None:
+                raise ValueError(f"unknown tariff {payload['tariff_id']}")
+            if tariff.edge_id != identity.edge_id:
+                raise ValueError("tariff belongs to another edge")
+        existing = CustomerGroup.objects.filter(id=group_id).first()
+        if existing is None:
+            if base != 0:
+                raise ValueError("group does not exist on this edge")
+            if tariff is None:
+                raise ValueError("payload.tariff_id is required")
+            group = create_group(
+                name=_require(payload, "name"), tariff=tariff, group_id=group_id
+            )
+            return {**_group_result(group), "created": True}, "succeeded"
+
+        if existing.edge_id != identity.edge_id:
+            raise ValueError("group belongs to another edge")
+        if base == 0:
+            return {**_group_result(existing), "created": False}, "succeeded"
+        _check_revision(existing, base)
+        group = update_group(
+            existing,
+            name=_require(payload, "name"),
+            tariff=tariff,
+            is_active=bool(payload.get("is_active", True)),
+            expected_revision=base,
+        )
+        return {**_group_result(group), "created": False}, "succeeded"
+
+    if command_type == "catalog.tariff.upsert":
+        from apps.pricing.services import create_tariff, update_tariff
+
+        tariff_id = _require(payload, "tariff_id")
+        base = _base_revision(payload)
+        existing = Tariff.objects.filter(id=tariff_id).first()
+        if existing is None:
+            if base != 0:
+                raise ValueError("tariff does not exist on this edge")
+            tariff = create_tariff(
+                tariff_id=tariff_id,
+                name=_require(payload, "name"),
+                hourly_rate=_require_int(payload, "hourly_rate"),
+            )
+            return {**_tariff_result(tariff), "created": True}, "succeeded"
+
+        if existing.edge_id != identity.edge_id:
+            raise ValueError("tariff belongs to another edge")
+        if base == 0:
+            return {**_tariff_result(existing), "created": False}, "succeeded"
+        _check_revision(existing, base)
+        tariff = update_tariff(
+            existing,
+            name=_require(payload, "name"),
+            hourly_rate=_require_int(payload, "hourly_rate"),
+            is_active=bool(payload.get("is_active", True)),
+            expected_revision=base,
+        )
+        return {**_tariff_result(tariff), "created": False}, "succeeded"
+
+    if command_type == "session.start":
+        from apps.sessions.services import start_session
+
+        session_id = _require(payload, "session_id")
+        existing = GamingSession.objects.filter(id=session_id).first()
+        if existing is not None:
+            return _session_result(existing), "succeeded"
+        customer = Customer.objects.filter(
+            id=_require(payload, "customer_id")
+        ).first()
+        device = ClientDevice.objects.filter(
+            id=_require(payload, "device_id"), is_active=True
+        ).first()
+        if customer is None:
+            raise ValueError("unknown customer")
+        if device is None:
+            raise ValueError("unknown or inactive device")
+        if customer.edge_id != identity.edge_id or device.edge_id != identity.edge_id:
+            raise ValueError("customer or device belongs to another edge")
+        rate = None
+        if payload.get("customer_rate_id"):
+            rate = CustomerRate.objects.filter(
+                id=payload["customer_rate_id"]
+            ).first()
+            if rate is None:
+                raise ValueError("unknown customer rate")
+            if rate.customer_id != customer.id:
+                raise ValueError("customer rate belongs to another customer")
+        session = start_session(
+            customer, device, customer_rate=rate, session_id=session_id
+        )
+        return _session_result(session), "succeeded"
+
+    if command_type == "session.stop":
+        from apps.sessions.services import stop_session
+
+        session = GamingSession.objects.filter(
+            id=_require(payload, "session_id")
+        ).first()
+        if session is None:
+            raise ValueError("unknown session")
+        if session.edge_id != identity.edge_id:
+            raise ValueError("session belongs to another edge")
+        ended, entry = stop_session(
+            session, reason=str(payload.get("reason") or "پایان از ابر")[:120]
+        )
+        return {
+            **_session_result(ended),
+            "ledger_entry_id": str(entry.id) if entry is not None else None,
+        }, "succeeded"
+
+    if command_type in WALLET_COMMAND_TYPES:
+        from apps.wallets.services import adjust, deposit
+
+        customer = Customer.objects.filter(
+            id=_require(payload, "customer_id")
+        ).first()
+        if customer is None:
+            raise ValueError("unknown customer")
+        if customer.edge_id != identity.edge_id:
+            raise ValueError("customer belongs to another edge")
+        amount = _require_int(payload, "amount")
+        reason = str(payload.get("reason") or "").strip()
+        if not reason:
+            raise ValueError("payload.reason is required")
+        requested_by = str(payload.get("requested_by") or "cloud").strip()[:80]
+        note = f"{reason} (از ابر: {requested_by})"[:255]
+        command_uuid = uuid.UUID(origin)
+        if command_type == "wallet.deposit":
+            entry = deposit(
+                customer,
+                amount,
+                note=note,
+                source_command_id=command_uuid,
+            )
+        else:
+            entry = adjust(
+                customer,
+                amount,
+                note=note,
+                source_command_id=command_uuid,
+            )
+        return {
+            "entry_id": str(entry.id),
+            "customer_id": str(customer.id),
+            "entry_type": entry.entry_type,
+            "amount": entry.amount,
+            "balance_after": entry.balance_after,
+        }, "succeeded"
 
     if command_type in DEVICE_COMMAND_TYPES:
         device_id = payload.get("device_id")
