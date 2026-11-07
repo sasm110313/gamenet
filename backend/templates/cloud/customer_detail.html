@@ -1,0 +1,78 @@
+{% extends "base.html" %}
+{% load gn %}
+
+{% block title %}{{ customer.full_name }}{% endblock %}
+{% block page_title %}{{ customer.full_name }}{% endblock %}
+{% block page_subtitle %}{{ customer.id }} · کپی همگام‌شده (فقط خواندنی){% endblock %}
+
+{% block content %}
+<div class="gn-grid cols-3 mb-3">
+  <div class="gn-card">
+    <h6>کیف پول</h6>
+    <div class="gn-kpi">
+      <span class="label">موجودی</span>
+      <span class="value num {% if customer.wallet.balance < 0 %}text-danger{% endif %}">{{ customer.wallet.balance|toman }}</span>
+      <span class="hint">سقف اعتبار {{ customer.credit_limit|toman }} تومان</span>
+    </div>
+  </div>
+  <div class="gn-card">
+    <h6>مشخصات</h6>
+    <div class="d-flex flex-column gap-1" style="font-size: 12.5px">
+      <div class="d-flex justify-content-between"><span class="gn-muted">تماس</span><span class="num">{{ customer.phone|default:"—" }}</span></div>
+      <div class="d-flex justify-content-between"><span class="gn-muted">گروه</span><span>{{ customer.group.name|default:"پیش‌فرض" }}</span></div>
+      <div class="d-flex justify-content-between"><span class="gn-muted">تعرفه</span><span>{% if customer.group.tariff %}{{ customer.group.tariff.hourly_rate|toman }} تومان/ساعت{% else %}پیش‌فرض{% endif %}</span></div>
+      <div class="d-flex justify-content-between"><span class="gn-muted">Edge</span><span class="mono">{{ customer.edge_id|shortid }}</span></div>
+      <div class="d-flex justify-content-between"><span class="gn-muted">وضعیت</span><span>{{ customer.is_active|yesno:"فعال،غیرفعال" }}</span></div>
+    </div>
+  </div>
+  <div class="gn-card">
+    <h6>یادداشت</h6>
+    <p class="gn-muted" style="font-size: 12.5px">{{ customer.notes|default:"—" }}</p>
+  </div>
+</div>
+
+<div class="gn-grid cols-2">
+  <div class="gn-card">
+    <h6>نشست‌ها</h6>
+    <div class="gn-scroll" style="max-height: 380px">
+      <table class="gn-table">
+        <thead><tr><th>دستگاه</th><th>شروع</th><th>مدت</th><th>هزینه</th><th>وضعیت</th></tr></thead>
+        <tbody>
+          {% for session in sessions %}
+            <tr>
+              <td>{{ session.device.name }}</td>
+              <td class="num gn-muted">{{ session.started_at|date:"m-d H:i" }}</td>
+              <td class="num gn-muted">{% if session.elapsed_seconds is not None %}{{ session.elapsed_seconds }}s{% else %}—{% endif %}</td>
+              <td class="num">{{ session.cost|default:0|toman }}</td>
+              <td><span class="gn-status {{ session.status|status_tone }}"><span class="dot"></span>{{ session.status|status_fa }}</span></td>
+            </tr>
+          {% empty %}
+            <tr><td colspan="5"><div class="gn-empty">نشستی همگام نشده است.</div></td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <div class="gn-card">
+    <h6>دفتر مالی</h6>
+    <div class="gn-scroll" style="max-height: 380px">
+      <table class="gn-table">
+        <thead><tr><th>زمان</th><th>نوع</th><th>مبلغ</th><th>مانده</th></tr></thead>
+        <tbody>
+          {% for entry in entries %}
+            <tr>
+              <td class="num gn-muted">{{ entry.created_at|date:"m-d H:i" }}</td>
+              <td>{{ entry.get_entry_type_display }}</td>
+              <td class="num {% if entry.amount < 0 %}text-danger{% endif %}">{{ entry.amount|toman }}</td>
+              <td class="num gn-muted">{{ entry.balance_after|toman }}</td>
+            </tr>
+          {% empty %}
+            <tr><td colspan="4"><div class="gn-empty">تراکنشی همگام نشده است.</div></td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+{% endblock %}

@@ -173,9 +173,19 @@ def set_status(
     changed = False
     HUB_ONLY = {ClientStatus.ACTIVE, ClientStatus.IDLE, ClientStatus.STARTING, ClientStatus.STOPPING}
     if new_status and new_status != device.status:
-        if new_status in HUB_ONLY and not force:
+        may_report_active = False
+        if new_status == ClientStatus.ACTIVE and not force:
+            # A client may confirm ACTIVE only while the edge has a real session.
+            from apps.sessions.models import GamingSession, SessionStatus
+
+            may_report_active = GamingSession.objects.filter(
+                device=device, status=SessionStatus.ACTIVE
+            ).exists()
+        if new_status in HUB_ONLY and not force and not may_report_active:
             logger.info("ignoring hub-only state %s reported by %s", new_status, device.name)
-        elif new_status in PRESENCE_STATES and (force or device.can_transition_to(new_status)):
+        elif new_status in PRESENCE_STATES and (
+            force or may_report_active or device.can_transition_to(new_status)
+        ):
             device.status = new_status
             changed = True
         else:

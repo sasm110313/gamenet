@@ -8,6 +8,7 @@ twice only via the duplicate path, but projections are still written defensively
 from __future__ import annotations
 
 import logging
+from datetime import datetime
 from typing import Callable
 
 from django.db import transaction
@@ -16,7 +17,13 @@ from django.utils import timezone
 from apps.clients.models import ClientDevice, ClientStatus
 from apps.commands.models import CommandStatus, RemoteCommand
 from apps.core.roles import require_cloud
+from apps.customer_groups.models import CustomerGroup
+from apps.customers.models import Customer
+from apps.ledger.models import LedgerEntry
+from apps.pricing.models import Tariff
+from apps.sessions.models import GamingSession, SessionStatus
 from apps.synchronization.models import EdgeNode, EdgeStatus, SyncEvent
+from apps.wallets.models import Wallet
 
 logger = logging.getLogger("gamenet.handlers")
 
@@ -118,3 +125,169 @@ def config_applied(event: SyncEvent) -> None:
 @handles("edge.test")
 def edge_test(event: SyncEvent) -> None:
     logger.info("edge.test event from %s: %s", event.edge_id, event.payload)
+
+
+# ---------------------------------------------------------------------------
+# Phase 1 projections
+# ---------------------------------------------------------------------------
+def _iso(value, fallback):
+    if not value:
+        return fallback
+    return datetime.fromisoformat(str(value))
+
+
+@handles("tariff.created")
+@handles("tariff.updated")
+def tariff_upsert(event: SyncEvent) -> None:
+    p = event.payload
+    Tariff.objects.update_or_create(
+        id=p["tariff_id"],
+        defaults={
+            "edge_id": event.edge_id,
+            "name": p["name"],
+            "hourly_rate": int(p["hourly_rate"]),
+            "is_active": bool(p.get("is_active", True)),
+            "is_replica": True,
+        },
+    )
+
+
+@handles("customer_group.created")
+@handles("customer_group.updated")
+def customer_group_upsert(event: SyncEvent) -> None:
+    p = event.payload
+    tariff = None
+    if p.get("tariff_id"):
+        tariff = Tariff.objects.filter(id=p["tariff_id"]).first()
+        if tariff is None:
+            raise ValueError(f"group {p['group_id']} references unknown tariff {p['tariff_id']}")
+    CustomerGroup.objects.update_or_create(
+        id=p["group_id"],
+        defaults={
+            "edge_id": event.edge_id,
+            "name": p["name"],
+            "tariff": tariff,
+            "is_active": bool(p.get("is_active", True)),
+            "is_replica": True,
+        },
+    )
+
+
+@handles("customer.created")
+@handles("customer.updated")
+def customer_upsert(event: SyncEvent) -> None:
+    p = event.payload
+    group = None
+    if p.get("group_id"):
+        group = CustomerGroup.objects.filter(id=p["group_id"]).first()
+        if group is None:
+            raise ValueError(f"customer {p['customer_id']} references unknown group {p['group_id']}")
+    customer, _ = Customer.objects.update_or_create(
+        id=p["customer_id"],
+        defaults={
+            "edge_id": event.edge_id,
+            "full_name": p["full_name"],
+            "phone": p.get("phone", ""),
+            "group": group,
+            "credit_limit": int(p.get("credit_limit", 0)),
+            "is_active": bool(p.get("is_active", True)),
+            "notes": p.get("notes", ""),
+            "is_replica": True,
+        },
+    )
+    # Never overwrite an existing replica balance from a customer event: the
+    # ledger stream is the only authoritative source for money.
+    Wallet.objects.get_or_create(
+        customer=customer,
+        defaults={"balance": int(p.get("wallet_balance", 0)), "is_replica": True},
+    )
+
+
+@handles("ledger.entry_created")
+def ledger_entry_created(event: SyncEvent) -> None:
+    p = event.payload
+    customer = Customer.objects.filter(id=p["customer_id"]).first()
+    if customer is None:
+        raise ValueError(f"ledger entry for unknown customer {p['customer_id']}")
+    session = None
+    if p.get("session_id"):
+        session = GamingSession.objects.filter(id=p["session_id"]).first()
+        if session is None:
+            raise ValueError(f"ledger entry references unknown session {p['session_id']}")
+    reverses = None
+    if p.get("reverses_id"):
+        reverses = LedgerEntry.objects.filter(id=p["reverses_id"]).first()
+        if reverses is None:
+            raise ValueError(f"ledger entry reverses unknown entry {p['reverses_id']}")
+
+    entry, created = LedgerEntry.objects.get_or_create(
+        id=p["entry_id"],
+        defaults={
+            "edge_id": event.edge_id,
+            "customer": customer,
+            "session": session,
+            "entry_type": p["entry_type"],
+            "amount": int(p["amount"]),
+            "balance_after": int(p["balance_after"]),
+            "reverses": reverses,
+            "note": p.get("note", ""),
+            "is_replica": True,
+            "created_at": _iso(p.get("created_at"), event.occurred_at),
+        },
+    )
+    if not created:
+        return
+    Wallet.objects.update_or_create(
+        customer=customer,
+        defaults={"balance": entry.balance_after, "is_replica": True},
+    )
+
+
+@handles("session.started")
+def session_started(event: SyncEvent) -> None:
+    p = event.payload
+    customer = Customer.objects.filter(id=p["customer_id"]).first()
+    device = ClientDevice.objects.filter(id=p["device_id"]).first()
+    if customer is None or device is None:
+        raise ValueError(
+            f"session {p['session_id']} references unknown customer/device"
+        )
+    tariff = None
+    if p.get("tariff_id"):
+        tariff = Tariff.objects.filter(id=p["tariff_id"]).first()
+        if tariff is None:
+            raise ValueError(f"session {p['session_id']} references unknown tariff {p['tariff_id']}")
+    GamingSession.objects.get_or_create(
+        id=p["session_id"],
+        defaults={
+            "edge_id": event.edge_id,
+            "customer": customer,
+            "device": device,
+            "status": SessionStatus.ACTIVE,
+            "tariff": tariff,
+            "tariff_name": p.get("tariff_name", ""),
+            "hourly_rate": int(p["hourly_rate"]),
+            "started_at": _iso(p.get("started_at"), event.occurred_at),
+            "is_replica": True,
+        },
+    )
+
+
+@handles("session.ended")
+def session_ended(event: SyncEvent) -> None:
+    p = event.payload
+    session = GamingSession.objects.filter(id=p["session_id"]).first()
+    if session is None:
+        raise ValueError(f"session.ended for unknown session {p['session_id']}")
+    session.status = p.get("status", SessionStatus.COMPLETED)
+    session.ended_at = _iso(p.get("ended_at"), event.occurred_at)
+    session.elapsed_seconds = int(p.get("elapsed_seconds", 0))
+    session.cost = int(p.get("cost", 0))
+    session.end_reason = p.get("end_reason", "")
+    session.is_replica = True
+    session.save(
+        update_fields=[
+            "status", "ended_at", "elapsed_seconds", "cost", "end_reason",
+            "is_replica", "updated_at",
+        ]
+    )

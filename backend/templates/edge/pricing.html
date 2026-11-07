@@ -1,0 +1,105 @@
+{% extends "base.html" %}
+{% load gn %}
+
+{% block title %}تعرفه‌ها{% endblock %}
+{% block page_title %}تعرفه‌ها و گروه‌ها{% endblock %}
+{% block page_subtitle %}نرخ ساعتی و گروه‌بندی مشتریان؛ تغییر نرخ روی نشست فعال اثر ندارد{% endblock %}
+
+{% block content %}
+<div class="gn-grid cols-2 mb-3">
+  <div class="gn-card">
+    <h6>تعرفه جدید</h6>
+    <form method="post" action="{% url 'edge_tariff_create' %}" class="gn-form-row">
+      {% csrf_token %}
+      <div class="flex-grow-1">
+        <label class="gn-label">نام تعرفه</label>
+        <input class="gn-input" name="name" required maxlength="80" placeholder="استاندارد">
+      </div>
+      <div>
+        <label class="gn-label">نرخ ساعتی (تومان)</label>
+        <input class="gn-input num" name="hourly_rate" inputmode="numeric" required value="40000">
+      </div>
+      <button class="gn-btn primary" type="submit"><i class="ti ti-plus"></i> ثبت</button>
+    </form>
+  </div>
+  <div class="gn-card">
+    <h6>گروه جدید</h6>
+    <form method="post" action="{% url 'edge_group_create' %}" class="gn-form-row">
+      {% csrf_token %}
+      <div class="flex-grow-1">
+        <label class="gn-label">نام گروه</label>
+        <input class="gn-input" name="name" required maxlength="80" placeholder="مثلاً VIP">
+      </div>
+      <div>
+        <label class="gn-label">تعرفه</label>
+        <select class="gn-select" name="tariff_id" required>
+          {% for tariff in tariffs %}
+            <option value="{{ tariff.id }}">{{ tariff.name }} — {{ tariff.hourly_rate|toman }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <button class="gn-btn primary" type="submit"><i class="ti ti-plus"></i> ثبت</button>
+    </form>
+  </div>
+</div>
+
+<div class="gn-grid cols-2">
+  <div class="gn-card">
+    <h6>تعرفه‌ها</h6>
+    <table class="gn-table">
+      <thead><tr><th>نام</th><th>نرخ</th><th>وضعیت</th><th></th></tr></thead>
+      <tbody>
+        {% for tariff in tariffs %}
+          <tr>
+            <td>
+              <form id="tariff-{{ tariff.id }}" method="post" action="{% url 'edge_tariff_update' tariff.id %}">{% csrf_token %}</form>
+              <input class="gn-input" form="tariff-{{ tariff.id }}" name="name" value="{{ tariff.name }}" maxlength="80" style="min-width: 130px">
+            </td>
+            <td><input class="gn-input num" form="tariff-{{ tariff.id }}" name="hourly_rate" value="{{ tariff.hourly_rate }}" inputmode="numeric" style="min-width: 100px"></td>
+            <td>
+              <label class="d-flex align-items-center gap-1" style="font-size: 12px">
+                <input form="tariff-{{ tariff.id }}" type="checkbox" name="is_active" value="1" {% if tariff.is_active %}checked{% endif %}> فعال
+              </label>
+            </td>
+            <td class="text-end"><button class="gn-btn sm" form="tariff-{{ tariff.id }}" type="submit"><i class="ti ti-device-floppy"></i></button></td>
+          </tr>
+        {% empty %}
+          <tr><td colspan="4"><div class="gn-empty">تعرفه‌ای ثبت نشده است.</div></td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+  <div class="gn-card">
+    <h6>گروه‌ها</h6>
+    <table class="gn-table">
+      <thead><tr><th>نام</th><th>تعرفه</th><th>وضعیت</th><th></th></tr></thead>
+      <tbody>
+        {% for group in groups %}
+          <tr>
+            <td>
+              <form id="group-{{ group.id }}" method="post" action="{% url 'edge_group_update' group.id %}">{% csrf_token %}</form>
+              <input class="gn-input" form="group-{{ group.id }}" name="name" value="{{ group.name }}" maxlength="80" style="min-width: 120px">
+            </td>
+            <td>
+              <select class="gn-select" form="group-{{ group.id }}" name="tariff_id">
+                {% for tariff in tariffs %}
+                  <option value="{{ tariff.id }}" {% if group.tariff_id == tariff.id %}selected{% endif %}>{{ tariff.name }}</option>
+                {% endfor %}
+              </select>
+            </td>
+            <td>
+              <label class="d-flex align-items-center gap-1" style="font-size: 12px">
+                <input form="group-{{ group.id }}" type="checkbox" name="is_active" value="1" {% if group.is_active %}checked{% endif %}> فعال
+              </label>
+            </td>
+            <td class="text-end"><button class="gn-btn sm" form="group-{{ group.id }}" type="submit"><i class="ti ti-device-floppy"></i></button></td>
+          </tr>
+        {% empty %}
+          <tr><td colspan="4"><div class="gn-empty">گروهی ثبت نشده است.</div></td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}

@@ -21,7 +21,7 @@ class ClientStatus(models.TextChoices):
 # Transitions the hub accepts from a client's own reports. The hub may always
 # force MAINTENANCE/OFFLINE (network truth), and admin commands may force LOCKED.
 CLIENT_ALLOWED_TRANSITIONS: dict[str, set[str]] = {
-    ClientStatus.OFFLINE: {ClientStatus.ONLINE},
+    ClientStatus.OFFLINE: {ClientStatus.ONLINE, ClientStatus.LOCKED},
     ClientStatus.ONLINE: {ClientStatus.LOCKED, ClientStatus.IDLE, ClientStatus.OFFLINE,
                           ClientStatus.MAINTENANCE, ClientStatus.STARTING},
     ClientStatus.IDLE: {ClientStatus.LOCKED, ClientStatus.ACTIVE, ClientStatus.OFFLINE,

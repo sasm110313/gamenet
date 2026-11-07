@@ -1,0 +1,222 @@
+"""Session start/stop. The edge is the only writer of play time and charges.
+
+Lock order is deliberate: session row (stop only) -> customer row -> customer
+advisory lock -> wallet row -> device row. A concurrent start for the same
+customer therefore waits and re-reads the committed balance and active-session
+exposure before it can pass the credit check.
+"""
+
+from __future__ import annotations
+
+from django.conf import settings
+from django.db import transaction
+from django.utils import timezone
+
+from apps.clients.models import ClientDevice, ClientStatus
+from apps.core.locks import customer_lock
+from apps.core.money import session_cost
+from apps.core.roles import require_edge
+from apps.customers.models import Customer
+from apps.ledger.models import LedgerEntry, LedgerEntryType
+from apps.sessions.models import GamingSession, SessionStatus
+from apps.synchronization.command_service import queue_device_command
+from apps.synchronization.config import current_config
+from apps.synchronization.edge_credentials import ensure_identity
+from apps.synchronization.events import emit
+from apps.wallets.models import Wallet
+from apps.wallets.services import post_entry
+
+
+class SessionError(ValueError):
+    pass
+
+
+STARTABLE_DEVICE_STATES = {ClientStatus.ONLINE, ClientStatus.LOCKED, ClientStatus.IDLE}
+
+
+def _resolve_tariff(customer: Customer):
+    """Return (tariff, hourly_rate, tariff_name) for a new session."""
+    group = customer.group
+    if group is not None and not group.is_active:
+        raise SessionError("گروه مشتری غیرفعال است.")
+    tariff = group.tariff if group is not None else None
+    if tariff is not None:
+        if not tariff.is_active:
+            raise SessionError("تعرفه گروه غیرفعال است.")
+        if tariff.hourly_rate <= 0:
+            raise SessionError("نرخ تعرفه نامعتبر است.")
+        return tariff, tariff.hourly_rate, tariff.name
+    rate = int(current_config().get("default_hourly_rate", settings.DEFAULT_HOURLY_RATE))
+    if rate <= 0:
+        raise SessionError("نرخ پیش‌فرض نامعتبر است.")
+    return None, rate, "تعرفه پیش‌فرض"
+
+
+def _session_payload(session: GamingSession) -> dict:
+    return {
+        "session_id": str(session.id),
+        "customer_id": str(session.customer_id),
+        "device_id": str(session.device_id),
+        "tariff_id": str(session.tariff_id) if session.tariff_id else None,
+        "tariff_name": session.tariff_name,
+        "hourly_rate": session.hourly_rate,
+        "started_at": session.started_at.isoformat(),
+    }
+
+
+@transaction.atomic
+def start_session(customer: Customer, device: ClientDevice, *, actor=None) -> GamingSession:
+    require_edge()
+    identity = ensure_identity()
+    now = timezone.now()
+
+    customer = Customer.objects.select_for_update().get(pk=customer.pk)
+    if not customer.is_active:
+        raise SessionError("مشتری غیرفعال است.")
+    if customer.edge_id != identity.edge_id:
+        raise SessionError("مشتری به این Edge تعلق ندارد.")
+
+    customer_lock(customer.id)
+    wallet = Wallet.objects.select_for_update().filter(customer=customer).first()
+    if wallet is None:
+        wallet = Wallet.objects.create(customer=customer, balance=0)
+
+    device = ClientDevice.objects.select_for_update().get(pk=device.pk)
+    if not device.is_active:
+        raise SessionError("دستگاه غیرفعال است.")
+    if device.edge_id != identity.edge_id:
+        raise SessionError("دستگاه به این Edge تعلق ندارد.")
+    if device.status not in STARTABLE_DEVICE_STATES:
+        raise SessionError(f"دستگاه در وضعیت قابل شروع نیست ({device.status}).")
+
+    if GamingSession.objects.filter(device=device, status=SessionStatus.ACTIVE).exists():
+        raise SessionError("این دستگاه در یک نشست فعال است.")
+
+    tariff, hourly_rate, tariff_name = _resolve_tariff(customer)
+
+    # Reserve one billable hour for every live session. This is the credit check
+    # that concurrent starts must not both pass.
+    reserved = sum(
+        GamingSession.objects.filter(
+            customer=customer, status=SessionStatus.ACTIVE
+        ).values_list("hourly_rate", flat=True)
+    )
+    available = wallet.balance + customer.credit_limit - reserved
+    if available < hourly_rate:
+        raise SessionError(
+            "موجودی و سقف اعتبار برای شروع یک ساعت بازی کافی نیست."
+        )
+
+    session = GamingSession.objects.create(
+        edge_id=identity.edge_id,
+        customer=customer,
+        device=device,
+        status=SessionStatus.ACTIVE,
+        tariff=tariff,
+        tariff_name=tariff_name,
+        hourly_rate=hourly_rate,
+        started_at=now,
+        started_by=actor if getattr(actor, "pk", None) else None,
+    )
+
+    from apps.devices.services import set_status
+
+    set_status(device, ClientStatus.STARTING, force=True, reason="session started")
+    queue_device_command(
+        device,
+        "client.unlock",
+        {
+            "session_id": str(session.id),
+            "customer_id": str(customer.id),
+            "hourly_rate": hourly_rate,
+        },
+        actor=actor,
+    )
+    emit(
+        "session.started",
+        aggregate_type="session",
+        aggregate_id=str(session.id),
+        payload=_session_payload(session),
+    )
+    return session
+
+
+@transaction.atomic
+def stop_session(
+    session: GamingSession, *, actor=None, reason: str = "پایان دستی"
+) -> tuple[GamingSession, LedgerEntry | None]:
+    """Finish a session and charge actual elapsed time exactly once.
+
+    Safe to call twice: a non-ACTIVE session is not charged again, and the
+    ledger's unique (session, entry_type) constraint is the database backstop.
+    """
+    require_edge()
+    session = GamingSession.objects.select_for_update().select_related(
+        "customer", "device"
+    ).get(pk=session.pk)
+
+    if session.status != SessionStatus.ACTIVE:
+        entry = LedgerEntry.objects.filter(
+            session=session, entry_type=LedgerEntryType.SESSION_CHARGE
+        ).first()
+        return session, entry
+
+    now = timezone.now()
+    elapsed = max(0, int((now - session.started_at).total_seconds()))
+    cost = session_cost(session.hourly_rate, elapsed)
+
+    entry = LedgerEntry.objects.filter(
+        session=session, entry_type=LedgerEntryType.SESSION_CHARGE
+    ).first()
+    if entry is None and cost > 0:
+        entry = post_entry(
+            customer=session.customer,
+            amount=-cost,
+            entry_type=LedgerEntryType.SESSION_CHARGE,
+            session=session,
+            note=f"شارژ نشست {str(session.id)[:8]}",
+            actor=actor,
+            allow_over_limit=True,
+        )
+
+    session.status = SessionStatus.COMPLETED
+    session.ended_at = now
+    session.elapsed_seconds = elapsed
+    session.cost = cost
+    session.ended_by = actor if getattr(actor, "pk", None) else None
+    session.end_reason = (reason or "")[:120]
+    session.save(
+        update_fields=[
+            "status", "ended_at", "elapsed_seconds", "cost", "ended_by",
+            "end_reason", "updated_at",
+        ]
+    )
+
+    from apps.devices.services import set_status
+
+    set_status(session.device, ClientStatus.STOPPING, force=True, reason="session ended")
+    queue_device_command(
+        session.device,
+        "client.lock",
+        {
+            "session_id": str(session.id),
+            "cost": cost,
+            "elapsed_seconds": elapsed,
+        },
+        actor=actor,
+    )
+    emit(
+        "session.ended",
+        aggregate_type="session",
+        aggregate_id=str(session.id),
+        payload={
+            "session_id": str(session.id),
+            "status": session.status,
+            "ended_at": session.ended_at.isoformat(),
+            "elapsed_seconds": elapsed,
+            "cost": cost,
+            "end_reason": session.end_reason,
+            "ledger_entry_id": str(entry.id) if entry is not None else None,
+        },
+    )
+    return session, entry

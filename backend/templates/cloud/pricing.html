@@ -1,0 +1,48 @@
+{% extends "base.html" %}
+{% load gn %}
+
+{% block title %}تعرفه‌ها{% endblock %}
+{% block page_title %}تعرفه‌ها و گروه‌ها{% endblock %}
+{% block page_subtitle %}کپی همگام‌شده تنظیمات قیمت‌گذاری Edge ها{% endblock %}
+
+{% block content %}
+<div class="gn-grid cols-2">
+  <div class="gn-card">
+    <h6>تعرفه‌ها</h6>
+    <table class="gn-table">
+      <thead><tr><th>نام</th><th>Edge</th><th>نرخ ساعتی</th><th>وضعیت</th></tr></thead>
+      <tbody>
+        {% for tariff in tariffs %}
+          <tr>
+            <td>{{ tariff.name }}</td>
+            <td class="mono gn-muted" style="font-size: 10.5px">{{ tariff.edge_id|shortid }}</td>
+            <td class="num">{{ tariff.hourly_rate|toman }}</td>
+            <td>{% if tariff.is_active %}<span class="gn-status st-online"><span class="dot"></span>فعال</span>{% else %}<span class="gn-status st-offline"><span class="dot"></span>غیرفعال</span>{% endif %}</td>
+          </tr>
+        {% empty %}
+          <tr><td colspan="4"><div class="gn-empty">تعرفه‌ای همگام نشده است.</div></td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+  <div class="gn-card">
+    <h6>گروه‌ها</h6>
+    <table class="gn-table">
+      <thead><tr><th>نام</th><th>Edge</th><th>تعرفه</th><th>وضعیت</th></tr></thead>
+      <tbody>
+        {% for group in groups %}
+          <tr>
+            <td>{{ group.name }}</td>
+            <td class="mono gn-muted" style="font-size: 10.5px">{{ group.edge_id|shortid }}</td>
+            <td class="gn-muted">{{ group.tariff.name|default:"—" }}</td>
+            <td>{% if group.is_active %}<span class="gn-status st-online"><span class="dot"></span>فعال</span>{% else %}<span class="gn-status st-offline"><span class="dot"></span>غیرفعال</span>{% endif %}</td>
+          </tr>
+        {% empty %}
+          <tr><td colspan="4"><div class="gn-empty">گروهی همگام نشده است.</div></td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}

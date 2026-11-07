@@ -73,3 +73,29 @@ def device(synced_identity):
     )
     dev._plain_token = token
     return dev
+
+
+@pytest.fixture
+def tariff(synced_identity):
+    from apps.pricing.services import create_tariff
+
+    return create_tariff(name="Standard", hourly_rate=40_000)
+
+
+@pytest.fixture
+def customer_group(synced_identity, tariff):
+    from apps.customer_groups.services import create_group
+
+    return create_group(name="Regular", tariff=tariff)
+
+
+@pytest.fixture
+def customer(synced_identity, customer_group):
+    from apps.customers.services import create_customer
+
+    return create_customer(
+        full_name="Ali Rezaei",
+        phone="09120000000",
+        group=customer_group,
+        credit_limit=60_000,
+    )

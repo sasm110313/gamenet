@@ -1,6 +1,7 @@
 # Architecture
 
-Status: Phase 0 (connectivity proof) — decisions here are load-bearing for Phases 1–6.
+Status: Phase 1 (customers, wallets, ledger, sessions). Decisions here are
+load-bearing for Phases 2–6.
 
 ## 1. Components and trust boundaries
 
@@ -44,8 +45,9 @@ audit at startup (`apps/core/checks.py`).
 
 ## 3. Authority and replication
 
-- **Edge is authoritative** for sessions, ledger entries, wallet balances and
-  device state. Those writes happen only on the edge.
+- **Edge is authoritative** for sessions, ledger entries, wallet balances,
+  customers, customer groups, tariffs and device state. Those writes happen only
+  on the edge.
 - **Cloud is a replica** for those aggregates. Ingest projects events into
   read models; it never recomputes a charge or overwrites an edge fact.
 - **Cloud is authoritative** for: remote commands, configuration snapshots,
@@ -56,6 +58,23 @@ audit at startup (`apps/core/checks.py`).
 Every edge fact is an event with a stable `event_id` (UUIDv7-ish, time-sortable)
 and a per-edge monotonic `local_sequence` allocated in the same transaction that
 writes the business row.
+
+### 3.1 Phase 1 replication rules
+
+| Edge fact | Cloud projection | Missing-reference policy |
+|---|---|---|
+| `tariff.created/updated` | `pricing.Tariff` upsert | n/a |
+| `customer_group.created/updated` | `customer_groups.CustomerGroup` upsert | Unknown tariff rejects the event |
+| `customer.created/updated` | `customers.Customer` upsert + wallet bootstrap | Unknown group rejects the event |
+| `ledger.entry_created` | `ledger.LedgerEntry` insert + wallet balance | Unknown customer/session/reversed entry rejects the event |
+| `session.started` | `sessions.GamingSession` insert | Unknown customer/device/tariff rejects the event |
+| `session.ended` | session status/duration/cost update | Unknown session rejects the event |
+
+Projections are idempotent because an already-applied event can be re-delivered
+through the duplicate path. Rejection is deliberate: the edge keeps the event
+PENDING/FAILED and retries after the cause is fixed, so the cloud never stores a
+partial customer or money fact. Customer events never overwrite an existing
+cloud wallet balance; only the ledger stream may move a replica balance.
 
 ## 4. Edge → Cloud sync (Transactional Outbox)
 
@@ -82,9 +101,13 @@ Failure handling:
 - Network/5xx → exponential backoff with jitter (1s → 60s cap), events stay PENDING.
 - 4xx validation → event marked FAILED (poison), excluded from auto-drain, shown
   with a manual retry action. Nothing is ever deleted before acknowledgement.
-- Ordering: a batch is sent in sequence order; the cloud rejects a batch whose
-  first sequence is beyond `last_sequence + 1` gap for order-sensitive types.
-  (Phase 0 enforces per-aggregate ordering; global gap handling is Phase 1.)
+- Ordering: the edge drains strictly FIFO by `local_sequence`; a FAILED head
+  blocks the stream until an operator retries it. The cloud deduplicates on
+  `(edge_id, event_id)`, rejects a sequence slot already used by a different
+  event, and rejects per-aggregate regression (an event older than the last
+  applied event for that aggregate). Gaps are allowed because rolled-back
+  transactions never emit; the edge watermark only advances over a contiguous
+  acknowledged prefix.
 - The edge records `last_acked_sequence` locally so restarts resume correctly.
 
 ## 5. Cloud → Edge (commands and configuration)
@@ -160,11 +183,26 @@ the applied version.
   implemented with integer arithmetic (`(rate*secs + 1800) // 3600`).
 - Tariff snapshot is copied into the session row at start; later price changes
   cannot touch an active session.
-- Wallet mutations happen in `transaction.atomic()` with `SELECT ... FOR UPDATE`
-  on the wallet row plus a customer-scoped advisory lock, so concurrent starts
-  cannot both pass the credit check.
+- Ledger rows carry a signed `amount` (positive credits the wallet) and the
+  authoritative `balance_after`; the wallet row is a cached balance that is only
+  written together with a ledger row.
+- A wallet may go negative down to `-credit_limit`. A deposit is strictly
+  positive; an adjustment is non-zero; a reversal is the negated original and is
+  unique per original entry. Zero-amount ledger rows are impossible by DB
+  constraint, so a zero-cost session creates no ledger row.
+- Session start reserves one billable hour per active session:
+  `balance + credit_limit - sum(active.hourly_rate) >= new_rate`. This prevents
+  concurrent starts from both passing the check.
+- Session stop charges actual elapsed time and may legitimately exceed the credit
+  limit (`allow_over_limit`), because the time has already been consumed. The
+  charge is idempotent on `(session_id, SESSION_CHARGE)`; a non-ACTIVE session is
+  never charged again.
+- Wallet mutations happen in `transaction.atomic()` under a fixed lock order:
+  customer row → customer-scoped advisory lock → wallet row. Session stop also
+  locks the session row first.
 - Ledger is append-only; corrections are reversals referencing the original entry.
-- Every charge path is idempotent on `(session_id, entry_type)`.
+  The model refuses updates and deletes, and the database enforces non-zero
+  amounts, valid entry types and one charge per session type.
 
 ## 10. Pinned versions
 

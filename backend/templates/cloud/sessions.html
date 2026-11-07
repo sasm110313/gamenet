@@ -1,0 +1,53 @@
+{% extends "base.html" %}
+{% load gn %}
+
+{% block title %}نشست‌ها{% endblock %}
+{% block page_title %}نشست‌ها{% endblock %}
+{% block page_subtitle %}نمای همگام‌شده نشست‌های همه Edge ها{% endblock %}
+
+{% block topbar_status %}
+  <span class="gn-chip {% if sessions_active %}accent{% endif %}"><span class="dot"></span>{{ sessions_active }} نشست فعال</span>
+{% endblock %}
+
+{% block content %}
+<div class="gn-card mb-3">
+  <form method="get" class="gn-form-row">
+    <div class="flex-grow-1">
+      <label class="gn-label">مشتری، دستگاه یا شناسه</label>
+      <input class="gn-input" name="q" value="{{ q }}" placeholder="جستجو…">
+    </div>
+    <div>
+      <label class="gn-label">وضعیت</label>
+      <select class="gn-select" name="status">
+        <option value="">همه</option>
+        {% for value, label in statuses.choices %}
+          <option value="{{ value }}" {% if status == value %}selected{% endif %}>{{ label }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <button class="gn-btn" type="submit"><i class="ti ti-filter"></i> اعمال</button>
+  </form>
+</div>
+
+<div class="gn-card">
+  <table class="gn-table">
+    <thead><tr><th>مشتری</th><th>دستگاه</th><th>Edge</th><th>شروع</th><th>مدت</th><th>هزینه</th><th>وضعیت</th><th>تعرفه</th></tr></thead>
+    <tbody>
+      {% for session in sessions %}
+        <tr>
+          <td><a href="{% url 'cloud_customer_detail' session.customer.id %}" style="color: var(--gn-text); text-decoration: none">{{ session.customer.full_name }}</a></td>
+          <td>{{ session.device.name }}</td>
+          <td class="mono gn-muted" style="font-size: 10.5px">{{ session.edge_id|shortid }}</td>
+          <td class="num gn-muted">{{ session.started_at|date:"Y-m-d H:i" }}</td>
+          <td class="num gn-muted">{% if session.elapsed_seconds is not None %}{{ session.elapsed_seconds }}s{% else %}—{% endif %}</td>
+          <td class="num">{{ session.cost|default:0|toman }}</td>
+          <td><span class="gn-status {{ session.status|status_tone }}"><span class="dot"></span>{{ session.status|status_fa }}</span></td>
+          <td class="gn-muted">{{ session.tariff_name }}<div class="num" style="font-size: 10.5px">{{ session.hourly_rate|toman }}</div></td>
+        </tr>
+      {% empty %}
+        <tr><td colspan="8"><div class="gn-empty"><i class="ti ti-clock-off"></i>نشستی همگام نشده است.</div></td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endblock %}

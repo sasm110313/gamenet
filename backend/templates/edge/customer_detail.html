@@ -1,0 +1,159 @@
+{% extends "base.html" %}
+{% load gn %}
+
+{% block title %}{{ customer.full_name }}{% endblock %}
+{% block page_title %}{{ customer.full_name }}{% endblock %}
+{% block page_subtitle %}{{ customer.phone|default:"بدون شماره تماس" }} · {{ customer.id }}{% endblock %}
+
+{% block content %}
+<div class="gn-grid cols-3 mb-3">
+  <div class="gn-card">
+    <h6>کیف پول</h6>
+    <div class="gn-kpi mb-2">
+      <span class="label">موجودی فعلی</span>
+      <span class="value num {% if wallet.balance < 0 %}text-danger{% endif %}">{{ wallet.balance|toman }}</span>
+      <span class="hint">قابل استفاده با اعتبار: {{ available|toman }} تومان</span>
+    </div>
+    <div class="d-flex justify-content-between" style="font-size: 12.5px">
+      <span class="gn-muted">سقف اعتبار</span><span class="num">{{ customer.credit_limit|toman }}</span>
+    </div>
+    <div class="gn-divider"></div>
+    <form method="post" action="{% url 'edge_customer_deposit' customer.id %}" class="mb-2">
+      {% csrf_token %}
+      <label class="gn-label">شارژ کیف پول (تومان)</label>
+      <div class="d-flex gap-2">
+        <input class="gn-input num" name="amount" inputmode="numeric" required placeholder="100000">
+        <button class="gn-btn primary" type="submit"><i class="ti ti-plus"></i> شارژ</button>
+      </div>
+      <input class="gn-input mt-2" name="note" maxlength="255" placeholder="توضیح (اختیاری)">
+    </form>
+    <form method="post" action="{% url 'edge_customer_adjust' customer.id %}">
+      {% csrf_token %}
+      <label class="gn-label">اصلاح موجودی (مثبت یا منفی)</label>
+      <div class="d-flex gap-2">
+        <input class="gn-input num" name="amount" inputmode="numeric" required placeholder="-10000">
+        <button class="gn-btn" type="submit"><i class="ti ti-adjustments"></i> ثبت</button>
+      </div>
+      <input class="gn-input mt-2" name="note" maxlength="255" placeholder="دلیل اصلاح">
+    </form>
+  </div>
+
+  <div class="gn-card">
+    <h6>مشخصات</h6>
+    <form method="post" action="{% url 'edge_customer_update' customer.id %}">
+      {% csrf_token %}
+      <label class="gn-label">نام</label>
+      <input class="gn-input" name="full_name" value="{{ customer.full_name }}" required maxlength="120">
+      <label class="gn-label mt-2">شماره تماس</label>
+      <input class="gn-input num" name="phone" value="{{ customer.phone }}" maxlength="24">
+      <label class="gn-label mt-2">گروه</label>
+      <select class="gn-select" name="group_id">
+        <option value="">بدون گروه</option>
+        {% for group in groups %}
+          <option value="{{ group.id }}" {% if customer.group_id == group.id %}selected{% endif %}>{{ group.name }}</option>
+        {% endfor %}
+      </select>
+      <label class="gn-label mt-2">سقف اعتبار</label>
+      <input class="gn-input num" name="credit_limit" value="{{ customer.credit_limit }}" inputmode="numeric">
+      <label class="gn-label mt-2">یادداشت</label>
+      <input class="gn-input" name="notes" value="{{ customer.notes }}" maxlength="255">
+      <button class="gn-btn primary mt-3" type="submit"><i class="ti ti-device-floppy"></i> ذخیره</button>
+    </form>
+    <div class="gn-divider"></div>
+    <form method="post" action="{% url 'edge_customer_toggle' customer.id %}">
+      {% csrf_token %}
+      <button class="gn-btn {% if customer.is_active %}danger{% else %}primary{% endif %} w-100 justify-content-center" type="submit">
+        {% if customer.is_active %}<i class="ti ti-user-off"></i> غیرفعال‌سازی{% else %}<i class="ti ti-user-check"></i> فعال‌سازی{% endif %}
+      </button>
+    </form>
+  </div>
+
+  <div class="gn-card">
+    <h6>نشست</h6>
+    {% if active_session %}
+      <div class="d-flex justify-content-between mb-1" style="font-size: 12.5px">
+        <span class="gn-muted">دستگاه</span><strong>{{ active_session.device.name }}</strong>
+      </div>
+      <div class="d-flex justify-content-between mb-1" style="font-size: 12.5px">
+        <span class="gn-muted">شروع</span><span class="num">{{ active_session.started_at|date:"H:i:s" }}</span>
+      </div>
+      <div class="d-flex justify-content-between mb-2" style="font-size: 12.5px">
+        <span class="gn-muted">نرخ</span><span class="num">{{ active_session.hourly_rate|toman }} / ساعت</span>
+      </div>
+      <form method="post" action="{% url 'edge_session_stop' active_session.id %}">
+        {% csrf_token %}
+        <input type="hidden" name="next" value="{% url 'edge_customer_detail' customer.id %}">
+        <button class="gn-btn danger w-100 justify-content-center" type="submit"><i class="ti ti-player-stop"></i> پایان نشست</button>
+      </form>
+    {% elif devices %}
+      <form method="post" action="{% url 'edge_session_start' %}">
+        {% csrf_token %}
+        <input type="hidden" name="customer_id" value="{{ customer.id }}">
+        <label class="gn-label">دستگاه</label>
+        <select class="gn-select" name="device_id" required>
+          {% for device in devices %}<option value="{{ device.id }}">{{ device.name }} — {{ device.status|status_fa }}</option>{% endfor %}
+        </select>
+        <button class="gn-btn primary mt-2 w-100 justify-content-center" type="submit"><i class="ti ti-player-play"></i> شروع نشست</button>
+      </form>
+    {% else %}
+      <div class="gn-empty" style="padding: 20px 5px"><i class="ti ti-device-desktop-off"></i>دستگاه آماده‌ای وجود ندارد.</div>
+    {% endif %}
+  </div>
+</div>
+
+<div class="gn-grid cols-2">
+  <div class="gn-card">
+    <h6>نشست‌های اخیر</h6>
+    <div class="gn-scroll" style="max-height: 340px">
+      <table class="gn-table">
+        <thead><tr><th>دستگاه</th><th>شروع</th><th>مدت</th><th>هزینه</th><th>وضعیت</th></tr></thead>
+        <tbody>
+          {% for session in sessions %}
+            <tr>
+              <td>{{ session.device.name }}</td>
+              <td class="num gn-muted">{{ session.started_at|date:"m-d H:i" }}</td>
+              <td class="num gn-muted">{% if session.elapsed_seconds is not None %}{{ session.elapsed_seconds }}s{% else %}—{% endif %}</td>
+              <td class="num">{{ session.cost|default:0|toman }}</td>
+              <td><span class="gn-status {{ session.status|status_tone }}"><span class="dot"></span>{{ session.status|status_fa }}</span></td>
+            </tr>
+          {% empty %}
+            <tr><td colspan="5"><div class="gn-empty">نشستی ثبت نشده است.</div></td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <div class="gn-card">
+    <div class="d-flex justify-content-between align-items-center">
+      <h6 class="mb-0">دفتر مالی</h6>
+      <a class="gn-btn sm" href="{% url 'edge_ledger' %}?q={{ customer.full_name }}">همه</a>
+    </div>
+    <div class="gn-scroll" style="max-height: 340px">
+      <table class="gn-table">
+        <thead><tr><th>نوع</th><th>مبلغ</th><th>مانده</th><th>زمان</th><th></th></tr></thead>
+        <tbody>
+          {% for entry in entries %}
+            <tr>
+              <td>{{ entry.get_entry_type_display }}</td>
+              <td class="num {% if entry.amount < 0 %}text-danger{% endif %}">{{ entry.amount|toman }}</td>
+              <td class="num gn-muted">{{ entry.balance_after|toman }}</td>
+              <td class="num gn-muted">{{ entry.created_at|date:"m-d H:i" }}</td>
+              <td class="text-end">
+                {% if entry.entry_type != 'REVERSAL' %}
+                  <form method="post" action="{% url 'edge_customer_reverse' customer.id entry.id %}" class="gn-inline-form">
+                    {% csrf_token %}
+                    <button class="gn-btn sm" type="submit" title="برگشت تراکنش"><i class="ti ti-arrow-back-up"></i></button>
+                  </form>
+                {% endif %}
+              </td>
+            </tr>
+          {% empty %}
+            <tr><td colspan="5"><div class="gn-empty">تراکنشی ثبت نشده است.</div></td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+{% endblock %}

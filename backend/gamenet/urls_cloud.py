@@ -4,10 +4,16 @@ from django.urls import path
 
 from apps.ingress import dashboard as dash
 from apps.ingress import views as api
+from apps.reports import dashboard as reports
 from gamenet.urls_common import base_patterns
 
 urlpatterns = [
     path("", dash.overview, name="cloud_overview"),
+    path("customers/", reports.customers, name="cloud_customers"),
+    path("customers/<uuid:customer_id>/", reports.customer_detail, name="cloud_customer_detail"),
+    path("sessions/", reports.sessions, name="cloud_sessions"),
+    path("ledger/", reports.ledger, name="cloud_ledger"),
+    path("pricing/", reports.pricing, name="cloud_pricing"),
     path("edges/", dash.edges, name="cloud_edges"),
     path("edges/create-code", dash.create_code, name="cloud_create_code"),
     path("edges/<uuid:edge_id>/", dash.edge_detail, name="cloud_edge_detail"),

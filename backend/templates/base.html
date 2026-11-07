@@ -31,6 +31,18 @@
         <a href="{% url 'edge_devices' %}" class="{% if n|slice:':12' == 'edge_device_' or n == 'edge_devices' %}active{% endif %}">
           <i class="ti ti-device-desktop"></i><span>کلاینت‌ها</span>
         </a>
+        <a href="{% url 'edge_customers' %}" class="{% if n|slice:':14' == 'edge_customer_' or n == 'edge_customers' %}active{% endif %}">
+          <i class="ti ti-users"></i><span>مشتریان</span>
+        </a>
+        <a href="{% url 'edge_sessions' %}" class="{% if n|slice:':13' == 'edge_session_' or n == 'edge_sessions' %}active{% endif %}">
+          <i class="ti ti-clock-play"></i><span>نشست‌ها</span>
+        </a>
+        <a href="{% url 'edge_ledger' %}" class="{% if n == 'edge_ledger' %}active{% endif %}">
+          <i class="ti ti-receipt"></i><span>صندوق</span>
+        </a>
+        <a href="{% url 'edge_pricing' %}" class="{% if n|slice:':11' == 'edge_tariff' or n|slice:':10' == 'edge_group' or n == 'edge_pricing' %}active{% endif %}">
+          <i class="ti ti-tags"></i><span>تعرفه‌ها</span>
+        </a>
         <a href="{% url 'edge_cloud' %}" class="{% if n|slice:':10' == 'edge_cloud' or n == 'edge_emit_test' %}active{% endif %}">
           <i class="ti ti-cloud-upload"></i><span>همگام‌سازی ابر</span>
         </a>
@@ -40,6 +52,18 @@
         </a>
         <a href="{% url 'cloud_edges' %}" class="{% if n|slice:':11' == 'cloud_edge' %}active{% endif %}">
           <i class="ti ti-server-2"></i><span>Edge ها</span>
+        </a>
+        <a href="{% url 'cloud_customers' %}" class="{% if n|slice:':15' == 'cloud_customer_' or n == 'cloud_customers' %}active{% endif %}">
+          <i class="ti ti-users"></i><span>مشتریان</span>
+        </a>
+        <a href="{% url 'cloud_sessions' %}" class="{% if n == 'cloud_sessions' %}active{% endif %}">
+          <i class="ti ti-clock-play"></i><span>نشست‌ها</span>
+        </a>
+        <a href="{% url 'cloud_ledger' %}" class="{% if n == 'cloud_ledger' %}active{% endif %}">
+          <i class="ti ti-receipt"></i><span>صندوق</span>
+        </a>
+        <a href="{% url 'cloud_pricing' %}" class="{% if n == 'cloud_pricing' %}active{% endif %}">
+          <i class="ti ti-tags"></i><span>تعرفه‌ها</span>
         </a>
         <a href="{% url 'cloud_commands' %}" class="{% if n == 'cloud_commands' %}active{% endif %}">
           <i class="ti ti-terminal-2"></i><span>دستورها</span>

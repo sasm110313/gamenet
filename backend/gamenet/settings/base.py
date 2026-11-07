@@ -27,7 +27,7 @@ GAMENET_ROLE = env("GAMENET_ROLE", default="edge")
 if GAMENET_ROLE not in {"cloud", "edge"}:
     raise SystemExit(f"GAMENET_ROLE must be cloud|edge, got {GAMENET_ROLE!r}")
 GAMENET_ENV = env("GAMENET_ENV", default="dev")
-GAMENET_VERSION = "0.1.0-phase0"
+GAMENET_VERSION = "0.1.0-phase1"
 
 ALLOWED_HOSTS = env.list("DJANGO_ALLOWED_HOSTS", default=["127.0.0.1", "localhost"])
 CSRF_TRUSTED_ORIGINS = env.list("DJANGO_CSRF_TRUSTED_ORIGINS", default=[])

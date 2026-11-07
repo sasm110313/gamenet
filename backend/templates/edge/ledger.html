@@ -1,0 +1,51 @@
+{% extends "base.html" %}
+{% load gn %}
+
+{% block title %}صندوق{% endblock %}
+{% block page_title %}دفتر مالی{% endblock %}
+{% block page_subtitle %}تاریخچه فقط‌افزودنی تراکنش‌های کیف پول{% endblock %}
+
+{% block content %}
+<div class="gn-card mb-3">
+  <form method="get" class="gn-form-row">
+    <div class="flex-grow-1">
+      <label class="gn-label">مشتری / شناسه تراکنش</label>
+      <input class="gn-input" name="q" value="{{ q }}" placeholder="جستجو…">
+    </div>
+    <div>
+      <label class="gn-label">نوع</label>
+      <select class="gn-select" name="type">
+        <option value="">همه</option>
+        {% for value, label in types.choices %}
+          <option value="{{ value }}" {% if entry_type == value %}selected{% endif %}>{{ label }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <button class="gn-btn" type="submit"><i class="ti ti-filter"></i> اعمال</button>
+    <span class="gn-chip ms-auto">جمع فیلتر: <span class="num">{{ total|toman }}</span> تومان</span>
+  </form>
+</div>
+
+<div class="gn-card">
+  <table class="gn-table">
+    <thead><tr><th>زمان</th><th>مشتری</th><th>نوع</th><th>مبلغ</th><th>مانده</th><th>نشست</th><th>توضیح</th></tr></thead>
+    <tbody>
+      {% for entry in entries %}
+        <tr>
+          <td class="num gn-muted">{{ entry.created_at|date:"Y-m-d H:i:s" }}</td>
+          <td>
+            <a href="{% url 'edge_customer_detail' entry.customer.id %}" style="color: var(--gn-text); text-decoration: none">{{ entry.customer.full_name }}</a>
+          </td>
+          <td>{{ entry.get_entry_type_display }}</td>
+          <td class="num {% if entry.amount < 0 %}text-danger{% else %}text-success{% endif %}">{{ entry.amount|toman }}</td>
+          <td class="num gn-muted">{{ entry.balance_after|toman }}</td>
+          <td class="mono gn-muted" style="font-size: 10.5px">{{ entry.session_id|default:"—"|shortid }}</td>
+          <td class="gn-muted" style="font-size: 11.5px">{{ entry.note|default:"—" }}</td>
+        </tr>
+      {% empty %}
+        <tr><td colspan="7"><div class="gn-empty"><i class="ti ti-receipt-off"></i>تراکنشی یافت نشد.</div></td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endblock %}

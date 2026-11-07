@@ -1,0 +1,94 @@
+{% extends "base.html" %}
+{% load gn %}
+
+{% block title %}نشست‌ها{% endblock %}
+{% block page_title %}نشست‌ها{% endblock %}
+{% block page_subtitle %}شروع و پایان نشست با محاسبه دقیق زمان و هزینه{% endblock %}
+
+{% block topbar_status %}
+  <span class="gn-chip {% if active_sessions %}accent{% endif %}">
+    <span class="dot"></span>{{ active_sessions|length }} نشست فعال
+  </span>
+{% endblock %}
+
+{% block content %}
+<div class="gn-card mb-3">
+  <h6>شروع نشست جدید</h6>
+  {% if customers and devices %}
+    <form method="post" action="{% url 'edge_session_start' %}" class="gn-form-row">
+      {% csrf_token %}
+      <div class="flex-grow-1">
+        <label class="gn-label">مشتری</label>
+        <select class="gn-select" name="customer_id" required>
+          {% for customer in customers %}
+            <option value="{{ customer.id }}">{{ customer.full_name }}{% if customer.wallet %} — {{ customer.wallet.balance|toman }} تومان{% endif %}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="flex-grow-1">
+        <label class="gn-label">دستگاه آماده</label>
+        <select class="gn-select" name="device_id" required>
+          {% for device in devices %}<option value="{{ device.id }}">{{ device.name }} — {{ device.status|status_fa }}</option>{% endfor %}
+        </select>
+      </div>
+      <button class="gn-btn primary" type="submit"><i class="ti ti-player-play"></i> شروع</button>
+    </form>
+  {% else %}
+    <div class="gn-empty"><i class="ti ti-plug-off"></i>برای شروع نشست به یک مشتری فعال و یک دستگاه آنلاین/قفل نیاز است.</div>
+  {% endif %}
+</div>
+
+<div class="gn-card mb-3">
+  <h6>نشست‌های فعال</h6>
+  <table class="gn-table">
+    <thead><tr><th>مشتری</th><th>دستگاه</th><th>شروع</th><th>نرخ</th><th>تعرفه</th><th class="text-end">پایان</th></tr></thead>
+    <tbody>
+      {% for session in active_sessions %}
+        <tr>
+          <td><a href="{% url 'edge_customer_detail' session.customer.id %}" style="color: var(--gn-text); text-decoration: none"><strong>{{ session.customer.full_name }}</strong></a></td>
+          <td>{{ session.device.name }}</td>
+          <td class="num gn-muted">{{ session.started_at|date:"Y-m-d H:i:s" }}</td>
+          <td class="num">{{ session.hourly_rate|toman }}</td>
+          <td class="gn-muted">{{ session.tariff_name }}</td>
+          <td class="text-end">
+            <form method="post" action="{% url 'edge_session_stop' session.id %}">
+              {% csrf_token %}
+              <button class="gn-btn sm danger" type="submit"><i class="ti ti-player-stop"></i> پایان و شارژ</button>
+            </form>
+          </td>
+        </tr>
+      {% empty %}
+        <tr><td colspan="6"><div class="gn-empty"><i class="ti ti-clock-off"></i>نشست فعالی وجود ندارد.</div></td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+
+<div class="gn-card">
+  <div class="d-flex justify-content-between align-items-center mb-2">
+    <h6 class="mb-0">تاریخچه</h6>
+    <form method="get" class="d-flex gap-2">
+      <input class="gn-input" name="q" value="{{ q }}" placeholder="مشتری، دستگاه یا شناسه">
+      <button class="gn-btn" type="submit"><i class="ti ti-search"></i></button>
+    </form>
+  </div>
+  <table class="gn-table">
+    <thead><tr><th>مشتری</th><th>دستگاه</th><th>شروع</th><th>مدت</th><th>هزینه</th><th>وضعیت</th><th>دلیل پایان</th></tr></thead>
+    <tbody>
+      {% for session in recent_sessions %}
+        <tr>
+          <td>{{ session.customer.full_name }}</td>
+          <td>{{ session.device.name }}</td>
+          <td class="num gn-muted">{{ session.started_at|date:"m-d H:i" }}</td>
+          <td class="num gn-muted">{% if session.elapsed_seconds is not None %}{{ session.elapsed_seconds }}s{% else %}—{% endif %}</td>
+          <td class="num">{{ session.cost|default:0|toman }}</td>
+          <td><span class="gn-status {{ session.status|status_tone }}"><span class="dot"></span>{{ session.status|status_fa }}</span></td>
+          <td class="gn-muted" style="font-size: 11.5px">{{ session.end_reason|default:"—" }}</td>
+        </tr>
+      {% empty %}
+        <tr><td colspan="7"><div class="gn-empty">نشستی ثبت نشده است.</div></td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endblock %}

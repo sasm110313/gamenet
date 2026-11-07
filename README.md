@@ -3,10 +3,15 @@
 Hybrid edge-cloud management for Windows gaming clients: cloud backend, on-site
 Control Hub (Windows 10), and an Electron client for Windows 7 SP1.
 
-**Status: Phase 0 — software connectivity proof passed 10/10 on the Linux dev
-host; Windows hardware acceptance pending.** See
-[docs/PHASE0.md](docs/PHASE0.md) for the proof, evidence and the on-site
-checklist, and [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for the design.
+**Status: Phase 1 — customers, groups/tariffs, wallets, append-only ledger and
+gaming sessions are implemented on the edge and projected read-only to the
+cloud. The backend suite passes 109 tests; the Phase 0 connectivity proof passed
+10/10 on the Linux dev host. Windows hardware acceptance is still pending.**
+
+See [docs/PHASE1.md](docs/PHASE1.md) for the Phase 1 scope and money/session
+rules, [docs/PHASE0.md](docs/PHASE0.md) for the connectivity proof and the
+on-site checklist, and [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for the
+design.
 
 ## Repository layout
 
@@ -19,6 +24,34 @@ docs/               architecture, phase evidence, Windows checklists
 dev/                local dev/proof tooling (PostgreSQL, Redis, TLS certs)
 scripts/            proof and ops scripts
 ```
+
+## Phase 1 features
+
+Edge (the only writer of these facts):
+
+- Customers with a unique phone per edge, optional billing group, credit limit,
+  notes and activation state. Groups inherit a tariff; without one, the configured
+  default of 40,000 Toman/hour applies.
+- Wallets with deposits, manual adjustments and reversal entries. Corrections are
+  new ledger rows that reference the original; nothing is updated or deleted.
+- Gaming sessions with a tariff snapshot at start, one active session per device,
+  and multiple concurrent sessions per customer. Stopping charges exact elapsed
+  time with integer half-up Toman rounding.
+- Start reserves one billable hour per active session against
+  `balance + credit_limit`; stop may exceed the limit because elapsed time is
+  already a fact.
+- Every business mutation and its outbox event commit in the same transaction, so
+  an acknowledged fact can never be missing from the queue.
+
+Cloud (read-only replica and remote control):
+
+- Read-only customer, session, ledger and pricing pages fed by edge events.
+- Projections fail closed: a customer group that references an unknown tariff, a
+  customer that references an unknown group, or a ledger entry that references an
+  unknown customer/session rejects the event. The edge keeps retrying; the cloud
+  never records a partial financial fact.
+- Duplicate delivery is idempotent on `(edge, event_id)`; sequence reuse and
+  per-aggregate regression are rejected.
 
 ## Run the Phase 0 proof
 
@@ -61,8 +94,10 @@ it does not print or store device tokens or edge secrets.
 
 Local dashboards:
 
-- Edge: `https://127.0.0.1:19443/`
-- Cloud: `https://127.0.0.1:18443/`
+- Edge: `https://127.0.0.1:19443/` — overview, devices, customers, sessions,
+  ledger, pricing and cloud health.
+- Cloud: `https://127.0.0.1:18443/` — overview, edges, commands, events, config,
+  and read-only customers, sessions, ledger and pricing.
 
 ## Tests
 

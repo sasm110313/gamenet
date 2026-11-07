@@ -1,0 +1,69 @@
+{% extends "base.html" %}
+{% load gn %}
+
+{% block title %}مشتریان{% endblock %}
+{% block page_title %}مشتریان{% endblock %}
+{% block page_subtitle %}نمای همگام‌شده مشتریان و کیف پول‌ها (فقط خواندنی){% endblock %}
+
+{% block content %}
+<div class="gn-grid cols-4 mb-3">
+  <div class="gn-card gn-kpi">
+    <span class="label">مشتریان فعال</span>
+    <span class="value num">{{ customers_total }}</span>
+    <span class="hint">در همه Edge ها</span>
+  </div>
+  <div class="gn-card gn-kpi accent">
+    <span class="label">مجموع موجودی</span>
+    <span class="value num">{{ wallet_total|toman }}</span>
+    <span class="hint">تومان</span>
+  </div>
+  <div class="gn-card gn-kpi {% if debt_total %}bad{% endif %}">
+    <span class="label">مجموع بدهی</span>
+    <span class="value num">{{ debt_total|toman }}</span>
+    <span class="hint">تومان</span>
+  </div>
+  <div class="gn-card gn-kpi">
+    <span class="label">نشست‌های فعال</span>
+    <span class="value num">{{ sessions_active }}</span>
+    <span class="hint">{{ ledger_total }} ردیف دفتر مالی</span>
+  </div>
+</div>
+
+<div class="gn-card">
+  <div class="d-flex justify-content-between align-items-center mb-2">
+    <h6 class="mb-0">لیست مشتریان</h6>
+    <form method="get" class="d-flex gap-2">
+      <input class="gn-input" name="q" value="{{ q }}" placeholder="نام، تماس یا شناسه">
+      <button class="gn-btn" type="submit"><i class="ti ti-search"></i></button>
+    </form>
+  </div>
+  <table class="gn-table">
+    <thead><tr><th>مشتری</th><th>تماس</th><th>Edge</th><th>گروه</th><th>موجودی</th><th>اعتبار</th><th>وضعیت</th><th></th></tr></thead>
+    <tbody>
+      {% for customer in customers %}
+        <tr>
+          <td>
+            <a href="{% url 'cloud_customer_detail' customer.id %}" style="color: var(--gn-text); text-decoration: none"><strong>{{ customer.full_name }}</strong></a>
+            <div class="gn-muted mono" style="font-size: 10.5px">{{ customer.id|shortid }}</div>
+          </td>
+          <td class="num gn-muted">{{ customer.phone|default:"—" }}</td>
+          <td class="mono gn-muted" style="font-size: 10.5px">{{ customer.edge_id|shortid }}</td>
+          <td class="gn-muted">{{ customer.group.name|default:"پیش‌فرض" }}</td>
+          <td class="num {% if customer.wallet.balance < 0 %}text-danger{% endif %}">{{ customer.wallet.balance|toman }}</td>
+          <td class="num gn-muted">{{ customer.credit_limit|toman }}</td>
+          <td>
+            {% if customer.is_active %}
+              <span class="gn-status st-online"><span class="dot"></span>فعال</span>
+            {% else %}
+              <span class="gn-status st-offline"><span class="dot"></span>غیرفعال</span>
+            {% endif %}
+          </td>
+          <td class="text-end"><a class="gn-btn sm" href="{% url 'cloud_customer_detail' customer.id %}"><i class="ti ti-chevron-left"></i></a></td>
+        </tr>
+      {% empty %}
+        <tr><td colspan="8"><div class="gn-empty"><i class="ti ti-users-off"></i>مشتری‌ای همگام نشده است.</div></td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endblock %}

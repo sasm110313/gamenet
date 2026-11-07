@@ -27,6 +27,16 @@ KNOWN_EVENT_TYPES = {
     "command.result",
     "config.applied",
     "edge.test",
+    # Phase 1 domain facts
+    "tariff.created",
+    "tariff.updated",
+    "customer_group.created",
+    "customer_group.updated",
+    "customer.created",
+    "customer.updated",
+    "ledger.entry_created",
+    "session.started",
+    "session.ended",
 }
 
 
