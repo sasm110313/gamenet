@@ -1,126 +1,173 @@
 {% load gn %}
-<div class="gn-card mb-3" style="background: linear-gradient(135deg, rgba(45, 212, 191, 0.04) 0%, rgba(30, 64, 175, 0.06) 100%); border: 1px solid rgba(45, 212, 191, 0.22); position: relative; overflow: hidden; border-radius: var(--gn-radius);">
-  <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2 pb-2" style="border-bottom: 1px solid rgba(255, 255, 255, 0.06);">
+<div class="gn-card mb-3" style="background: linear-gradient(135deg, rgba(45, 212, 191, 0.04) 0%, rgba(30, 64, 175, 0.06) 100%); border: 1px solid rgba(45, 212, 191, 0.25); position: relative; overflow: hidden; border-radius: var(--gn-radius); box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);">
+  <!-- نوار بالای کارت وضعیت -->
+  <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2 pb-2" style="border-bottom: 1px solid rgba(255, 255, 255, 0.07);">
     <div class="d-flex align-items-center gap-3">
-      <div style="width: 44px; height: 44px; border-radius: 12px; background: linear-gradient(135deg, rgba(45, 212, 191, 0.2), rgba(59, 130, 246, 0.25)); border: 1px solid rgba(45, 212, 191, 0.35); display: flex; align-items: center; justify-content: center; font-size: 22px; box-shadow: 0 0 16px rgba(45, 212, 191, 0.15); flex-shrink: 0;">
+      <div style="width: 44px; height: 44px; border-radius: 12px; background: linear-gradient(135deg, rgba(45, 212, 191, 0.22), rgba(59, 130, 246, 0.28)); border: 1px solid rgba(45, 212, 191, 0.4); display: flex; align-items: center; justify-content: center; font-size: 22px; box-shadow: 0 0 16px rgba(45, 212, 191, 0.18); flex-shrink: 0;">
         🎮
       </div>
       <div>
-        <h5 style="margin: 0; font-weight: 700; font-size: 15.5px; color: var(--gn-text);">وضعیت و کوپن تخفیف سامانه رهرو</h5>
-        <span style="font-size: 11.5px; color: var(--gn-muted);">هماهنگ‌شده با سامانه فرهنگی و تربیتی مسجد</span>
+        <div class="d-flex align-items-center gap-2">
+          <h5 style="margin: 0; font-weight: 700; font-size: 16px; color: var(--gn-text);">وضعیت و کوپن تخفیف سامانه رهرو</h5>
+          <span class="gn-chip" style="background: rgba(59, 130, 246, 0.15); color: #60a5fa; border: 1px solid rgba(59, 130, 246, 0.3); font-size: 11px;">اتصال دوطرفه فعال</span>
+        </div>
+        <span style="font-size: 11.5px; color: var(--gn-muted);">همگام‌سازی خودکار تعرفه، سهمیه‌ها و کسر امتیاز با سامانه فرهنگی و تربیتی مسجد</span>
       </div>
     </div>
     <div class="d-flex align-items-center gap-2 flex-wrap">
       {% if rahro_status and rahro_status.found %}
-        <span class="gn-chip" style="background: rgba(16, 185, 129, 0.12); color: #34d399; border: 1px solid rgba(52, 211, 153, 0.3); font-size: 12px; font-weight: 600; padding: 4px 10px;">
+        <span class="gn-chip" style="background: rgba(16, 185, 129, 0.14); color: #34d399; border: 1px solid rgba(52, 211, 153, 0.35); font-size: 12px; font-weight: 700; padding: 5px 12px;">
           <i class="ti ti-circle-check"></i> عضو تاییدشده رهرو (تعرفه ساعتی ۴۰,۰۰۰ ت)
         </span>
         {% if rahro_status.gamenet_login_code or customer.username %}
-          <span class="gn-chip" style="background: rgba(245, 165, 36, 0.12); color: #fbbf24; border: 1px solid rgba(245, 165, 36, 0.3); font-size: 12px; padding: 4px 10px;" title="کد اختصاصی ۴ تا ۶ رقمی برای ورود به سیستم کلاینت بازی">
-            <i class="ti ti-key"></i> کد ورود کلاینت: <strong class="num">{{ rahro_status.gamenet_login_code|default:customer.username }}</strong>
+          <span class="gn-chip" style="background: rgba(245, 165, 36, 0.14); color: #fbbf24; border: 1px solid rgba(245, 165, 36, 0.35); font-size: 12px; font-weight: 600; padding: 5px 12px;" title="کد اختصاصی ۴ تا ۶ رقمی برای ورود مستقیم به سیستم‌های بازی سالن">
+            <i class="ti ti-key"></i> کد ورود کلاینت: <strong class="num font-bold">{{ rahro_status.gamenet_login_code|default:customer.username }}</strong>
           </span>
         {% endif %}
       {% else %}
-        <span class="gn-chip" style="background: rgba(129, 148, 166, 0.1); color: var(--gn-muted); border: 1px solid var(--gn-border); font-size: 12px; padding: 4px 10px;">
-          <i class="ti ti-user-x"></i> کاربر عادی (تعرفه ساعتی ۶۰,۰۰۰ ت)
+        <span class="gn-chip" style="background: rgba(129, 148, 166, 0.12); color: var(--gn-muted); border: 1px solid var(--gn-border); font-size: 12px; padding: 5px 12px;">
+          <i class="ti ti-user-x"></i> کاربر عادی (تعرفه آزاد ۶۰,۰۰۰ ت)
         </span>
       {% endif %}
     </div>
   </div>
 
   {% if rahro_status and rahro_status.found %}
+    <!-- ۴ کارت شاخص‌های کلیدی وضعیت عضو در رهرو -->
     <div class="gn-grid cols-4 mb-3" style="gap: 12px;">
-      <div class="p-3 rounded" style="background: var(--gn-surface-2); border: 1px solid var(--gn-border);">
+      <div class="p-3 rounded" style="background: var(--gn-surface-2); border: 1px solid var(--gn-border); transition: transform 0.15s ease;">
         <div class="d-flex align-items-center gap-2 mb-1" style="font-size: 11.5px; color: var(--gn-muted);">
-          <i class="ti ti-award" style="color: #818cf8; font-size: 14px;"></i>
+          <i class="ti ti-award" style="color: #818cf8; font-size: 15px;"></i>
           <span>سطح تشکیلاتی:</span>
         </div>
-        <div style="font-weight: 600; font-size: 13px; color: #a5b4fc; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;" title="{{ rahro_status.level_name }}">
+        <div style="font-weight: 700; font-size: 13.5px; color: #a5b4fc; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;" title="{{ rahro_status.level_name }}">
           {{ rahro_status.level_name }}
         </div>
+        <div class="gn-subtitle mt-1" style="font-size: 11px;">بر اساس عملکرد در مسجد</div>
       </div>
 
-      <div class="p-3 rounded" style="background: var(--gn-surface-2); border: 1px solid var(--gn-border);">
+      <div class="p-3 rounded" style="background: var(--gn-surface-2); border: 1px solid var(--gn-border); transition: transform 0.15s ease;">
         <div class="d-flex align-items-center gap-2 mb-1" style="font-size: 11.5px; color: var(--gn-muted);">
-          <i class="ti ti-coins" style="color: #34d399; font-size: 14px;"></i>
+          <i class="ti ti-coins" style="color: #34d399; font-size: 15px;"></i>
           <span>موجودی امتیاز:</span>
         </div>
-        <div style="font-weight: 700; font-size: 16px; color: #34d399;">
+        <div style="font-weight: 800; font-size: 18px; color: #34d399;">
           <span class="num">{{ rahro_status.current_balance }}</span>
-          <span style="font-size: 11.5px; font-weight: 400; color: var(--gn-muted);">امتیاز</span>
+          <span style="font-size: 12px; font-weight: 400; color: var(--gn-muted);">امتیاز</span>
         </div>
+        <div class="gn-subtitle mt-1" style="font-size: 11px;">قابل خرج در تخفیف گیم‌نت</div>
       </div>
 
-      <div class="p-3 rounded" style="background: var(--gn-surface-2); border: 1px solid var(--gn-border);">
+      <div class="p-3 rounded" style="background: var(--gn-surface-2); border: 1px solid var(--gn-border); transition: transform 0.15s ease;">
         <div class="d-flex align-items-center gap-2 mb-1" style="font-size: 11.5px; color: var(--gn-muted);">
-          <i class="ti ti-gift" style="color: #38bdf8; font-size: 14px;"></i>
+          <i class="ti ti-gift" style="color: #38bdf8; font-size: 15px;"></i>
           <span>سهمیه رایگان این ماه:</span>
         </div>
         <div>
           {% if rahro_status.has_free_monthly_quota %}
-            <span class="num" style="font-weight: 700; font-size: 16px; color: #38bdf8;">{{ rahro_status.remaining_monthly_quotas }}</span>
-            <span style="font-size: 11.5px; color: #7dd3fc;">سهمیه ۵۰٪ باقی‌مانده</span>
+            <span class="num" style="font-weight: 800; font-size: 18px; color: #38bdf8;">{{ rahro_status.remaining_monthly_quotas }}</span>
+            <span style="font-size: 12px; color: #7dd3fc; font-weight: 600;">سهمیه ۵۰٪ باقی‌مانده</span>
           {% else %}
-            <span style="font-size: 12px; color: var(--gn-muted);">ندارد (کسر امتیاز)</span>
+            <span style="font-size: 13px; color: var(--gn-muted); font-weight: 600;">۰ سهمیه (کسر از امتیاز)</span>
           {% endif %}
         </div>
+        <div class="gn-subtitle mt-1" style="font-size: 11px;">شارژ ماهانه بدون هزینه امتیاز</div>
       </div>
 
-      <div class="p-3 rounded" style="background: var(--gn-surface-2); border: 1px solid var(--gn-border);">
+      <div class="p-3 rounded" style="background: var(--gn-surface-2); border: 1px solid var(--gn-border); transition: transform 0.15s ease;">
         <div class="d-flex align-items-center gap-2 mb-1" style="font-size: 11.5px; color: var(--gn-muted);">
-          <i class="ti ti-clock-play" style="color: #f5a524; font-size: 14px;"></i>
+          <i class="ti ti-clock-play" style="color: #f5a524; font-size: 15px;"></i>
           <span>کل مدت بازی در گیم‌نت:</span>
         </div>
-        <div style="font-weight: 700; font-size: 16px; color: #f5a524;">
+        <div style="font-weight: 800; font-size: 18px; color: #f5a524;">
           <span class="num">{{ rahro_status.total_gaming_minutes|default:0 }}</span>
-          <span style="font-size: 11.5px; font-weight: 400; color: var(--gn-muted);">دقیقه</span>
+          <span style="font-size: 12px; font-weight: 400; color: var(--gn-muted);">دقیقه</span>
         </div>
+        <div class="gn-subtitle mt-1" style="font-size: 11px;">ثبت خودکار تردد سالن</div>
       </div>
     </div>
 
-    <form method="post" action="{% if is_edge %}{% url 'edge_customer_rahro_discount' customer.id %}{% else %}{% url 'cloud_manage_customer_rahro_discount' customer.id %}{% endif %}">
+    <!-- فرم مدیریت و صدور تخفیف / کوپن -->
+    <form method="post" action="{% if is_edge %}{% url 'edge_customer_rahro_discount' customer.id %}{% else %}{% url 'cloud_manage_customer_rahro_discount' customer.id %}{% endif %}" class="p-3 rounded" style="background: rgba(0, 0, 0, 0.2); border: 1px solid rgba(255, 255, 255, 0.08);">
       {% csrf_token %}
+
+      <!-- تعیین هدف تخفیف (نشست فعال یا کوپن رزرو) -->
       {% if active_sessions %}
-        <div class="mb-3">
-          <label class="gn-label" style="font-weight: 600;"><i class="ti ti-device-desktop"></i> نشست فعال گیم‌نت (اعمال آنی روی بازی):</label>
+        <div class="p-2.5 rounded mb-3" style="background: rgba(16, 185, 129, 0.08); border: 1px solid rgba(16, 185, 129, 0.25);">
+          <div class="d-flex align-items-center justify-content-between flex-wrap gap-2 mb-2">
+            <div class="d-flex align-items-center gap-2">
+              <span class="gn-status st-active"><span class="dot"></span>نشست فعال گیم‌نت شناسایی شد</span>
+              <span style="font-size: 12px; color: var(--gn-text); font-weight: 600;">تخفیف مستقیماً و بلافاصله بر هزینه فاکتور همین سیستم محاسبه خواهد شد:</span>
+            </div>
+          </div>
           <div style="max-width: 480px;">
-            <select class="gn-select" name="session_id">
+            <select class="gn-select font-bold" name="session_id">
               {% for s in active_sessions %}
-                <option value="{{ s.id }}">ایستگاه {{ s.device.name }} (شروع: {{ s.started_at|date:"H:i" }}) {% if s.discount_percent %}— تخفیف فعلی: {{ s.discount_percent }}٪{% endif %}</option>
+                <option value="{{ s.id }}">ایستگاه {{ s.device.name }} (شروع: {{ s.started_at|date:"H:i" }}) {% if s.discount_percent %}— تخفیف اعمال‌شده قبلی: {{ s.discount_percent }}٪{% endif %}</option>
               {% endfor %}
             </select>
           </div>
         </div>
+      {% else %}
+        <div class="p-2.5 rounded mb-3" style="background: rgba(56, 189, 248, 0.08); border: 1px solid rgba(56, 189, 248, 0.22); font-size: 12px; color: var(--gn-text);">
+          <div class="d-flex align-items-center gap-2">
+            <i class="ti ti-ticket text-info" style="font-size: 18px;"></i>
+            <span>در حال حاضر سیستم فعالی باز نیست. با انتخاب تخفیف، <strong>کوپن تخفیف در حساب متربی صادر شده</strong> و به محض شروع بازی بعدی در سالن، به طور خودکار بر فاکتور اعمال می‌گردد.</span>
+          </div>
+        </div>
       {% endif %}
 
+      <!-- انتخابگر درصد تخفیف -->
       <div class="mb-3">
-        <label class="gn-label" style="font-weight: 600;"><i class="ti ti-percentage"></i> درصد تخفیف مورد نظر:</label>
-        <div class="d-flex align-items-center gap-2 flex-wrap mb-2" id="rahro-pills-{{ customer.id }}">
-          <button type="button" class="gn-btn rahro-disc-btn" data-pct="30" onclick="setDiscountPercent('{{ customer.id }}', 30, this)">
-            <i class="ti ti-ticket"></i> ۳۰٪ تخفیف <span class="num" style="opacity: 0.8; font-size: 11px;">(۲۰ امتیاز)</span>
+        <label class="gn-label mb-2" style="font-weight: 700; font-size: 12.5px; color: var(--gn-text);">
+          <i class="ti ti-percentage text-primary"></i> درصد تخفیف مورد نظر:
+        </label>
+        
+        <div class="d-flex align-items-center gap-2 flex-wrap mb-2.5" id="rahro-pills-{{ customer.id }}">
+          <button type="button" class="gn-btn rahro-disc-btn" data-pct="30" onclick="updateDiscountUI('{{ customer.id }}', 30, this, {{ rahro_status.has_free_monthly_quota|yesno:'true,false' }}, {{ rahro_status.remaining_monthly_quotas|default:0 }}, {{ rahro_status.current_balance|default:0 }})" style="padding: 8px 14px; font-size: 12.5px;">
+            <i class="ti ti-ticket"></i> ۳۰٪ تخفیف <span class="num font-bold text-muted">(۲۰ امتیاز)</span>
           </button>
-          <button type="button" class="gn-btn primary rahro-disc-btn active" data-pct="50" onclick="setDiscountPercent('{{ customer.id }}', 50, this)">
-            <i class="ti ti-sparkles"></i> ۵۰٪ تخفیف <span class="num" style="opacity: 0.9; font-size: 11px;">(سهمیه ماهانه یا ۳۵ امتیاز)</span>
+          
+          <button type="button" class="gn-btn primary rahro-disc-btn active" data-pct="50" onclick="updateDiscountUI('{{ customer.id }}', 50, this, {{ rahro_status.has_free_monthly_quota|yesno:'true,false' }}, {{ rahro_status.remaining_monthly_quotas|default:0 }}, {{ rahro_status.current_balance|default:0 }})" style="padding: 8px 14px; font-size: 12.5px; border-width: 2px;">
+            <i class="ti ti-sparkles"></i> ۵۰٪ تخفیف <span class="num font-bold" style="color: #04110f;">(سهمیه ماهانه یا ۳۵ امتیاز)</span>
           </button>
-          <button type="button" class="gn-btn rahro-disc-btn" data-pct="100" onclick="setDiscountPercent('{{ customer.id }}', 100, this)">
-            <i class="ti ti-gift"></i> ۱۰۰٪ رایگان <span class="num" style="opacity: 0.8; font-size: 11px;">(۸۰ امتیاز)</span>
+          
+          <button type="button" class="gn-btn rahro-disc-btn" data-pct="100" onclick="updateDiscountUI('{{ customer.id }}', 100, this, {{ rahro_status.has_free_monthly_quota|yesno:'true,false' }}, {{ rahro_status.remaining_monthly_quotas|default:0 }}, {{ rahro_status.current_balance|default:0 }})" style="padding: 8px 14px; font-size: 12.5px;">
+            <i class="ti ti-gift"></i> ۱۰۰٪ رایگان <span class="num font-bold text-muted">(۸۰ امتیاز)</span>
           </button>
         </div>
 
+        <!-- فیلد درصد دلخواه و دکمه اعمال -->
         <div class="d-flex align-items-center gap-2 flex-wrap">
-          <div style="position: relative; max-width: 140px;">
-            <input class="gn-input num text-center" id="custom-disc-{{ customer.id }}" name="discount_percent" value="50" min="1" max="100" inputmode="numeric" required style="font-size: 15px; font-weight: 700; padding-inline-end: 28px;">
-            <span style="position: absolute; left: 10px; top: 50%; transform: translateY(-50%); color: var(--gn-muted); font-size: 13px; font-weight: 600;">٪</span>
+          <div style="position: relative; max-width: 130px;">
+            <input class="gn-input num text-center" id="custom-disc-{{ customer.id }}" name="discount_percent" value="50" min="1" max="100" inputmode="numeric" required style="font-size: 16px; font-weight: 800; padding-inline-end: 28px;" oninput="onCustomDiscountInput('{{ customer.id }}', this.value, {{ rahro_status.has_free_monthly_quota|yesno:'true,false' }}, {{ rahro_status.remaining_monthly_quotas|default:0 }}, {{ rahro_status.current_balance|default:0 }})">
+            <span style="position: absolute; left: 10px; top: 50%; transform: translateY(-50%); color: var(--gn-muted); font-size: 14px; font-weight: 700;">٪</span>
           </div>
-          <button class="gn-btn primary" type="submit" style="padding: 8px 18px; font-weight: 700;">
+
+          <button class="gn-btn primary" type="submit" style="padding: 9px 20px; font-weight: 800; font-size: 13px;">
             <i class="ti ti-ticket"></i> اعمال تخفیف و کوپن در رهرو و گیم‌نت
           </button>
         </div>
       </div>
 
-      <div class="d-flex align-items-start gap-2 p-2 px-3 rounded" style="background: rgba(45, 212, 191, 0.06); border: 1px dashed rgba(45, 212, 191, 0.25); font-size: 12px; color: var(--gn-text);">
-        <i class="ti ti-info-circle text-info" style="font-size: 16px; margin-top: 1px; flex-shrink: 0;"></i>
-        <span>* در صورت وجود سهمیه ماهانه ۵۰٪، بدون کسر امتیاز از سهمیه کسر می‌شود. در غیر این صورت، متناسب با درصد انتخابی از امتیاز رهرو کسر خواهد شد.</span>
+      <!-- باکس شفاف‌سازی نحوه تسویه تخفیف به صورت زنده -->
+      <div id="disc-explain-{{ customer.id }}" class="p-2.5 rounded mb-2" style="background: rgba(45, 212, 191, 0.08); border: 1px solid rgba(45, 212, 191, 0.25); font-size: 12px; color: var(--gn-text);">
+        <div class="d-flex align-items-center gap-2">
+          <i class="ti ti-calculator text-primary" style="font-size: 16px;"></i>
+          <span id="disc-explain-text-{{ customer.id }}">
+            {% if rahro_status.has_free_monthly_quota %}
+              <strong>نحوه تسویه:</strong> تخفیف ۵۰٪ از سهمیه ماهانه کسر می‌شود (<strong>۰ امتیاز کسر می‌گردد</strong>). سهمیه باقی‌مانده پس از ثبت: {{ rahro_status.remaining_monthly_quotas|add:"-1" }} عدد.
+            {% else %}
+              <strong>نحوه تسویه:</strong> سهمیه ماهانه موجود نیست؛ <strong>۳۵ امتیاز</strong> از موجودی رهرو کسر خواهد شد (مانده پس از ثبت: {{ rahro_status.current_balance|add:"-35" }} امتیاز).
+            {% endif %}
+            | هزینه ساعتی این کاربر: <strong>۲۰,۰۰۰ تومان</strong> (تعرفه اصلی رهرو: ۴۰,۰۰۰ ت).
+          </span>
+        </div>
+      </div>
+
+      <div class="d-flex align-items-start gap-2 pt-1" style="font-size: 11.5px; color: var(--gn-muted);">
+        <i class="ti ti-info-circle text-info" style="font-size: 14px; margin-top: 2px; flex-shrink: 0;"></i>
+        <span>* قانون سیستم: در صورت وجود سهمیه ماهانه ۵۰٪، بدون کسر امتیاز از سهمیه کسر می‌شود. در غیر این صورت، متناسب با درصد انتخابی از امتیاز رهرو کسر خواهد شد.</span>
       </div>
     </form>
   {% else %}
@@ -134,7 +181,7 @@
 </div>
 
 <script>
-function setDiscountPercent(customerId, pct, btn) {
+function updateDiscountUI(customerId, pct, btn, hasFreeQuota, remainingQuota, currentBalance) {
   var input = document.getElementById('custom-disc-' + customerId);
   if (input) {
     input.value = pct;
@@ -146,8 +193,52 @@ function setDiscountPercent(customerId, pct, btn) {
       b.classList.remove('primary');
       b.classList.remove('active');
     });
-    btn.classList.add('primary');
-    btn.classList.add('active');
+    if (btn) {
+      btn.classList.add('primary');
+      btn.classList.add('active');
+    }
+  }
+  explainDiscount(customerId, pct, hasFreeQuota, remainingQuota, currentBalance);
+}
+
+function onCustomDiscountInput(customerId, val, hasFreeQuota, remainingQuota, currentBalance) {
+  var pct = parseInt(val) || 0;
+  var container = document.getElementById('rahro-pills-' + customerId);
+  if (container) {
+    var btns = container.querySelectorAll('.rahro-disc-btn');
+    btns.forEach(function(b) {
+      if (parseInt(b.getAttribute('data-pct')) === pct) {
+        b.classList.add('primary');
+        b.classList.add('active');
+      } else {
+        b.classList.remove('primary');
+        b.classList.remove('active');
+      }
+    });
+  }
+  explainDiscount(customerId, pct, hasFreeQuota, remainingQuota, currentBalance);
+}
+
+function explainDiscount(customerId, pct, hasFreeQuota, remainingQuota, currentBalance) {
+  var target = document.getElementById('disc-explain-text-' + customerId);
+  if (!target) return;
+
+  var hourlyBase = 40000;
+  var finalHourly = Math.round(hourlyBase * (100 - pct) / 100);
+  var formattedHourly = finalHourly.toLocaleString('fa-IR') + ' تومان';
+
+  if (pct === 50 && hasFreeQuota) {
+    var rem = Math.max(0, remainingQuota - 1);
+    target.innerHTML = '<strong>نحوه تسویه:</strong> تخفیف ۵۰٪ از سهمیه ماهانه کسر می‌شود (<strong>۰ امتیاز کسر می‌گردد</strong>). سهمیه باقی‌مانده پس از ثبت: ' + rem + ' عدد. | هزینه ساعتی این کاربر: <strong>' + formattedHourly + '</strong>.';
+  } else {
+    var pts = Math.round(pct * 0.8);
+    if (pct === 30) pts = 20;
+    else if (pct === 50) pts = 35;
+    else if (pct === 100) pts = 80;
+
+    var newBal = Math.max(0, currentBalance - pts);
+    var warn = (currentBalance < pts) ? '<span class="text-danger font-bold"> (هشدار: موجودی ناکافی است!)</span>' : '';
+    target.innerHTML = '<strong>نحوه تسویه:</strong> کسر <strong>' + pts + ' امتیاز</strong> از موجودی رهرو (مانده پس از ثبت: ' + newBal + ' امتیاز)' + warn + ' | هزینه ساعتی این کاربر: <strong>' + formattedHourly + '</strong>.';
   }
 }
 </script>

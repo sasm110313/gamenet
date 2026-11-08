@@ -485,12 +485,15 @@ def customer_rahro_discount(request, customer_id):
             headers={"X-Internal-Secret": shared_secret, "Content-Type": "application/json"},
             timeout=3.0,
         )
-        if resp.status_code != 200:
-            raise ValueError("عدم پاسخ مناسب از سرور سامانه رهرو.")
+        data = {}
+        try:
+            data = resp.json()
+        except Exception:
+            pass
 
-        data = resp.json()
-        if not data.get("success"):
-            raise ValueError(data.get("error", "خطا در اعمال تخفیف از سامانه رهرو."))
+        if resp.status_code != 200 or not data.get("success"):
+            err_msg = data.get("error") or data.get("message") or f"خطا در ارتباط با سامانه رهرو (کد وضعیت: {resp.status_code})"
+            raise ValueError(err_msg)
 
         # اعمال تخفیف روی نشست فعال در صورت وجود
         active_session = None
