@@ -427,8 +427,12 @@ def _dispatch(command_type: str, payload: dict, *, origin: str) -> tuple[dict[st
         if payload.get("group_id"):
             group = CustomerGroup.objects.filter(id=payload["group_id"]).first()
             if group is None:
-                raise ValueError(f"unknown group {payload['group_id']}")
-            if group.edge_id != identity.edge_id:
+                group_name = payload.get("group_name")
+                if group_name:
+                    group = CustomerGroup.objects.filter(edge_id=identity.edge_id, name=group_name).first()
+                if group is None:
+                    group = CustomerGroup.objects.filter(edge_id=identity.edge_id).first()
+            elif group.edge_id != identity.edge_id:
                 raise ValueError("group belongs to another edge")
 
         credit_limit = (
