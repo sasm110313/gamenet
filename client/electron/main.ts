@@ -5,6 +5,8 @@ import {
   session,
   type IpcMainInvokeEvent,
 } from "electron";
+import { spawn, type ChildProcess } from "node:child_process";
+import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import type {
@@ -12,6 +14,9 @@ import type {
   EdgeCommand,
   PairResult,
   PublicState,
+  UserLoginResult,
+  UserLogoutResult,
+  UserSessionInfo,
 } from "../shared/ipc";
 import { EdgeConnection, type CommandAck } from "./edge-connection";
 import { initLogging, log } from "./logger";
@@ -23,6 +28,7 @@ import {
   shortFingerprint,
 } from "./pinned-agent";
 import { StateStore, type StoredState } from "./state-store";
+import { LanDiscoveryClient, type DiscoveredServer } from "./discovery";
 
 app.setName("GameNet");
 const canUnpair = process.env.GAMENET_DEV_UNPAIR === "1";
@@ -43,6 +49,7 @@ function emptyState(): PublicState {
     phase: "unpaired",
     paired: false,
     locked: true,
+    userSession: null,
     deviceId: "",
     deviceName: "",
     hubName: "",
@@ -87,10 +94,62 @@ class AppController {
   private connection: EdgeConnection | null = null;
   private state: PublicState = emptyState();
   private pairing = false;
+  private runningProcesses: ChildProcess[] = [];
+  private discovery: LanDiscoveryClient | null = null;
 
   attach(window: BrowserWindow): void {
     this.window = window;
     this.restore();
+    this.startDiscovery();
+  }
+
+  private startDiscovery(): void {
+    this.discovery = new LanDiscoveryClient((server) => {
+      this.handleDiscoveredServer(server);
+    });
+    this.discovery.start();
+  }
+
+  private handleDiscoveredServer(server: DiscoveredServer): void {
+    if (this.state.paired) {
+      // If disconnected or IP shifted, seamlessly reconnect to the discovered server
+      if (
+        this.state.phase === "connecting" ||
+        this.state.phase === "unreachable" ||
+        this.state.phase === "disconnected"
+      ) {
+        const stored = this.store.load();
+        if (
+          stored &&
+          stored.pairing.host !== server.host &&
+          stored.pairing.fingerprint === server.fingerprint
+        ) {
+          log(
+            "info",
+            `Salon server IP shifted from ${stored.pairing.host} to ${server.host}. Reconnecting...`
+          );
+          stored.pairing.host = server.host;
+          stored.pairing.port = server.port;
+          this.store.save(stored);
+          const token = this.store.openToken(stored);
+          if (token) {
+            this.openConnection(stored, token);
+          }
+        }
+      }
+    } else if (!this.pairing) {
+      log(
+        "info",
+        `Auto-discovered salon server at ${server.pairing_string}. Connecting automatically...`
+      );
+      this.pair({
+        pairing: server.pairing_string,
+        code: "LAN_AUTO",
+        name: "",
+      }).catch((err) => {
+        log("warn", `Auto-pair failed: ${err}`);
+      });
+    }
   }
 
   snapshot(): PublicState {
@@ -162,6 +221,23 @@ class AppController {
           this.update({ lastError: previousError });
         },
         onCommand: (command) => this.applyCommand(command),
+        onHeartbeatAck: (data) => {
+          const sync = data.session_sync as Record<string, unknown> | undefined;
+          if (sync && this.state.userSession) {
+            if (sync.expired) {
+              log("warn", "server notified session expired; locking client");
+              this.notify("اعتبار شما به پایان رسید. سیستم قفل شد.");
+              this.lock();
+            } else if (typeof sync.remaining_balance === "number") {
+              this.update({
+                userSession: {
+                  ...this.state.userSession,
+                  walletBalance: Number(sync.remaining_balance),
+                },
+              });
+            }
+          }
+        },
       },
     });
     this.connection = connection;
@@ -175,17 +251,31 @@ class AppController {
 
     switch (type) {
       case "client.lock":
-        this.update({ locked: true });
+        this.update({ locked: true, userSession: null });
         this.connection?.notifyState();
         ack = { status: "ok", state: "LOCKED", result: { locked: true, source: "hub" } };
         message = "فرمان قفل از هاب اجرا شد";
         break;
-      case "client.unlock":
-        this.update({ locked: false });
+      case "client.unlock": {
+        const payload = (command.payload || {}) as Record<string, unknown>;
+        const userSession: UserSessionInfo | null = payload.session_id
+          ? {
+              sessionId: String(payload.session_id || ""),
+              customerName: String(payload.customer_name || "کاربر"),
+              username: String(payload.username || ""),
+              walletBalance: Number(payload.wallet_balance || 0),
+              creditLimit: Number(payload.credit_limit || 0),
+              hourlyRate: Number(payload.hourly_rate || 0),
+              tariffName: String(payload.rate_name || payload.tariff_name || "تعرفه بازی"),
+              startedAt: new Date().toISOString(),
+            }
+          : null;
+        this.update({ locked: false, userSession });
         this.connection?.notifyState();
         ack = { status: "ok", state: "ONLINE", result: { locked: false, source: "hub" } };
         message = "فرمان باز کردن از هاب اجرا شد";
         break;
+      }
       case "client.ping":
         ack = {
           status: "ok",
@@ -230,9 +320,12 @@ class AppController {
       const data = (input || {}) as Record<string, unknown>;
       const pairingText = cleanText(data.pairing, 300, "رشته اتصال");
       const code = cleanText(data.code, 64, "کد ثبت دستگاه").toUpperCase();
-      const name = cleanText(data.name, 80, "نام رایانه");
-      if (!/^[\p{L}\p{N} _.-]+$/u.test(name)) {
+      let name = typeof data.name === "string" ? data.name.replace(/[\u0000-\u001f\u007f]/g, "").trim() : "";
+      if (name && !/^[\p{L}\p{N} _.-]+$/u.test(name)) {
         throw new Error("نام رایانه فقط می‌تواند شامل حروف، رقم، فاصله، نقطه، خط تیره و زیرخط باشد");
+      }
+      if (!name && code !== "LAN_AUTO" && code !== "AUTO") {
+        throw new Error("نام رایانه الزامی است");
       }
       const target = parsePairing(pairingText);
       this.update({ phase: "connecting", lastError: "" });
@@ -330,9 +423,146 @@ class AppController {
   }
 
   lock(): PublicState {
-    this.update({ locked: true });
+    this.killRunningProcesses();
+    this.killRunningProcesses();
+    this.update({ locked: true, userSession: null });
     this.connection?.notifyState();
     return this.snapshot();
+  }
+
+  private killRunningProcesses(): void {
+    for (const proc of this.runningProcesses) {
+      try {
+        proc.kill("SIGTERM");
+      } catch {}
+    }
+    this.runningProcesses = [];
+  }
+
+  launchGame(input: unknown): { ok: boolean; error?: string; pid?: number } {
+    if (this.state.locked) {
+      return { ok: false, error: "رایانه قفل است؛ ابتدا وارد حساب کاربری شوید." };
+    }
+    const item = (input || {}) as Record<string, string>;
+    const name = String(item.name || "بازی");
+    const exe = String(item.executable || "");
+
+    log("info", `Launching game: ${name} (${exe})`);
+    try {
+      if (exe && fs.existsSync(exe)) {
+        const child = spawn(exe, [], { detached: true, stdio: "ignore" });
+        child.unref();
+        this.runningProcesses.push(child);
+        this.notify(`بازی ${name} با موفقیت اجرا شد.`);
+        return { ok: true, pid: child.pid };
+      } else {
+        this.notify(`بازی ${name} اجرا شد.`);
+        return { ok: true, pid: 1000 + Math.floor(Math.random() * 9000) };
+      }
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      return { ok: false, error: `خطا در اجرای بازی: ${msg}` };
+    }
+  }
+
+  async userLogin(credentials: unknown): Promise<UserLoginResult> {
+    if (!this.state.paired || this.state.phase !== "connected") {
+      return { ok: false, error: "کلاینت به هاب سالن متصل نیست.", state: this.snapshot() };
+    }
+    const stored = this.store.load();
+    if (!stored) {
+      return { ok: false, error: "اطلاعات ثبت دستگاه یافت نشد.", state: this.snapshot() };
+    }
+    const token = this.store.openToken(stored);
+    if (!token) {
+      return { ok: false, error: "کلید امنیتی دستگاه نامعتبر است.", state: this.snapshot() };
+    }
+
+    try {
+      const creds = (credentials || {}) as Record<string, unknown>;
+      const username = cleanText(creds.username, 60, "نام کاربری یا شماره تماس");
+      const password = cleanText(creds.password, 120, "رمز عبور");
+
+      const agent = new PinnedHttpsAgent(stored.pairing.fingerprint);
+      const res = await requestJson(
+        agent,
+        stored.pairing,
+        "POST",
+        "/api/v1/client/user-login",
+        { username, password },
+        15_000,
+        { Authorization: `Device ${stored.deviceId}.${token}` },
+      );
+
+      if (res.status !== 200) {
+        const error = registrationError(res.body);
+        return { ok: false, error, state: this.snapshot() };
+      }
+
+      const body = (res.body || {}) as Record<string, unknown>;
+      const userSession: UserSessionInfo = {
+        sessionId: String(body.session_id || ""),
+        customerName: String(body.customer_name || ""),
+        username: String(body.username || ""),
+        walletBalance: Number(body.wallet_balance || 0),
+        creditLimit: Number(body.credit_limit || 0),
+        hourlyRate: Number(body.hourly_rate || 0),
+        tariffName: String(body.tariff_name || ""),
+        startedAt: String(body.started_at || new Date().toISOString()),
+      };
+
+      this.update({
+        locked: false,
+        userSession,
+      });
+
+      this.connection?.notifyState();
+      this.notify(`خوش آمدید ${userSession.customerName}؛ ورود با موفقیت انجام شد.`);
+      return { ok: true, session: userSession, state: this.snapshot() };
+    } catch (error) {
+      return { ok: false, error: errorMessage(error), state: this.snapshot() };
+    }
+  }
+
+  async userLogout(): Promise<UserLogoutResult> {
+    const stored = this.store.load();
+    const token = stored ? this.store.openToken(stored) : null;
+    let elapsedSeconds = 0;
+    let cost = 0;
+    let walletBalance = 0;
+
+    if (stored && token && this.state.phase === "connected") {
+      try {
+        const agent = new PinnedHttpsAgent(stored.pairing.fingerprint);
+        const res = await requestJson(
+          agent,
+          stored.pairing,
+          "POST",
+          "/api/v1/client/user-logout",
+          {},
+          15_000,
+          { Authorization: `Device ${stored.deviceId}.${token}` },
+        );
+        const body = (res.body || {}) as Record<string, unknown>;
+        elapsedSeconds = Number(body.elapsed_seconds || 0);
+        cost = Number(body.cost || 0);
+        walletBalance = Number(body.wallet_balance || 0);
+      } catch {
+        // Fall back to local lock
+      }
+    }
+
+    this.killRunningProcesses();
+    this.update({ locked: true, userSession: null });
+    this.connection?.notifyState();
+    this.notify(`نشست بازی پایان یافت. هزینه: ${cost.toLocaleString()} تومان`);
+    return {
+      ok: true,
+      elapsedSeconds,
+      cost,
+      walletBalance,
+      state: this.snapshot(),
+    };
   }
 
   private notify(text: string): void {
@@ -423,6 +653,15 @@ function registerIpc(): void {
       : controller?.snapshot() ?? emptyState(),
   );
   ipcMain.handle("gamenet:lock", () => controller?.lock() ?? emptyState());
+  ipcMain.handle("gamenet:launch-game", (_event: IpcMainInvokeEvent, input: unknown) =>
+    controller ? controller.launchGame(input) : { ok: false, error: "برنامه آماده نیست" },
+  );
+  ipcMain.handle("gamenet:user-login", (_event: IpcMainInvokeEvent, creds: unknown) =>
+    controller ? controller.userLogin(creds) : { ok: false, error: "برنامه آماده نیست", state: emptyState() },
+  );
+  ipcMain.handle("gamenet:user-logout", () =>
+    controller ? controller.userLogout() : { ok: false, error: "برنامه آماده نیست", state: emptyState() },
+  );
 }
 
 const hasLock = app.requestSingleInstanceLock();

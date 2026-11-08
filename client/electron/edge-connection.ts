@@ -55,6 +55,7 @@ export interface ConnectionCallbacks {
   onDisconnect(detail: string): void;
   onAuthFailure(detail: string): void;
   onCommand(command: EdgeCommand): CommandAck;
+  onHeartbeatAck?(data: Record<string, unknown>): void;
 }
 
 type AckPayload = CommandAck;
@@ -236,6 +237,7 @@ export class EdgeConnection {
       return;
     }
     if (kind === "heartbeat_ack") {
+      this.callbacks.onHeartbeatAck?.(message);
       this.processCommands(message.pending_commands);
       return;
     }

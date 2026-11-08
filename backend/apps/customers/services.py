@@ -230,7 +230,7 @@ def update_customer(
     customer.revision += 1
     customer.save(
         update_fields=[
-            "full_name", "phone", "group", "credit_limit", "notes", "is_active",
+            "full_name", "username", "password_hash", "phone", "group", "credit_limit", "notes", "is_active",
             "revision", "updated_at",
         ]
     )

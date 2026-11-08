@@ -2,76 +2,64 @@
 {% load gn %}
 
 {% block title %}مدیریت تعرفه‌ها{% endblock %}
-{% block page_title %}تعرفه‌ها و گروه‌ها{% endblock %}
-{% block page_subtitle %}ثبت و ویرایش از راه دور؛ نسخه پایه برای جلوگیری از بازنویسی تغییرات همکاران الزامی است{% endblock %}
+{% block page_title %}تعرفه‌ها و نرخ‌های بازی{% endblock %}
+{% block page_subtitle %}تعیین نرخ ساعتی و گروه‌های کاربری سالن گیم‌نت{% endblock %}
 
 {% block content %}
-{% include "cloud/_manage_tabs.html" %}
-
 <div class="gn-grid cols-2 mb-3">
   <div class="gn-card">
-    <h6>تعرفه جدید</h6>
+    <h6>ثبت تعرفه جدید</h6>
     <form method="post" action="{% url 'cloud_manage_tariff_create' %}" class="gn-form-row">
       {% csrf_token %}
       {% uuid4 as request_id %}
       <input type="hidden" name="request_id" value="{{ request_id }}">
-      <div>
-        <label class="gn-label">Edge</label>
-        <select class="gn-select" name="edge_id" required data-gn-edge-select>
-          {% for edge in edges %}
-            <option value="{{ edge.id }}">{{ edge.name }} — {{ edge.site_name|default:"بدون سایت" }}</option>
-          {% endfor %}
-        </select>
-      </div>
+      {% if edges %}
+        <input type="hidden" name="edge_id" value="{{ edges.0.id }}">
+      {% endif %}
       <div class="flex-grow-1">
         <label class="gn-label">نام تعرفه</label>
-        <input class="gn-input" name="name" required maxlength="80" placeholder="استاندارد">
+        <input class="gn-input" name="name" required maxlength="80" placeholder="عادی / VIP">
       </div>
       <div>
         <label class="gn-label">نرخ ساعتی (تومان)</label>
         <input class="gn-input num" name="hourly_rate" inputmode="numeric" required value="40000">
       </div>
-      <button class="gn-btn primary" type="submit"><i class="ti ti-cloud-upload"></i> ارسال</button>
+      <button class="gn-btn primary" type="submit"><i class="ti ti-check"></i> ثبت تعرفه</button>
     </form>
   </div>
 
   <div class="gn-card">
-    <h6>گروه جدید</h6>
+    <h6>ثبت گروه کاربری جدید</h6>
     <form method="post" action="{% url 'cloud_manage_group_create' %}" class="gn-form-row">
       {% csrf_token %}
       {% uuid4 as request_id %}
       <input type="hidden" name="request_id" value="{{ request_id }}">
-      <div>
-        <label class="gn-label">Edge</label>
-        <select class="gn-select" name="edge_id" required data-gn-edge-select>
-          {% for edge in edges %}
-            <option value="{{ edge.id }}">{{ edge.name }}</option>
-          {% endfor %}
-        </select>
-      </div>
+      {% if edges %}
+        <input type="hidden" name="edge_id" value="{{ edges.0.id }}">
+      {% endif %}
       <div class="flex-grow-1">
         <label class="gn-label">نام گروه</label>
-        <input class="gn-input" name="name" required maxlength="80" placeholder="مثلاً VIP">
+        <input class="gn-input" name="name" required maxlength="80" placeholder="مثلاً گیمرهای VIP">
       </div>
       <div>
-        <label class="gn-label">تعرفه</label>
-        <select class="gn-select" name="tariff_id" required data-gn-edge-tariff-select>
+        <label class="gn-label">تعرفه متصل</label>
+        <select class="gn-select" name="tariff_id" required>
           {% for tariff in tariffs %}
-            <option value="{{ tariff.id }}" data-edge="{{ tariff.edge_id }}">{{ tariff.name }} — {{ tariff.hourly_rate|toman }}</option>
+            <option value="{{ tariff.id }}">{{ tariff.name }} — {{ tariff.hourly_rate|toman }} تومان</option>
           {% endfor %}
         </select>
       </div>
-      <button class="gn-btn primary" type="submit"><i class="ti ti-cloud-upload"></i> ارسال</button>
+      <button class="gn-btn primary" type="submit"><i class="ti ti-check"></i> ثبت گروه</button>
     </form>
   </div>
 </div>
 
 <div class="gn-grid cols-2">
   <div class="gn-card">
-    <h6>تعرفه‌ها</h6>
+    <h6>تعرفه‌های فعال سالن</h6>
     <div class="gn-scroll" style="max-height: 520px">
       <table class="gn-table">
-        <thead><tr><th>نام</th><th>نرخ</th><th>فعال</th><th>Edge</th><th>نسخه</th><th></th></tr></thead>
+        <thead><tr><th>نام تعرفه</th><th>نرخ ساعتی (تومان)</th><th>وضعیت</th><th class="text-end">ذخیره</th></tr></thead>
         <tbody>
           {% for tariff in tariffs %}
             <tr>
@@ -90,12 +78,10 @@
                   <input form="cloud-tariff-{{ tariff.id }}" type="checkbox" name="is_active" value="1" {% if tariff.is_active %}checked{% endif %}> فعال
                 </label>
               </td>
-              <td class="mono gn-muted" style="font-size: 10.5px">{{ tariff.edge_id|shortid }}</td>
-              <td class="num gn-muted">{{ tariff.revision }}</td>
-              <td class="text-end"><button class="gn-btn sm" form="cloud-tariff-{{ tariff.id }}" type="submit" title="ارسال بهروزرسانی"><i class="ti ti-cloud-upload"></i></button></td>
+              <td class="text-end"><button class="gn-btn sm primary" form="cloud-tariff-{{ tariff.id }}" type="submit" title="ذخیره تغییرات"><i class="ti ti-check"></i></button></td>
             </tr>
           {% empty %}
-            <tr><td colspan="6"><div class="gn-empty">تعرفه‌ای همگام نشده است.</div></td></tr>
+            <tr><td colspan="4"><div class="gn-empty">تعرفه‌ای ثبت نشده است.</div></td></tr>
           {% endfor %}
         </tbody>
       </table>
@@ -103,10 +89,10 @@
   </div>
 
   <div class="gn-card">
-    <h6>گروه‌ها</h6>
+    <h6>گروه‌های مشتریان</h6>
     <div class="gn-scroll" style="max-height: 520px">
       <table class="gn-table">
-        <thead><tr><th>نام</th><th>تعرفه</th><th>فعال</th><th>Edge</th><th>نسخه</th><th></th></tr></thead>
+        <thead><tr><th>نام گروه</th><th>تعرفه متصل</th><th>وضعیت</th><th class="text-end">ذخیره</th></tr></thead>
         <tbody>
           {% for group in groups %}
             <tr>
@@ -121,13 +107,27 @@
               </td>
               <td>
                 <select class="gn-select" form="cloud-group-{{ group.id }}" name="tariff_id">
-                  {% for tariff in tariffs_by_edge|get_item:group.edge_id %}
-                    <option value="{{ tariff.id }}" {% if group.tariff_id == tariff.id %}selected{% endif %}>{{ tariff.name }}</option>
+                  {% for tariff in tariffs %}
+                    <option value="{{ tariff.id }}" {% if group.tariff_id == tariff.id %}selected{% endif %}>{{ tariff.name }} ({{ tariff.hourly_rate|toman }})</option>
                   {% endfor %}
                 </select>
               </td>
               <td>
                 <label class="d-flex align-items-center gap-1" style="font-size: 12px">
+                  <input form="cloud-group-{{ group.id }}" type="checkbox" name="is_active" value="1" {% if group.is_active %}checked{% endif %}> فعال
+                </label>
+              </td>
+              <td class="text-end"><button class="gn-btn sm primary" form="cloud-group-{{ group.id }}" type="submit" title="ذخیره تغییرات"><i class="ti ti-check"></i></button></td>
+            </tr>
+          {% empty %}
+            <tr><td colspan="4"><div class="gn-empty">گروهی ثبت نشده است.</div></td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+{% endblock %}
                   <input form="cloud-group-{{ group.id }}" type="checkbox" name="is_active" value="1" {% if group.is_active %}checked{% endif %}> فعال
                 </label>
               </td>

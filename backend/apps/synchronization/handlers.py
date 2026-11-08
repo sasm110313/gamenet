@@ -222,6 +222,7 @@ def customer_upsert(event: SyncEvent) -> None:
         defaults={
             "edge_id": event.edge_id,
             "full_name": p["full_name"],
+            "username": p.get("username", ""),
             "phone": p.get("phone", ""),
             "group": group,
             "credit_limit": int(p.get("credit_limit", 0)),

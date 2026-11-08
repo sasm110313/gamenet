@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="color-scheme" content="dark light">
-  <title>{% block title %}GameNet{% endblock %} · {% if is_edge %}مرکز کنترل محلی{% else %}پنل ابری{% endif %}</title>
+  <title>{% block title %}GameNet{% endblock %} · {% if is_edge %}سرور سالن گیم‌نت{% else %}پنل آنلاین گیم‌نت{% endif %}</title>
   <link rel="stylesheet" href="{% static 'vendor/css/tabler.rtl.min.css' %}">
   <link rel="stylesheet" href="{% static 'vendor/css/tabler-icons.min.css' %}">
   <link rel="stylesheet" href="{% static 'css/app.css' %}">
@@ -18,78 +18,73 @@
       <div class="gn-brand-mark">G</div>
       <div>
         <div class="gn-brand-name">GameNet</div>
-        <div class="gn-brand-sub">{% if is_edge %}Local Hub{% else %}Cloud{% endif %}</div>
+        <div class="gn-brand-sub">مدیریت هوشمند گیم‌نت {% if is_edge %}(سرور سالن){% else %}(پنل آنلاین){% endif %}</div>
       </div>
     </div>
 
     <nav class="gn-nav">
       {% with n=request.resolver_match.url_name %}
       {% if is_edge %}
+        <div class="gn-nav-section-title">عملیات</div>
         <a href="{% url 'edge_overview' %}" class="{% if n == 'edge_overview' %}active{% endif %}">
           <i class="ti ti-layout-dashboard"></i><span>داشبورد</span>
         </a>
         <a href="{% url 'edge_devices' %}" class="{% if n|slice:':12' == 'edge_device_' or n == 'edge_devices' %}active{% endif %}">
-          <i class="ti ti-device-desktop"></i><span>کلاینت‌ها</span>
+          <i class="ti ti-device-desktop"></i><span>ایستگاه‌های بازی</span>
         </a>
         <a href="{% url 'edge_customers' %}" class="{% if n|slice:':14' == 'edge_customer_' or n == 'edge_customers' %}active{% endif %}">
-          <i class="ti ti-users"></i><span>مشتریان</span>
+          <i class="ti ti-users"></i><span>مشتریان و اعضا</span>
         </a>
         <a href="{% url 'edge_sessions' %}" class="{% if n|slice:':13' == 'edge_session_' or n == 'edge_sessions' %}active{% endif %}">
-          <i class="ti ti-clock-play"></i><span>نشست‌ها</span>
+          <i class="ti ti-clock-play"></i><span>نشست‌های بازی</span>
         </a>
+
+        <div class="gn-nav-section-title mt-3">کسب‌وکار</div>
         <a href="{% url 'edge_ledger' %}" class="{% if n == 'edge_ledger' %}active{% endif %}">
-          <i class="ti ti-receipt"></i><span>صندوق</span>
+          <i class="ti ti-wallet"></i><span>امور مالی و صندوق</span>
         </a>
         <a href="{% url 'edge_pricing' %}" class="{% if n|slice:':11' == 'edge_tariff' or n|slice:':10' == 'edge_group' or n == 'edge_pricing' %}active{% endif %}">
           <i class="ti ti-tags"></i><span>تعرفه‌ها</span>
         </a>
-        <a href="{% url 'edge_cloud' %}" class="{% if n|slice:':10' == 'edge_cloud' or n == 'edge_emit_test' %}active{% endif %}">
-          <i class="ti ti-cloud-upload"></i><span>همگام‌سازی ابر</span>
-        </a>
       {% else %}
+        <div class="gn-nav-section-title">عملیات</div>
         <a href="{% url 'cloud_overview' %}" class="{% if n == 'cloud_overview' %}active{% endif %}">
-          <i class="ti ti-radar"></i><span>نمای کل</span>
+          <i class="ti ti-layout-dashboard"></i><span>داشبورد</span>
         </a>
         <a href="{% url 'cloud_devices' %}" class="{% if n|slice:':13' == 'cloud_device_' or n == 'cloud_devices' %}active{% endif %}">
-          <i class="ti ti-device-desktop"></i><span>کلاینت‌ها</span>
-        </a>
-        <a href="{% url 'cloud_edges' %}" class="{% if n|slice:':11' == 'cloud_edge' %}active{% endif %}">
-          <i class="ti ti-server-2"></i><span>Edge ها</span>
+          <i class="ti ti-device-desktop"></i><span>ایستگاه‌های بازی</span>
         </a>
         <a href="{% url 'cloud_customers' %}" class="{% if n|slice:':15' == 'cloud_customer_' or n == 'cloud_customers' %}active{% endif %}">
-          <i class="ti ti-users"></i><span>مشتریان</span>
+          <i class="ti ti-users"></i><span>مشتریان و اعضا</span>
         </a>
         <a href="{% url 'cloud_sessions' %}" class="{% if n == 'cloud_sessions' %}active{% endif %}">
-          <i class="ti ti-clock-play"></i><span>نشست‌ها</span>
+          <i class="ti ti-clock-play"></i><span>نشست‌های بازی</span>
         </a>
+
+        <div class="gn-nav-section-title mt-3">کسب‌وکار</div>
         <a href="{% url 'cloud_ledger' %}" class="{% if n == 'cloud_ledger' %}active{% endif %}">
-          <i class="ti ti-receipt"></i><span>صندوق</span>
+          <i class="ti ti-wallet"></i><span>امور مالی و صندوق</span>
         </a>
-        <a href="{% url 'cloud_pricing' %}" class="{% if n == 'cloud_pricing' %}active{% endif %}">
+        <a href="{% url 'cloud_manage_pricing' %}" class="{% if n|slice:':18' == 'cloud_manage_price' or n == 'cloud_pricing' or n == 'cloud_manage_pricing' %}active{% endif %}">
           <i class="ti ti-tags"></i><span>تعرفه‌ها</span>
         </a>
-        <a href="{% url 'cloud_manage_customers' %}" class="{% if n|slice:':13' == 'cloud_manage_' %}active{% endif %}">
-          <i class="ti ti-settings-automation"></i><span>مدیریت از راه دور</span>
-        </a>
-        <a href="{% url 'cloud_commands' %}" class="{% if n == 'cloud_commands' %}active{% endif %}">
-          <i class="ti ti-terminal-2"></i><span>دستورها</span>
-        </a>
-        <a href="{% url 'cloud_events' %}" class="{% if n == 'cloud_events' %}active{% endif %}">
-          <i class="ti ti-arrows-exchange"></i><span>رویدادها</span>
-        </a>
-        <a href="{% url 'cloud_config' %}" class="{% if n == 'cloud_config' %}active{% endif %}">
-          <i class="ti ti-adjustments"></i><span>پیکربندی</span>
+        <a href="{% url 'cloud_edges' %}" class="{% if n|slice:':11' == 'cloud_edge' %}active{% endif %}">
+          <i class="ti ti-server-2"></i><span>وضعیت سرور سالن</span>
         </a>
       {% endif %}
-      <a href="/admin/" class="{% if n|slice:':5' == 'admin' %}active{% endif %}">
-        <i class="ti ti-shield-lock"></i><span>مدیریت</span>
-      </a>
       {% endwith %}
     </nav>
 
     <div class="gn-sidebar-foot">
-      <div>v{{ gamenet_version }}</div>
-      <div>{% if is_edge %}Edge Node{% else %}Cloud Node{% endif %}</div>
+      <div class="d-flex justify-content-between align-items-center">
+        <span>GameNet v{{ gamenet_version }}</span>
+        {% if request.user.is_superuser %}
+          <a href="/admin/" class="gn-muted" title="تنظیمات پیشرفته سیستم" style="text-decoration: none;">
+            <i class="ti ti-settings"></i>
+          </a>
+        {% endif %}
+      </div>
+      <div>{% if is_edge %}سرور محلی سالن{% else %}پنل مرکزی آنلاین{% endif %}</div>
     </div>
   </aside>
 
@@ -99,15 +94,42 @@
         <h1 class="gn-title">{% block page_title %}داشبورد{% endblock %}</h1>
         <p class="gn-subtitle">{% block page_subtitle %}{% endblock %}</p>
       </div>
-      <div class="d-flex align-items-center gap-2">
-        {% block topbar_status %}{% endblock %}
-        <span class="gn-chip accent d-none d-md-inline-flex">
-          <i class="ti ti-fingerprint"></i>
-          {% if is_edge %}EDGE{% else %}CLOUD{% endif %}
-        </span>
-        <button class="gn-btn" type="button" onclick="gnToggleTheme()" title="تغییر تم">
+      <div class="d-flex align-items-center gap-3">
+        {% if is_edge %}
+          {% if cloud_online %}
+            <span class="gn-chip ok" title="اطلاعات به طور خودکار با پنل آنلاین مرکزی همگام است">
+              <span class="dot"></span>متصل به سرور آنلاین
+            </span>
+          {% else %}
+            <span class="gn-chip warn" title="اینترنت قطع است؛ سیستم‌ها در شبکه محلی بدون وقفه فعال هستند و پس از اتصال، خودکار همگام خواهند شد">
+              <span class="dot"></span>حالت آفلاین (محلی)
+            </span>
+          {% endif %}
+        {% else %}
+          {% block topbar_status %}{% endblock %}
+        {% endif %}
+
+        <div class="d-flex align-items-center gap-2 px-2 py-1 rounded-pill" style="background: rgba(255,255,255,0.05); border: 1px solid var(--gn-border);">
+          <span class="d-inline-flex justify-content-center align-items-center rounded-circle" style="width: 26px; height: 26px; background: #6366f1; color: #fff; font-size: 12px; font-weight: 700;">
+            {{ request.user.username|slice:":1"|upper }}
+          </span>
+          <span style="font-size: 12.5px; font-weight: 600; color: #f1f5f9;">
+            {{ request.user.label|default:request.user.username }}
+          </span>
+          <span class="gn-muted" style="font-size: 11px;">(مدیر)</span>
+        </div>
+
+        <a class="gn-btn sm" href="{% if is_edge %}{% url 'edge_customer_create' %}{% else %}{% url 'cloud_manage_customer_create' %}{% endif %}" title="ثبت گیمر جدید">
+          <i class="ti ti-plus"></i>
+        </a>
+
+        <button class="gn-btn sm" type="button" onclick="gnToggleTheme()" title="تغییر تم">
           <i class="ti ti-sun-moon"></i>
         </button>
+
+        <a class="gn-btn sm danger" href="/admin/logout/" title="خروج از حساب">
+          <i class="ti ti-logout"></i>
+        </a>
       </div>
     </header>
 

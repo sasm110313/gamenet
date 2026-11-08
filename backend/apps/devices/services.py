@@ -23,6 +23,8 @@ from apps.synchronization.models import EdgeIdentity
 
 logger = logging.getLogger("gamenet.devices")
 
+CANONICAL_STATIONS = [f"PC-{i:02d}" for i in range(1, 11)]
+
 PRESENCE_STATES = {
     ClientStatus.OFFLINE,
     ClientStatus.ONLINE,
@@ -75,34 +77,89 @@ def register_device(
     require_edge()
     identity = ensure_identity()
 
-    reg = (
-        RegistrationCode.objects.select_for_update()
-        .filter(code=(code or "").strip().upper())
-        .first()
-    )
-    if reg is None or not reg.is_usable():
-        raise RegistrationError("invalid or expired registration code")
+    code_clean = (code or "").strip().upper()
+    is_auto = code_clean in {"AUTO", "LAN_AUTO", "SMARTLAUNCH", ""}
+
+    reg = None
+    if not is_auto:
+        reg = (
+            RegistrationCode.objects.select_for_update()
+            .filter(code=code_clean)
+            .first()
+        )
+        if reg is None or not reg.is_usable():
+            raise RegistrationError("کد ثبت دستگاه نامعتبر یا منقضی شده است.")
 
     device: ClientDevice | None = None
     if device_id:
         device = ClientDevice.objects.select_for_update().filter(id=device_id).first()
         if device is not None and device.edge_id != identity.edge_id:
-            raise RegistrationError("device belongs to another edge")
+            raise RegistrationError("شناسه دستگاه به این سرور تعلق ندارد.")
 
     token = secrets.token_urlsafe(32)
+    clean_name = (name or "").strip().upper()
+    clean_host = (hostname or "").strip()
+
     if device is None:
-        if ClientDevice.objects.filter(name=name, is_active=True).exists():
-            raise RegistrationError("a device with this name already exists")
-        device = ClientDevice(
-            edge_id=identity.edge_id,
-            name=name.strip()[:80],
-            hostname=hostname[:120],
-            operating_system=operating_system[:120],
-            application_version=application_version[:40],
-            ip_address=ip_address,
-            status=ClientStatus.OFFLINE,
-            registered_at=timezone.now(),
-        )
+        # 1. Exact match if valid station name requested (e.g. PC-01 .. PC-10)
+        if clean_name in CANONICAL_STATIONS:
+            device = ClientDevice.objects.select_for_update().filter(
+                name=clean_name, edge_id=identity.edge_id, is_active=True
+            ).first()
+
+        # 2. Hostname match for returning PCs (reboot/reconnect)
+        if device is None and clean_host and clean_host.lower() not in {"localhost", "127.0.0.1", "win-pc"}:
+            device = ClientDevice.objects.select_for_update().filter(
+                hostname=clean_host, edge_id=identity.edge_id, is_active=True
+            ).first()
+
+        # 3. IP address match for static salon LAN IPs
+        if device is None and ip_address and ip_address not in {"127.0.0.1", "::1"}:
+            device = ClientDevice.objects.select_for_update().filter(
+                ip_address=ip_address, edge_id=identity.edge_id, is_active=True
+            ).first()
+
+        # 4. Auto-assignment from the 10 salon slots (PC-01 to PC-10)
+        if device is None:
+            existing = {
+                d.name: d
+                for d in ClientDevice.objects.select_for_update().filter(
+                    edge_id=identity.edge_id, is_active=True
+                )
+            }
+            # Find the lowest unassigned or fresh canonical slot
+            for slot in CANONICAL_STATIONS:
+                if slot in existing:
+                    candidate = existing[slot]
+                    if not candidate.token_hash or (candidate.status == ClientStatus.OFFLINE and not candidate.hostname):
+                        device = candidate
+                        break
+                else:
+                    device = ClientDevice(
+                        edge_id=identity.edge_id,
+                        name=slot,
+                        status=ClientStatus.OFFLINE,
+                        registered_at=timezone.now(),
+                    )
+                    break
+
+            # If all 10 exist, look for any offline slot without an active session
+            if device is None:
+                for slot in CANONICAL_STATIONS:
+                    if slot in existing and existing[slot].status == ClientStatus.OFFLINE:
+                        device = existing[slot]
+                        break
+
+            # Fallback if salon exceeds 10
+            if device is None:
+                fallback_name = clean_name if clean_name and clean_name not in existing else f"PC-{len(existing) + 1:02d}"
+                device = ClientDevice(
+                    edge_id=identity.edge_id,
+                    name=fallback_name[:80],
+                    status=ClientStatus.OFFLINE,
+                    registered_at=timezone.now(),
+                )
+
     device.hostname = hostname[:120] or device.hostname
     device.operating_system = operating_system[:120] or device.operating_system
     device.application_version = application_version[:40] or device.application_version
@@ -111,9 +168,10 @@ def register_device(
     device.token_issued_at = timezone.now()
     device.save()
 
-    reg.used_at = timezone.now()
-    reg.used_by = device
-    reg.save(update_fields=["used_at", "used_by"])
+    if reg is not None:
+        reg.used_at = timezone.now()
+        reg.used_by = device
+        reg.save(update_fields=["used_at", "used_by"])
 
     emit(
         "device.registered",

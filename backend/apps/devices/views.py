@@ -158,3 +158,103 @@ class DeviceCommandAckView(APIView):
         except ValueError as exc:
             raise ApiError("unknown_command", str(exc), status.HTTP_404_NOT_FOUND) from exc
         return Response({"command_id": str(command.id), "status": command.status})
+
+
+class ClientUserLoginView(APIView):
+    """Allows a customer/gamer to log in directly from the client machine with username/password."""
+
+    def post(self, request):
+        require_edge()
+        device = device_or_401(request)
+        data = request.data or {}
+        identifier = str(data.get("username", "")).strip()
+        password = str(data.get("password", "")).strip()
+
+        if not identifier or not password:
+            raise ApiError("invalid_credentials", "نام کاربری و رمز عبور الزامی است.", status.HTTP_400_BAD_REQUEST)
+
+        identity = ensure_identity()
+        from django.db.models import Q
+        from apps.customers.models import Customer
+        from apps.wallets.models import Wallet
+        from apps.sessions.services import start_session, SessionError
+
+        customer = (
+            Customer.objects.filter(edge_id=identity.edge_id, is_active=True)
+            .filter(Q(username__iexact=identifier) | Q(phone=identifier))
+            .first()
+        )
+
+        if customer is None or not customer.check_password(password):
+            raise ApiError("invalid_credentials", "نام کاربری یا رمز عبور اشتباه است.", status.HTTP_401_UNAUTHORIZED)
+
+        # If internet is connected, check with Cloud to ensure latest remote deposits/commands are synced first
+        try:
+            from apps.synchronization.cloud_client import CloudClient
+            from apps.synchronization.edge_credentials import load_credentials
+            from apps.synchronization.edge_runtime import pull_and_queue_commands, execute_received_commands
+            creds = load_credentials()
+            if creds:
+                client = CloudClient(creds, timeout=1.5)
+                pull_and_queue_commands(client)
+                execute_received_commands()
+                # Refresh customer and wallet from DB after applying any cloud updates
+                customer.refresh_from_db()
+        except Exception:
+            # If offline, use latest authoritative local state without blocking
+            pass
+
+        try:
+            session = start_session(customer=customer, device=device)
+        except SessionError as exc:
+            raise ApiError("session_start_failed", str(exc), status.HTTP_400_BAD_REQUEST) from exc
+
+        wallet = Wallet.objects.filter(customer=customer).first()
+        balance = wallet.balance if wallet else 0
+
+        return Response(
+            {
+                "ok": True,
+                "session_id": str(session.id),
+                "customer_id": str(customer.id),
+                "customer_name": customer.full_name,
+                "username": customer.username or customer.phone,
+                "wallet_balance": balance,
+                "credit_limit": customer.credit_limit,
+                "hourly_rate": session.hourly_rate,
+                "tariff_name": session.tariff_name,
+                "started_at": session.started_at.isoformat(),
+            },
+            status=status.HTTP_200_OK,
+        )
+
+
+class ClientUserLogoutView(APIView):
+    """Allows the logged in gamer to end their session and relock the machine."""
+
+    def post(self, request):
+        require_edge()
+        device = device_or_401(request)
+        from apps.sessions.models import GamingSession, SessionStatus
+        from apps.sessions.services import stop_session
+        from apps.wallets.models import Wallet
+
+        session = GamingSession.objects.filter(device=device, status=SessionStatus.ACTIVE).first()
+        if session is None:
+            return Response({"ok": True, "message": "هیچ نشست فعالی برای این دستگاه یافت نشد."})
+
+        session, entry = stop_session(session, reason="خروج توسط کاربر از کلاینت")
+        wallet = Wallet.objects.filter(customer=session.customer).first()
+        balance = wallet.balance if wallet else 0
+
+        return Response(
+            {
+                "ok": True,
+                "session_id": str(session.id),
+                "elapsed_seconds": session.elapsed_seconds,
+                "cost": session.cost,
+                "wallet_balance": balance,
+            },
+            status=status.HTTP_200_OK,
+        )
+

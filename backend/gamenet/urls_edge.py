@@ -14,6 +14,7 @@ urlpatterns = [
     path("", dash.overview, name="edge_overview"),
     path("customers/", customers_dash.customers, name="edge_customers"),
     path("customers/create", customers_dash.customer_create, name="edge_customer_create"),
+    path("customers/create/", customers_dash.customer_create),
     path("customers/<uuid:customer_id>/", customers_dash.customer_detail, name="edge_customer_detail"),
     path("customers/<uuid:customer_id>/update", customers_dash.customer_update, name="edge_customer_update"),
     path("customers/<uuid:customer_id>/toggle", customers_dash.customer_toggle, name="edge_customer_toggle"),
@@ -81,4 +82,6 @@ urlpatterns = [
         api.DeviceCommandAckView.as_view(),
         name="api_device_command_ack",
     ),
+    path("api/v1/client/user-login", api.ClientUserLoginView.as_view(), name="api_client_user_login"),
+    path("api/v1/client/user-logout", api.ClientUserLogoutView.as_view(), name="api_client_user_logout"),
 ] + base_patterns()

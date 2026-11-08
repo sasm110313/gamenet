@@ -26,6 +26,12 @@ const api: GamenetApi = {
   unpair: () => ipcRenderer.invoke("gamenet:unpair"),
   preview: (enabled: boolean) => ipcRenderer.invoke("gamenet:preview", enabled) as Promise<PublicState>,
   lock: () => ipcRenderer.invoke("gamenet:lock") as Promise<PublicState>,
+  launchGame: (input: { id: string; name: string; executable?: string }) =>
+    ipcRenderer.invoke("gamenet:launch-game", input),
+  userLogin: (credentials: { username: string; password: string }) =>
+    ipcRenderer.invoke("gamenet:user-login", credentials),
+  userLogout: () =>
+    ipcRenderer.invoke("gamenet:user-logout"),
   onState: (listener: (state: PublicState) => void) =>
     subscribe<PublicState>("gamenet:event-state", listener),
   onCommand: (listener: (notice: CommandNotice) => void) =>

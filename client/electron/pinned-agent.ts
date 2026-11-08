@@ -144,6 +144,7 @@ export function requestJson(
   path: string,
   body?: unknown,
   timeoutMs = 15_000,
+  extraHeaders?: Record<string, string>,
 ): Promise<JsonResponse> {
   return new Promise<JsonResponse>((resolve, reject) => {
     const payload =
@@ -167,6 +168,7 @@ export function requestJson(
                 "Content-Length": String(payload.byteLength),
               }
             : {}),
+          ...(extraHeaders || {}),
         },
       },
       (response) => {

@@ -1,10 +1,10 @@
 {% extends "base.html" %}
 {% load gn %}
 
-{% block title %}{{ device.name }} · کلاینت ابری{% endblock %}
+{% block title %}{{ device.name }} · سیستم بازی{% endblock %}
 {% block page_title %}{{ device.name }}{% endblock %}
 {% block page_subtitle %}
-  {{ device.id }} · هاب: {% if edge %}<a href="{% url 'cloud_edge_detail' edge.id %}">{{ edge.name }}</a>{% else %}{{ device.edge_id|shortid }}{% endif %}
+  سیستم بازی سالن گیم‌نت · {{ device.ip_address|default:"شبکه محلی" }}
 {% endblock %}
 
 {% block topbar_status %}
@@ -17,7 +17,7 @@
 <div class="gn-grid cols-3 mb-3">
   <!-- Card 1: Technical & State Details -->
   <div class="gn-card">
-    <h6>وضعیت و مشخصات کلاینت</h6>
+    <h6>وضعیت و مشخصات سیستم</h6>
     <div class="d-flex align-items-center gap-2 mb-2">
       <span class="gn-status {{ device.status|status_tone }}" style="font-size: 13px">
         <span class="dot"></span>{{ device.status|status_fa }}
@@ -31,17 +31,17 @@
       <div class="d-flex justify-content-between"><span class="gn-muted">آدرس IP</span><span class="num">{{ device.ip_address|default:"—" }}</span></div>
       <div class="d-flex justify-content-between"><span class="gn-muted">سیستم‌عامل</span><span>{{ device.operating_system|default:"—" }}</span></div>
       <div class="d-flex justify-content-between"><span class="gn-muted">نسخه نرم‌افزار کلاینت</span><span class="num">{{ device.application_version|default:"—" }}</span></div>
-      <div class="d-flex justify-content-between"><span class="gn-muted">آخرین ضربان (Heartbeat)</span><span class="num">{{ device.last_heartbeat_at|reltime }}</span></div>
+      <div class="d-flex justify-content-between"><span class="gn-muted">آخرین ارتباط</span><span class="num">{{ device.last_heartbeat_at|reltime }}</span></div>
       <div class="d-flex justify-content-between"><span class="gn-muted">تاریخ ثبت</span><span class="num">{{ device.registered_at|date:"Y-m-d H:i" }}</span></div>
-      <div class="d-flex justify-content-between"><span class="gn-muted">هاب متصل</span><span>{{ edge.name|default:"ناشناخته" }}</span></div>
+      <div class="d-flex justify-content-between"><span class="gn-muted">سرور سالن</span><span>{{ edge.name|default:"سرور سالن اصلی" }}</span></div>
     </div>
   </div>
 
   <!-- Card 2: Remote Controls -->
   <div class="gn-card">
-    <h6>کنترل از راه دور کلاینت</h6>
+    <h6>کنترل از راه دور سیستم</h6>
     <p class="gn-muted" style="font-size: 12px">
-      دستورهای زیر از طریق کانال امن WebSocket به هاب محلی و سپس مستقیماً به کلاینت ویندوزی ارسال و اعمال می‌شوند.
+      دستورهای زیر از طریق سرور سالن مستقیماً به کلاینت ویندوزی ارسال و اعمال می‌شوند.
     </p>
     <form method="post" action="{% url 'cloud_device_action' device.id %}">
       {% csrf_token %}

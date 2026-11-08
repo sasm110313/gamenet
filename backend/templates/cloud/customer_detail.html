@@ -3,31 +3,34 @@
 
 {% block title %}{{ customer.full_name }}{% endblock %}
 {% block page_title %}{{ customer.full_name }}{% endblock %}
-{% block page_subtitle %}{{ customer.id }} · کپی همگام‌شده (فقط خواندنی){% endblock %}
+{% block page_subtitle %}جزئیات حساب، موجودی کیف پول و تاریخچه بازی{% endblock %}
 
 {% block content %}
 <div class="gn-card mb-3">
   <div class="d-flex justify-content-between align-items-center flex-wrap gap-2">
-    <span class="gn-subtitle">این صفحه کپی همگام‌شده از Edge است. تغییرات مالی و کاتالوگ فقط از طریق فرمان مدیریت از راه دور اعمال می‌شوند.</span>
-    <a class="gn-btn primary" href="{% url 'cloud_manage_customer' customer.id %}"><i class="ti ti-settings-automation"></i> مدیریت از راه دور</a>
+    <span class="gn-subtitle">اطلاعات این گیمر به طور خودکار با سرور سالن همگام است.</span>
+    <div class="d-flex gap-2">
+      <a class="gn-btn" href="{% url 'cloud_manage_wallet' customer.id %}"><i class="ti ti-wallet"></i> شارژ کیف پول</a>
+      <a class="gn-btn primary" href="{% url 'cloud_manage_customer' customer.id %}"><i class="ti ti-edit"></i> ویرایش اطلاعات و تنظیمات</a>
+    </div>
   </div>
 </div>
 <div class="gn-grid cols-3 mb-3">
   <div class="gn-card">
     <h6>کیف پول</h6>
     <div class="gn-kpi">
-      <span class="label">موجودی</span>
-      <span class="value num {% if customer.wallet.balance < 0 %}text-danger{% endif %}">{{ customer.wallet.balance|toman }}</span>
-      <span class="hint">سقف اعتبار {{ customer.credit_limit|toman }} تومان</span>
+      <span class="label">موجودی فعلی</span>
+      <span class="value num {% if customer.wallet.balance < 0 %}text-danger{% endif %}">{{ customer.wallet.balance|toman }} تومان</span>
+      <span class="hint">سقف اعتبار: {{ customer.credit_limit|toman }} تومان</span>
     </div>
   </div>
   <div class="gn-card">
     <h6>مشخصات</h6>
     <div class="d-flex flex-column gap-1" style="font-size: 12.5px">
-      <div class="d-flex justify-content-between"><span class="gn-muted">تماس</span><span class="num">{{ customer.phone|default:"—" }}</span></div>
-      <div class="d-flex justify-content-between"><span class="gn-muted">گروه</span><span>{{ customer.group.name|default:"پیش‌فرض" }}</span></div>
+      <div class="d-flex justify-content-between"><span class="gn-muted">شماره تماس</span><span class="num">{{ customer.phone|default:"—" }}</span></div>
+      <div class="d-flex justify-content-between"><span class="gn-muted">نام کاربری</span><span class="num">@{{ customer.username|default:"—" }}</span></div>
+      <div class="d-flex justify-content-between"><span class="gn-muted">گروه کاربری</span><span>{{ customer.group.name|default:"پیش‌فرض" }}</span></div>
       <div class="d-flex justify-content-between"><span class="gn-muted">تعرفه</span><span>{% if customer.group.tariff %}{{ customer.group.tariff.hourly_rate|toman }} تومان/ساعت{% else %}پیش‌فرض{% endif %}</span></div>
-      <div class="d-flex justify-content-between"><span class="gn-muted">Edge</span><span class="mono">{{ customer.edge_id|shortid }}</span></div>
       <div class="d-flex justify-content-between"><span class="gn-muted">وضعیت</span><span>{{ customer.is_active|yesno:"فعال،غیرفعال" }}</span></div>
     </div>
   </div>

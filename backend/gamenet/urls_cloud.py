@@ -11,6 +11,8 @@ from gamenet.urls_common import base_patterns
 urlpatterns = [
     path("", dash.overview, name="cloud_overview"),
     path("customers/", reports.customers, name="cloud_customers"),
+    path("customers/create", management.customer_create, name="cloud_customer_create"),
+    path("customers/create/", management.customer_create),
     path("customers/<uuid:customer_id>/", reports.customer_detail, name="cloud_customer_detail"),
     path("sessions/", reports.sessions, name="cloud_sessions"),
     path("ledger/", reports.ledger, name="cloud_ledger"),
@@ -30,6 +32,7 @@ urlpatterns = [
     ),
     path("manage/customers/", management.customers, name="cloud_manage_customers"),
     path("manage/customers/create", management.customer_create, name="cloud_manage_customer_create"),
+    path("manage/customers/create/", management.customer_create),
     path(
         "manage/customers/<uuid:customer_id>/",
         management.customer_detail,

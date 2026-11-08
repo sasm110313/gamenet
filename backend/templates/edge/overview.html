@@ -1,117 +1,145 @@
 {% extends "base.html" %}
 {% load gn %}
 
-{% block title %}داشبورد محلی{% endblock %}
-{% block page_title %}داشبورد محلی{% endblock %}
-{% block page_subtitle %}{{ identity.name }} · {{ identity.edge_id }}{% endblock %}
-
-{% block topbar_status %}
-  {% if cloud_online %}
-    <span class="gn-chip ok"><span class="dot"></span>ابر متصل</span>
-  {% else %}
-    <span class="gn-chip warn"><span class="dot"></span>ابر قطع</span>
-  {% endif %}
-{% endblock %}
+{% block title %}داشبورد مدیریت{% endblock %}
+{% block page_title %}داشبورد{% endblock %}
+{% block page_subtitle %}نمای زندۀ عملکرد گیم‌سنتر شما{% endblock %}
 
 {% block content %}
-{% if not registered %}
-  <div class="gn-alert warning mb-3">
-    این Edge هنوز در Cloud ثبت نشده است. عملیات محلی ادامه دارد و رویدادها صف می‌شوند.
-    <a href="{% url 'edge_cloud' %}" class="ms-2">ثبت Edge</a>
-  </div>
-{% endif %}
+<div class="baz-dash">
 
-<div class="gn-grid cols-4 mb-3">
-  <div class="gn-card gn-kpi">
-    <span class="label">کلاینت‌های آنلاین</span>
-    <span class="value num">{{ online_count }}</span>
-    <span class="hint">از {{ devices|length }} دستگاه</span>
-  </div>
-  <div class="gn-card gn-kpi">
-    <span class="label">قفل</span>
-    <span class="value num">{{ locked_count }}</span>
-    <span class="hint">آماده ورود مشتری</span>
-  </div>
-  <div class="gn-card gn-kpi accent">
-    <span class="label">در حال بازی</span>
-    <span class="value num">{{ active_count }}</span>
-    <span class="hint">نشست فعال</span>
-  </div>
-  <div class="gn-card gn-kpi {% if counts.FAILED %}bad{% elif counts.PENDING %}warn{% endif %}">
-    <span class="label">صف همگام‌سازی</span>
-    <span class="value num">{{ counts.PENDING }}</span>
-    <span class="hint">{{ counts.FAILED }} ناموفق · آخرین {{ last_sync|reltime }}</span>
-  </div>
-</div>
-
-<div class="gn-grid cols-2">
-  <div class="gn-card" style="grid-column: span 1">
-    <div class="d-flex justify-content-between align-items-center mb-2">
-      <h6 class="mb-0">دستگاه‌ها</h6>
-      <a class="gn-btn sm" href="{% url 'edge_devices' %}">مدیریت</a>
+  <!-- Header & Live Indicators -->
+  <div class="baz-header">
+    <div class="baz-title-wrap">
+      <div class="baz-accent-bar"></div>
+      <div>
+        <h1 class="baz-title">داشبورد</h1>
+        <p class="baz-subtitle">نمای زندۀ عملکرد گیم‌سنتر شما</p>
+      </div>
     </div>
+
+    <div class="baz-header-actions">
+      <div class="baz-legend">
+        <span class="baz-legend-item">
+          <span class="baz-legend-dot gray"></span> آزاد
+        </span>
+        <span class="baz-legend-item">
+          <span class="baz-legend-dot amber"></span> متوقف
+        </span>
+        <span class="baz-legend-item">
+          <span class="baz-legend-dot green"></span> فعال
+        </span>
+      </div>
+
+      <div class="baz-live-pill">
+        <span class="baz-pulse-dot"></span>
+        <span>به‌روزرسانی زنده</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- KPI Cards (Row of 4) -->
+  <div class="baz-kpi-grid">
+    <!-- Active Devices -->
+    <div class="baz-kpi-card baz-kpi-purple">
+      <div class="baz-kpi-info">
+        <span class="baz-kpi-label">دستگاه‌های فعال</span>
+        <span class="baz-kpi-val num">{{ active_count }}</span>
+        <span class="baz-kpi-sub">از {{ total_devices }} دستگاه · {{ free_count }} آزاد</span>
+      </div>
+      <div class="baz-kpi-icon-box">
+        <i class="ti ti-device-gamepad-2"></i>
+      </div>
+    </div>
+
+    <!-- Today's Revenue -->
+    <div class="baz-kpi-card baz-kpi-amber">
+      <div class="baz-kpi-info">
+        <span class="baz-kpi-label">درآمد امروز</span>
+        <span class="baz-kpi-val num">{{ today_revenue|toman }}</span>
+        <span class="baz-kpi-sub">{{ today_session_revenue|toman }} دستگاه · {{ today_deposit_revenue|toman }} شارژ</span>
+      </div>
+      <div class="baz-kpi-icon-box">
+        <i class="ti ti-coins"></i>
+      </div>
+    </div>
+
+    <!-- Monthly Revenue -->
+    <div class="baz-kpi-card baz-kpi-emerald">
+      <div class="baz-kpi-info">
+        <span class="baz-kpi-label">درآمد ماه</span>
+        <span class="baz-kpi-val num">{{ month_revenue|toman }}</span>
+        <span class="baz-kpi-sub">سود / مجموع این ماه</span>
+      </div>
+      <div class="baz-kpi-icon-box">
+        <i class="ti ti-trending-up"></i>
+      </div>
+    </div>
+
+    <!-- Customers Count -->
+    <div class="baz-kpi-card baz-kpi-cyan">
+      <div class="baz-kpi-info">
+        <span class="baz-kpi-label">تعداد مشتریان</span>
+        <span class="baz-kpi-val num">{{ customer_count }}</span>
+        <span class="baz-kpi-sub">مجموع گیمرهای ثبت‌شده</span>
+      </div>
+      <div class="baz-kpi-icon-box">
+        <i class="ti ti-users"></i>
+      </div>
+    </div>
+  </div>
+
+  <!-- Live Stations Grid -->
+  <div class="baz-section">
+    <div class="baz-section-header">
+      <h2 class="baz-section-title">وضعیت زندۀ دستگاه‌ها</h2>
+      <a href="{% url 'edge_devices' %}" class="gn-btn sm">
+        <i class="ti ti-settings"></i> مدیریت استیشن‌ها
+      </a>
+    </div>
+
+    <!-- Live Auto-Refreshing Stations Grid via HTMX -->
     <div hx-get="{% url 'edge_device_grid' %}" hx-trigger="every 3s" hx-swap="innerHTML">
       {% include "edge/_device_grid.html" %}
     </div>
   </div>
 
-  <div class="d-flex flex-column gap-3">
-    <div class="gn-card">
-      <h6>وضعیت همگام‌سازی</h6>
-      <div class="d-flex flex-column gap-2" style="font-size: 12.5px">
-        <div class="d-flex justify-content-between">
-          <span class="gn-muted">وضعیت ابر</span>
-          <span class="gn-status {% if cloud_online %}st-online{% else %}st-offline{% endif %}">
-            <span class="dot"></span>{% if cloud_online %}آنلاین{% else %}قطع{% endif %}
+  <!-- Revenue Report Chart -->
+  <div class="baz-chart-card">
+    <div class="baz-chart-header">
+      <div>
+        <h3 class="baz-section-title" style="font-size: 15px;">گزارش درآمد</h3>
+        <p class="baz-subtitle">روند فروش و شارژ طی روزهای اخیر</p>
+      </div>
+
+      <div class="d-flex align-items-center gap-3">
+        <div class="baz-chart-legend">
+          <span class="d-flex align-items-center gap-1">
+            <span class="baz-chart-legend-box purple"></span> درآمد دستگاه
+          </span>
+          <span class="d-flex align-items-center gap-1">
+            <span class="baz-chart-legend-box cyan"></span> شارژ کیف پول
           </span>
         </div>
-        <div class="d-flex justify-content-between"><span class="gn-muted">در انتظار</span><span class="num">{{ counts.PENDING }}</span></div>
-        <div class="d-flex justify-content-between"><span class="gn-muted">همگام‌شده</span><span class="num">{{ counts.SYNCED }}</span></div>
-        <div class="d-flex justify-content-between"><span class="gn-muted">ناموفق</span><span class="num">{{ counts.FAILED }}</span></div>
-        <div class="d-flex justify-content-between"><span class="gn-muted">آخرین همگام‌سازی</span><span class="num">{{ last_sync|reltime }}</span></div>
-        <div class="d-flex justify-content-between"><span class="gn-muted">نسخه پیکربندی</span><span class="num">v{{ config.version }}</span></div>
+
+        <div class="baz-chart-tabs">
+          <button class="baz-chart-tab active" type="button">روزانه</button>
+          <button class="baz-chart-tab" type="button">هفتگی</button>
+          <button class="baz-chart-tab" type="button">ماهانه</button>
+        </div>
       </div>
-      <div class="gn-divider"></div>
-      <form method="post" action="{% url 'edge_emit_test' %}">
-        {% csrf_token %}
-        <button class="gn-btn w-100 justify-content-center" type="submit">
-          <i class="ti ti-send"></i> ارسال رویداد آزمایشی
-        </button>
-      </form>
     </div>
 
-    <div class="gn-card">
-      <h6>کدهای ثبت فعال</h6>
-      {% for code in codes %}
-        <div class="d-flex justify-content-between align-items-center py-1">
-          <span class="gn-code" style="font-size: 14px">{{ code.code }}</span>
-          <span class="gn-muted num">{{ code.expires_at|reltime }}</span>
+    <!-- Responsive Bar Chart -->
+    <div class="baz-bars-wrap">
+      {% for item in revenue_chart %}
+        <div class="baz-bar-col">
+          <div class="baz-bar-pill" style="height: {{ item.height_pct }}%;" data-tooltip="{{ item.day_name }}: {{ item.total|toman }} تومان"></div>
+          <span class="baz-bar-label num">{{ item.label }}</span>
         </div>
-      {% empty %}
-        <div class="gn-muted" style="font-size: 12.5px">کد فعالی وجود ندارد.</div>
-      {% endfor %}
-      <div class="gn-divider"></div>
-      <form method="post" action="{% url 'edge_create_code' %}" class="gn-form-row">
-        {% csrf_token %}
-        <div class="flex-grow-1">
-          <label class="gn-label">کد جدید برای ثبت کلاینت</label>
-          <input class="gn-input" name="label" placeholder="مثلاً PC-01">
-        </div>
-        <button class="gn-btn primary" type="submit"><i class="ti ti-key"></i> ساخت کد</button>
-      </form>
-    </div>
-
-    <div class="gn-card">
-      <h6>آخرین دستورها</h6>
-      {% for cmd in recent_commands %}
-        <div class="d-flex justify-content-between align-items-center py-1" style="font-size: 12.5px">
-          <span>{{ cmd.client.name }} · <span class="gn-muted">{{ cmd.command_type }}</span></span>
-          <span class="gn-status {{ cmd.status|status_tone }}"><span class="dot"></span>{{ cmd.status|status_fa }}</span>
-        </div>
-      {% empty %}
-        <div class="gn-muted" style="font-size: 12.5px">دستوری ثبت نشده است.</div>
       {% endfor %}
     </div>
   </div>
+
 </div>
 {% endblock %}

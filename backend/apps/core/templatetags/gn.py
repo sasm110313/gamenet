@@ -106,11 +106,40 @@ def shortid(value):
 
 
 @register.filter
+def station_num(name):
+    """Converts 'PC-01' -> '1', 'PC-10' -> '10', '1' -> '1'."""
+    if not name:
+        return ""
+    s = str(name).strip()
+    if s.upper().startswith("PC-"):
+        part = s[3:]
+        try:
+            return str(int(part))
+        except ValueError:
+            return part
+    return s
+
+
+@register.filter
 def toman(value):
     try:
         return f"{int(value):,}"
     except (TypeError, ValueError):
         return "—"
+
+
+@register.filter
+def duration_hms(seconds):
+    if seconds is None:
+        return "00:00:00"
+    try:
+        s = int(seconds)
+        h = s // 3600
+        m = (s % 3600) // 60
+        sec = s % 60
+        return f"{h:02d}:{m:02d}:{sec:02d}"
+    except (ValueError, TypeError):
+        return "00:00:00"
 
 
 @register.filter

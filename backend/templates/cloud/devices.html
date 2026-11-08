@@ -1,40 +1,31 @@
 {% extends "base.html" %}
 {% load gn %}
 
-{% block title %}کلاینت‌ها{% endblock %}
-{% block page_title %}مدیریت کلاینت‌ها (دستگاه‌های بازی){% endblock %}
-{% block page_subtitle %}نظارت زنده، قفل و بازگشایی، راه‌اندازی و شروع نشست از طریق ابر{% endblock %}
+{% block title %}ایستگاه‌های بازی{% endblock %}
+{% block page_title %}مدیریت سیستم‌های سالن{% endblock %}
+{% block page_subtitle %}نظارت زنده، قفل و بازگشایی و کنترل سیستم‌های گیم‌نت{% endblock %}
 
 {% block content %}
 <div class="gn-grid cols-2 mb-3">
   <div class="gn-card">
-    <h6>ساخت کد ثبت کلاینت برای هاب محلی (Edge)</h6>
+    <h6>افزودن سیستم جدید به سالن</h6>
     <p class="gn-muted" style="font-size: 12.5px">
-      از طریق این فرم می‌توانید برای هر کدام از هاب‌های محلی خود، کد ثبت دستگاه جدید ایجاد کنید.
-      اپراتور محلی این کد را روی کلاینت جدید وارد می‌کند تا به هاب متصل شود.
+      یک نام برای سیستم (مثلاً PC-02) وارد کنید تا کد ثبت صادر شود. این کد روی کلاینت جدید وارد می‌شود.
     </p>
     <form method="post" action="{% url 'cloud_create_client_code' %}" class="d-flex flex-column gap-2">
       {% csrf_token %}
       <input type="hidden" name="next" value="cloud_devices">
       <div class="d-flex gap-2">
+        {% if edges %}
+          <input type="hidden" name="edge_id" value="{{ edges.0.id }}">
+        {% endif %}
         <div class="flex-grow-1">
-          <label class="gn-label">انتخاب هاب محلی (Edge)</label>
-          <select class="gn-select" name="edge_id" required>
-            <option value="">-- انتخاب هاب --</option>
-            {% for e in edges %}
-              <option value="{{ e.id }}" {% if selected_edge == e.id|stringformat:"s" %}selected{% endif %}>
-                {{ e.name }} ({% if e.status == 'ONLINE' %}آنلاین{% else %}آفلاین{% endif %})
-              </option>
-            {% endfor %}
-          </select>
-        </div>
-        <div class="flex-grow-1">
-          <label class="gn-label">برچسب (مثلاً PC-06)</label>
-          <input class="gn-input" name="label" placeholder="PC-01" required>
+          <label class="gn-label">نام سیستم (برچسب)</label>
+          <input class="gn-input" name="label" placeholder="PC-02" required>
         </div>
       </div>
       <div class="d-flex justify-content-end">
-        <button class="gn-btn primary" type="submit"><i class="ti ti-key"></i> صدور کد ثبت از راه دور</button>
+        <button class="gn-btn primary" type="submit"><i class="ti ti-key"></i> صدور کد ثبت سیستم</button>
       </div>
     </form>
   </div>
@@ -42,7 +33,7 @@
   <div class="gn-card">
     <h6>شروع سریع نشست از راه دور</h6>
     <p class="gn-muted" style="font-size: 12.5px">
-      انتخاب مستقیم مشتری و دستگاه جهت باز شدن قفل و شروع بلافاصله زمان بازی مشتری.
+      انتخاب مستقیم مشتری و سیستم جهت باز شدن قفل و شروع زمان بازی.
     </p>
     {% if customers and devices %}
       <form method="post" action="" id="quickSessionForm" class="d-flex flex-column gap-2">
@@ -56,7 +47,7 @@
               {% for d in devices %}
                 {% if not d.active_session %}
                   <option value="{{ d.id }}" data-action-url="{% url 'cloud_device_start_session' d.id %}">
-                    {{ d.name }} · {{ d.status|status_fa }} ({{ d.edge_node.name|default:"هاب" }})
+                    {{ d.name }} · {{ d.status|status_fa }}
                   </option>
                 {% endif %}
               {% endfor %}
@@ -73,7 +64,7 @@
           </div>
         </div>
         <div class="d-flex justify-content-end">
-          <button class="gn-btn ok" type="submit" id="btnQuickStartSession"><i class="ti ti-player-play"></i> شروع نشست از ابر</button>
+          <button class="gn-btn ok" type="submit" id="btnQuickStartSession"><i class="ti ti-player-play"></i> شروع نشست</button>
         </div>
       </form>
       <script>
@@ -94,25 +85,95 @@
 <div class="gn-card">
   <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
     <div class="d-flex align-items-center gap-2">
-      <h6 class="mb-0">لیست کامل دستگاه‌ها</h6>
+      <h6 class="mb-0">لیست سیستم‌های سالن</h6>
       <span class="gn-muted num" style="font-size: 12px">({{ devices|length }} دستگاه)</span>
     </div>
 
     <!-- Filters -->
     <form method="get" class="d-flex gap-2 flex-wrap">
-      <select class="gn-select" name="edge" onchange="this.form.submit()" style="min-width: 160px">
-        <option value="">همه هاب‌ها (Edges)</option>
-        {% for e in edges %}
-          <option value="{{ e.id }}" {% if selected_edge == e.id|stringformat:"s" %}selected{% endif %}>
-            {{ e.name }}
-          </option>
-        {% endfor %}
-      </select>
-
       <select class="gn-select" name="status" onchange="this.form.submit()" style="min-width: 140px">
         <option value="">همه وضعیت‌ها</option>
-        <option value="ONLINE" {% if status_filter == 'ONLINE' %}selected{% endif %}>آنلاین (ONLINE)</option>
-        <option value="LOCKED" {% if status_filter == 'LOCKED' %}selected{% endif %}>قفل (LOCKED)</option>
+        <option value="ONLINE" {% if status_filter == 'ONLINE' %}selected{% endif %}>آنلاین</option>
+        <option value="LOCKED" {% if status_filter == 'LOCKED' %}selected{% endif %}>قفل</option>
+        <option value="ACTIVE" {% if status_filter == 'ACTIVE' %}selected{% endif %}>در حال بازی</option>
+        <option value="OFFLINE" {% if status_filter == 'OFFLINE' %}selected{% endif %}>آفلاین</option>
+      </select>
+      <input class="gn-input" name="q" value="{{ search_query }}" placeholder="جستجوی نام یا IP..." style="min-width: 180px">
+      <button class="gn-btn sm"><i class="ti ti-search"></i></button>
+    </form>
+  </div>
+
+  <table class="gn-table">
+    <thead>
+      <tr>
+        <th>نام سیستم</th>
+        <th>وضعیت</th>
+        <th>نشست فعلی</th>
+        <th>نسخه</th>
+        <th>آخرین ضربان</th>
+        <th class="text-end">کنترل از راه دور</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for device in devices %}
+        <tr>
+          <td>
+            <a href="{% url 'cloud_device_detail' device.id %}" style="color: var(--gn-text); font-weight: 600; text-decoration: none">
+              {{ device.name }}
+            </a>
+            <div class="gn-muted mono" style="font-size: 11px">{{ device.ip_address|default:"—" }}</div>
+          </td>
+          <td>
+            <span class="gn-status {{ device.status|status_tone }}">
+              <span class="dot"></span>{{ device.status|status_fa }}
+            </span>
+          </td>
+          <td>
+            {% if device.active_session %}
+              <span class="gn-chip ok" style="font-size: 11.5px">
+                <i class="ti ti-user"></i> {{ device.active_session.customer.full_name }}
+              </span>
+              <span class="gn-muted num ms-1" style="font-size: 11px">{{ device.active_session.started_at|reltime }}</span>
+            {% else %}
+              <span class="gn-muted" style="font-size: 12px">—</span>
+            {% endif %}
+          </td>
+          <td class="gn-muted num" style="font-size: 12px">{{ device.application_version|default:"—" }}</td>
+          <td class="gn-muted num" style="font-size: 12px">{{ device.last_heartbeat_at|reltime }}</td>
+          <td class="text-end">
+            <div class="d-flex gap-1 justify-content-end align-items-center">
+              {% if device.active_session %}
+                <form method="post" action="{% url 'cloud_manage_session_stop' device.active_session.id %}" class="gn-inline-form">
+                  {% csrf_token %}
+                  <input type="hidden" name="next" value="cloud_devices">
+                  <button class="gn-btn sm danger" title="پایان نشست">
+                    <i class="ti ti-player-stop"></i>
+                  </button>
+                </form>
+              {% endif %}
+
+              <form method="post" action="{% url 'cloud_device_action' device.id %}" class="gn-inline-form">
+                {% csrf_token %}
+                <input type="hidden" name="next" value="cloud_devices">
+                {% if device.status == 'LOCKED' or device.status == 'OFFLINE' %}
+                  <button class="gn-btn sm" name="action" value="unlock" title="باز کردن قفل"><i class="ti ti-lock-open"></i></button>
+                {% else %}
+                  <button class="gn-btn sm" name="action" value="lock" title="قفل کردن"><i class="ti ti-lock"></i></button>
+                {% endif %}
+                <button class="gn-btn sm" name="action" value="ping" title="پینگ"><i class="ti ti-activity"></i></button>
+              </form>
+            </div>
+          </td>
+        </tr>
+      {% empty %}
+        <tr>
+          <td colspan="6"><div class="gn-empty">سیستمی یافت نشد.</div></td>
+        </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endblock %}
         <option value="ACTIVE" {% if status_filter == 'ACTIVE' %}selected{% endif %}>در حال بازی (ACTIVE)</option>
         <option value="OFFLINE" {% if status_filter == 'OFFLINE' %}selected{% endif %}>آفلاین (OFFLINE)</option>
       </select>

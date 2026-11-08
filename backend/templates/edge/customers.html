@@ -23,6 +23,16 @@
       </div>
       <div class="gn-form-row mt-2">
         <div class="flex-grow-1">
+          <label class="gn-label">نام کاربری (ورود به کلاینت)</label>
+          <input class="gn-input" name="username" maxlength="60" placeholder="مثلاً ali">
+        </div>
+        <div>
+          <label class="gn-label">رمز عبور کلاینت</label>
+          <input class="gn-input" type="password" name="password" maxlength="120" placeholder="••••••••">
+        </div>
+      </div>
+      <div class="gn-form-row mt-2">
+        <div class="flex-grow-1">
           <label class="gn-label">گروه / تعرفه</label>
           <select class="gn-select" name="group_id">
             <option value="">بدون گروه (تعرفه پیش‌فرض)</option>
@@ -73,6 +83,9 @@
             <a href="{% url 'edge_customer_detail' customer.id %}" style="color: var(--gn-text); text-decoration: none">
               <strong>{{ customer.full_name }}</strong>
             </a>
+            {% if customer.username %}
+              <span class="gn-chip" style="font-size: 10px; margin-right: 4px">@{{ customer.username }}</span>
+            {% endif %}
             <div class="gn-muted mono" style="font-size: 10.5px">{{ customer.id|shortid }}</div>
           </td>
           <td class="num gn-muted">{{ customer.phone|default:"—" }}</td>

@@ -1,97 +1,92 @@
 {% load gn %}
-<table class="gn-table">
-  <thead>
-    <tr>
-      <th>دستگاه</th>
-      <th>وضعیت</th>
-      <th>Edge</th>
-      <th>نشست جاری</th>
-      <th>نسخه</th>
-      <th>آخرین ضربان</th>
-      <th class="text-end">عملیات از راه دور</th>
-    </tr>
-  </thead>
-  <tbody>
-    {% for device in devices %}
-      <tr>
-        <td>
-          <a href="{% url 'cloud_device_detail' device.id %}" class="text-decoration-none" style="color: var(--gn-text)">
-            <strong>{{ device.name }}</strong>
-          </a>
-          <div class="gn-muted mono" style="font-size: 11px">{{ device.hostname|default:device.id|shortid }}</div>
-        </td>
-        <td>
-          <span class="gn-status {{ device.status|status_tone }}">
-            <span class="dot"></span>{{ device.status|status_fa }}
-          </span>
-        </td>
-        <td>
-          {% if device.edge_node %}
-            <a href="{% url 'cloud_edge_detail' device.edge_node.id %}" class="gn-chip" style="font-size: 11px; text-decoration: none">
-              {{ device.edge_node.name }}
-            </a>
-          {% else %}
-            <span class="gn-muted mono" style="font-size: 11px">{{ device.edge_id|shortid }}</span>
-          {% endif %}
-        </td>
-        <td>
-          {% if device.active_session %}
-            <div>
-              <span class="gn-chip ok" style="font-size: 11px">
-                <i class="ti ti-user"></i> {{ device.active_session.customer.full_name }}
-              </span>
-              <span class="gn-muted num ms-1" style="font-size: 11px">
-                {{ device.active_session.started_at|reltime }}
-              </span>
-            </div>
-          {% else %}
-            <span class="gn-muted" style="font-size: 11.5px">—</span>
-          {% endif %}
-        </td>
-        <td class="num gn-muted" style="font-size: 12px">{{ device.application_version|default:"—" }}</td>
-        <td class="num gn-muted" style="font-size: 12px">{{ device.last_heartbeat_at|reltime }}</td>
-        <td class="text-end">
-          <div class="d-flex gap-1 justify-content-end align-items-center">
-            {% if device.active_session %}
-              <form method="post" action="{% url 'cloud_manage_session_stop' device.active_session.id %}" class="gn-inline-form">
-                {% csrf_token %}
-                <button class="gn-btn sm danger" title="پایان نشست">
-                  <i class="ti ti-player-stop"></i>
-                </button>
-              </form>
-            {% endif %}
 
-            <form method="post" action="{% url 'cloud_device_action' device.id %}" class="gn-inline-form">
+<div class="baz-station-grid">
+  {% for device in devices %}
+    <div class="baz-station-card {% if device.active_session or device.status == 'ACTIVE' %}is-active{% elif device.status == 'LOCKED' %}is-locked{% elif device.status == 'OFFLINE' %}is-offline{% endif %}">
+      
+      <!-- Top Row -->
+      <div class="baz-card-top">
+        <span class="baz-station-dot {% if device.active_session or device.status == 'ACTIVE' %}green{% elif device.status == 'LOCKED' %}amber{% else %}gray{% endif %}"></span>
+        <div class="text-end">
+          <div class="baz-station-num-big">{{ device.name|station_num }}</div>
+          <div class="baz-station-sub-type">PC</div>
+        </div>
+      </div>
+
+      <!-- Center Status & Gamer Info -->
+      <div class="baz-card-center">
+        {% if device.active_session %}
+          <div class="baz-status-big green">فعال</div>
+          <div class="baz-gamer-name">{{ device.active_session.customer.full_name }}</div>
+          {% if device.active_session.customer.username %}
+            <div class="baz-gamer-user">@{{ device.active_session.customer.username }}</div>
+          {% endif %}
+          <div class="baz-timer-badge">
+            <i class="ti ti-clock"></i> {{ device.elapsed_seconds|duration_hms }}
+          </div>
+          <div class="baz-cost-label">{{ device.current_cost|toman }} تومان</div>
+        {% elif device.status == 'IDLE' %}
+          <div class="baz-status-big gray">آزاد</div>
+          <span class="text-muted" style="font-size: 11px; margin-top: 4px;">آماده شروع</span>
+        {% elif device.status == 'LOCKED' %}
+          <div class="baz-status-big amber">متوقف</div>
+          <span class="text-muted" style="font-size: 11px; margin-top: 4px;">آماده لاگین گیمر</span>
+        {% else %}
+          <div class="baz-status-big gray">آفلاین</div>
+          <span class="text-muted" style="font-size: 11px; margin-top: 4px;">سیستم خاموش است</span>
+        {% endif %}
+      </div>
+
+      <!-- Card Bottom & Remote Quick Actions -->
+      <div class="baz-card-bottom">
+        <span class="baz-rate-hint">
+          {% if device.active_session %}
+            {{ device.active_session.hourly_rate|toman }} ت/ساعت
+          {% else %}
+            نرخ عادی
+          {% endif %}
+        </span>
+
+        <div class="baz-actions-row">
+          {% if device.active_session %}
+            <form method="post" action="{% url 'cloud_manage_session_stop' device.active_session.id %}" class="gn-inline-form">
               {% csrf_token %}
-              <input type="hidden" name="next" value="{{ request.path }}">
-              {% if device.status == 'LOCKED' or device.status == 'OFFLINE' %}
-                <button class="gn-btn sm" name="action" value="unlock" title="باز کردن قفل">
-                  <i class="ti ti-lock-open"></i>
-                </button>
-              {% else %}
-                <button class="gn-btn sm" name="action" value="lock" title="قفل کردن">
-                  <i class="ti ti-lock"></i>
-                </button>
-              {% endif %}
-              <button class="gn-btn sm" name="action" value="ping" title="پینگ">
-                <i class="ti ti-activity"></i>
-              </button>
-              <button class="gn-btn sm" name="action" value="restart" title="راه‌اندازی مجدد">
-                <i class="ti ti-reload"></i>
+              <input type="hidden" name="next" value="cloud_overview">
+              <button class="baz-mini-btn" style="color: #fb7185; border-color: rgba(251, 113, 133, 0.3);" title="پایان نشست و قفل">
+                <i class="ti ti-player-stop"></i>
               </button>
             </form>
-          </div>
-        </td>
-      </tr>
-    {% empty %}
-      <tr>
-        <td colspan="7">
-          <div class="gn-empty">
-            <i class="ti ti-device-desktop-off"></i>
-            دستگاهی یافت نشد یا هنوز کلاینتی ثبت نشده است.
-          </div>
-        </td>
-      </tr>
-    {% endfor %}
-  </tbody>
-</table>
+          {% elif device.status == 'LOCKED' or device.status == 'OFFLINE' %}
+            <form method="post" action="{% url 'cloud_device_action' device.id %}" class="gn-inline-form">
+              {% csrf_token %}
+              <input type="hidden" name="next" value="cloud_overview">
+              <input type="hidden" name="action" value="unlock">
+              <button class="baz-mini-btn" title="باز کردن قفل دستی">
+                <i class="ti ti-lock-open"></i>
+              </button>
+            </form>
+          {% else %}
+            <form method="post" action="{% url 'cloud_device_action' device.id %}" class="gn-inline-form">
+              {% csrf_token %}
+              <input type="hidden" name="next" value="cloud_overview">
+              <input type="hidden" name="action" value="lock">
+              <button class="baz-mini-btn" title="قفل کردن">
+                <i class="ti ti-lock"></i>
+              </button>
+            </form>
+          {% endif %}
+
+          <a href="{% url 'cloud_device_detail' device.id %}" class="baz-mini-btn" title="مشاهده جزئیات">
+            <i class="ti ti-adjustments"></i>
+          </a>
+        </div>
+      </div>
+
+    </div>
+  {% empty %}
+    <div class="gn-empty" style="grid-column: 1 / -1;">
+      <i class="ti ti-device-desktop-off"></i>
+      دستگاهی یافت نشد یا هنوز کلاینتی ثبت نشده است.
+    </div>
+  {% endfor %}
+</div>

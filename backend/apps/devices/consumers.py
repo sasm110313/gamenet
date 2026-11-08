@@ -54,11 +54,12 @@ class DeviceConsumer(AsyncJsonWebsocketConsumer):
         kind = content.get("type")
         if kind == "heartbeat":
             state = content.get("state")
-            await database_sync_to_async(self._heartbeat)(state, content.get("app_version", ""))
+            session_sync = await database_sync_to_async(self._heartbeat)(state, content.get("app_version", ""))
             await self.send_json(
                 {
                     "type": "heartbeat_ack",
                     "server_time": timezone.now().isoformat(),
+                    "session_sync": session_sync,
                     "pending_commands": await database_sync_to_async(self._pending_commands)(),
                 }
             )
@@ -127,10 +128,51 @@ class DeviceConsumer(AsyncJsonWebsocketConsumer):
             )
         return desired, cfg
 
-    def _heartbeat(self, state: str | None, app_version: str) -> None:
+    def _heartbeat(self, state: str | None, app_version: str) -> dict | None:
         if state in HUB_ONLY:
             state = None
         set_status(self.device, state, force=False, app_version=app_version, reason="heartbeat")
+
+        from apps.sessions.models import GamingSession, SessionStatus
+        from apps.wallets.models import Wallet
+        from apps.core.money import session_cost
+        from apps.sessions.services import stop_session
+        from apps.synchronization.command_service import queue_device_command
+
+        session = (
+            GamingSession.objects.filter(device=self.device, status=SessionStatus.ACTIVE)
+            .select_related("customer", "customer__wallet")
+            .first()
+        )
+        if not session:
+            return None
+
+        now = timezone.now()
+        elapsed = max(0, int((now - session.started_at).total_seconds()))
+        cost = session_cost(session.hourly_rate, elapsed)
+        wallet = getattr(session.customer, "wallet", None)
+        balance = wallet.balance if wallet else 0
+        available = balance + session.customer.credit_limit - cost
+
+        if available <= 0:
+            logger.warning(
+                "Device %s session %s credit exhausted (%s <= 0). Stopping session.",
+                self.device.name,
+                session.id,
+                available,
+            )
+            queue_device_command(self.device, "client.lock", {"reason": "اتمام اعتبار حساب"})
+            stop_session(session, reason="اتمام خودکار اعتبار")
+            return {"expired": True, "remaining_balance": 0, "cost": cost}
+
+        return {
+            "expired": False,
+            "session_id": str(session.id),
+            "customer_name": session.customer.full_name,
+            "remaining_balance": max(0, balance - cost),
+            "elapsed_seconds": elapsed,
+            "cost": cost,
+        }
 
     def _pending_commands(self) -> list[dict]:
         now = timezone.now()

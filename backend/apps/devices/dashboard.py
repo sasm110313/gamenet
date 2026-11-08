@@ -4,12 +4,13 @@ from __future__ import annotations
 
 from apps.core.redirects import safe_redirect_next
 
+from datetime import datetime, time, timedelta
 import logging
 
 from django.conf import settings
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
-from django.db.models import Q
+from django.db.models import Prefetch, Q, Sum
 from django.http import HttpResponseBadRequest
 from django.shortcuts import get_object_or_404, redirect, render
 from django.utils import timezone
@@ -19,8 +20,11 @@ from apps.audit.models import AuditLog
 from apps.clients.models import ClientDevice, ClientStatus
 from apps.commands.models import DeviceCommand
 from apps.core.roles import require_edge
+from apps.customers.models import Customer
 from apps.devices.models import RegistrationCode
 from apps.devices.services import create_registration_code, deactivate_device
+from apps.ledger.models import LedgerEntry, LedgerEntryType
+from apps.sessions.models import GamingSession, SessionStatus
 from apps.synchronization.cloud_client import CloudClient, CloudRejected, CloudUnavailable
 from apps.synchronization.command_service import queue_device_command
 from apps.synchronization.config import current_config
@@ -59,23 +63,138 @@ def _common():
     }
 
 
+def _station_sort_key(d):
+    name = (d.name or "").upper().strip()
+    if name.startswith("PC-"):
+        part = name[3:]
+        if part.isdigit():
+            return (0, int(part))
+    return (1, name)
+
+
+def _enrich_devices(device_list, now):
+    active_sessions = {
+        s.device_id: s
+        for s in GamingSession.objects.filter(status=SessionStatus.ACTIVE).select_related(
+            "customer", "tariff", "customer_rate"
+        )
+    }
+    for d in device_list:
+        d.active_session = active_sessions.get(d.id)
+        if d.active_session:
+            d.elapsed_seconds = max(0, int((now - d.active_session.started_at).total_seconds()))
+            d.current_cost = int((d.elapsed_seconds / 3600) * d.active_session.hourly_rate)
+        else:
+            d.elapsed_seconds = 0
+            d.current_cost = 0
+    device_list.sort(key=_station_sort_key)
+    return device_list
+
+
 @login_required
 def overview(request):
     ctx = _common()
-    devices = ClientDevice.objects.filter(is_active=True).order_by("name")
+    now = timezone.now()
+    today = timezone.localdate()
+    today_start = timezone.make_aware(datetime.combine(today, time.min))
+    month_start = timezone.make_aware(datetime.combine(today.replace(day=1), time.min))
+
+    device_list = list(ClientDevice.objects.filter(is_active=True))
+    device_list = _enrich_devices(device_list, now)
+
+    total_devices = max(10, len(device_list))
+    active_count = sum(1 for d in device_list if d.status == ClientStatus.ACTIVE or d.active_session)
+    free_count = max(0, total_devices - active_count)
+    locked_count = sum(1 for d in device_list if d.status == ClientStatus.LOCKED and not d.active_session)
+    offline_count = sum(1 for d in device_list if d.status == ClientStatus.OFFLINE)
+
+    today_session_revenue = (
+        GamingSession.objects.filter(
+            ended_at__gte=today_start, status=SessionStatus.COMPLETED
+        ).aggregate(total=Sum("cost"))["total"]
+        or 0
+    )
+    today_deposit_revenue = (
+        LedgerEntry.objects.filter(
+            created_at__gte=today_start, entry_type=LedgerEntryType.DEPOSIT
+        ).aggregate(total=Sum("amount"))["total"]
+        or 0
+    )
+    today_revenue = today_session_revenue + today_deposit_revenue
+
+    month_session_revenue = (
+        GamingSession.objects.filter(
+            ended_at__gte=month_start, status=SessionStatus.COMPLETED
+        ).aggregate(total=Sum("cost"))["total"]
+        or 0
+    )
+    month_deposit_revenue = (
+        LedgerEntry.objects.filter(
+            created_at__gte=month_start, entry_type=LedgerEntryType.DEPOSIT
+        ).aggregate(total=Sum("amount"))["total"]
+        or 0
+    )
+    month_revenue = month_session_revenue + month_deposit_revenue
+
+    customer_count = Customer.objects.filter(is_active=True).count()
+
+    # Chart data for last 7 days
+    revenue_chart = []
+    max_chart_val = 1
+    for i in range(6, -1, -1):
+        d = today - timedelta(days=i)
+        d_start = timezone.make_aware(datetime.combine(d, time.min))
+        d_end = timezone.make_aware(datetime.combine(d, time.max))
+        day_session = (
+            GamingSession.objects.filter(
+                ended_at__gte=d_start, ended_at__lte=d_end, status=SessionStatus.COMPLETED
+            ).aggregate(total=Sum("cost"))["total"]
+            or 0
+        )
+        day_deposit = (
+            LedgerEntry.objects.filter(
+                created_at__gte=d_start, created_at__lte=d_end, entry_type=LedgerEntryType.DEPOSIT
+            ).aggregate(total=Sum("amount"))["total"]
+            or 0
+        )
+        total_val = day_session + day_deposit
+        if total_val > max_chart_val:
+            max_chart_val = total_val
+        revenue_chart.append(
+            {
+                "label": f"{d.month}/{d.day}",
+                "day_name": ["دوشنبه", "سه‌شنبه", "چهارشنبه", "پنج‌شنبه", "جمعه", "شنبه", "یکشنبه"][d.weekday()],
+                "session": day_session,
+                "deposit": day_deposit,
+                "total": total_val,
+                "height_pct": 0,
+            }
+        )
+
+    for item in revenue_chart:
+        item["height_pct"] = max(8, int((item["total"] / max_chart_val) * 100)) if item["total"] > 0 else 5
+
     ctx.update(
         {
-            "devices": devices,
-            "online_count": devices.exclude(
-                status__in=[ClientStatus.OFFLINE, ClientStatus.MAINTENANCE]
-            ).count(),
-            "locked_count": devices.filter(status=ClientStatus.LOCKED).count(),
-            "active_count": devices.filter(status=ClientStatus.ACTIVE).count(),
+            "devices": device_list,
+            "total_devices": total_devices,
+            "active_count": active_count,
+            "locked_count": locked_count,
+            "free_count": free_count,
+            "offline_count": offline_count,
+            "today_revenue": today_revenue,
+            "today_session_revenue": today_session_revenue,
+            "today_deposit_revenue": today_deposit_revenue,
+            "month_revenue": month_revenue,
+            "month_session_revenue": month_session_revenue,
+            "month_deposit_revenue": month_deposit_revenue,
+            "customer_count": customer_count,
+            "revenue_chart": revenue_chart,
             "recent_commands": DeviceCommand.objects.select_related("client")[:8],
             "codes": RegistrationCode.objects.filter(used_at__isnull=True)[:4],
             "outbox_recent": OutboxEvent.objects.order_by("-local_sequence")[:6],
             "outbox_labels": OUTBOX_LABELS,
-            "now": timezone.now(),
+            "now": now,
         }
     )
     return render(request, "edge/overview.html", ctx)
@@ -84,7 +203,11 @@ def overview(request):
 @login_required
 def device_grid(request):
     ctx = _common()
-    ctx["devices"] = ClientDevice.objects.filter(is_active=True).order_by("name")
+    now = timezone.now()
+    device_list = list(ClientDevice.objects.filter(is_active=True).order_by("name"))
+    device_list = _enrich_devices(device_list, now)
+    ctx["devices"] = device_list
+    ctx["now"] = now
     return render(request, "edge/_device_grid.html", ctx)
 
 

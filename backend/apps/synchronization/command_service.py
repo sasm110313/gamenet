@@ -442,6 +442,8 @@ def _dispatch(command_type: str, payload: dict, *, origin: str) -> tuple[dict[st
             customer = create_customer(
                 customer_id=customer_id,
                 full_name=_require(payload, "full_name"),
+                username=payload.get("username", ""),
+                password=payload.get("password", ""),
                 phone=payload.get("phone", ""),
                 group=group,
                 credit_limit=credit_limit,
@@ -457,6 +459,8 @@ def _dispatch(command_type: str, payload: dict, *, origin: str) -> tuple[dict[st
         customer = update_customer(
             existing,
             full_name=_require(payload, "full_name"),
+            username=payload.get("username"),
+            password=payload.get("password"),
             phone=payload.get("phone", ""),
             group=group,
             clear_group=not bool(payload.get("group_id")),

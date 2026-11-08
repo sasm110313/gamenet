@@ -13,6 +13,7 @@ import uuid
 
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
+from django.db import IntegrityError
 from django.shortcuts import get_object_or_404, redirect, render
 from django.views.decorators.http import require_POST
 
@@ -50,12 +51,16 @@ def _request_id(request) -> uuid.UUID | None:
         raise ValueError("شناسه درخواست نامعتبر است.") from exc
 
 
-def _edge(edge_id) -> EdgeNode | None:
-    return (
-        EdgeNode.objects.filter(id=edge_id)
-        .exclude(status=EdgeStatus.REVOKED)
-        .first()
-    )
+def _edge(edge_id=None) -> EdgeNode | None:
+    if edge_id:
+        node = (
+            EdgeNode.objects.filter(id=edge_id)
+            .exclude(status=EdgeStatus.REVOKED)
+            .first()
+        )
+        if node:
+            return node
+    return EdgeNode.objects.exclude(status=EdgeStatus.REVOKED).first()
 
 
 def _audit(request, action: str, command: RemoteCommand) -> None:
@@ -271,40 +276,120 @@ def customers(request):
 
 
 @login_required
-@require_POST
 def customer_create(request):
     require_cloud()
-    try:
-        edge = _edge(request.POST.get("edge_id"))
-        if edge is None:
-            raise ValueError("Edge انتخاب‌شده معتبر نیست.")
-        group_id = request.POST.get("group_id")
-        group = (
-            CustomerGroup.objects.filter(id=group_id, edge_id=edge.id).first()
-            if group_id
-            else None
-        )
-        if group_id and group is None:
-            raise ValueError("گروه انتخاب‌شده معتبر نیست.")
-        _issue(
-            request,
-            edge,
-            "catalog.customer.upsert",
-            {
-                "customer_id": str(uuid.uuid4()),
-                "base_revision": 0,
-                "full_name": (request.POST.get("full_name") or "").strip(),
-                "phone": (request.POST.get("phone") or "").strip(),
-                "group_id": str(group.id) if group else None,
-                "credit_limit": _int(request.POST.get("credit_limit"), "سقف اعتبار"),
-                "notes": (request.POST.get("notes") or "").strip(),
-                "is_active": True,
-            },
-            action="remote.customer.created",
-        )
-    except ValueError as exc:
-        messages.error(request, str(exc))
-    return redirect("cloud_manage_customers")
+    salon_server = _edge(request.POST.get("edge_id") if request.method == "POST" else None)
+
+    if request.method == "POST":
+        try:
+            if salon_server is None:
+                raise ValueError("سرور سالن در دسترس نیست.")
+            group_id = request.POST.get("group_id")
+            group = (
+                CustomerGroup.objects.filter(id=group_id, edge_id=salon_server.id).first()
+                if group_id
+                else None
+            )
+            if group_id and group is None:
+                raise ValueError("گروه انتخاب‌شده معتبر نیست.")
+
+            customer_id = str(uuid.uuid4())
+            full_name = (request.POST.get("full_name") or "").strip()
+            username = (request.POST.get("username") or "").strip()
+            password = (request.POST.get("password") or "").strip()
+            phone = (request.POST.get("phone") or "").strip()
+            credit_limit = _int(request.POST.get("credit_limit", 60000), "سقف اعتبار")
+            initial_deposit = _int(request.POST.get("initial_deposit", 0), "شارژ اولیه")
+            notes = (request.POST.get("notes") or "").strip()
+
+            if not full_name:
+                raise ValueError("وارد کردن نام و نام خانوادگی الزامی است.")
+
+            _issue(
+                request,
+                salon_server,
+                "catalog.customer.upsert",
+                {
+                    "customer_id": customer_id,
+                    "base_revision": 0,
+                    "full_name": full_name,
+                    "username": username,
+                    "password": password,
+                    "phone": phone,
+                    "group_id": str(group.id) if group else None,
+                    "credit_limit": credit_limit,
+                    "notes": notes,
+                    "is_active": True,
+                },
+                action="remote.customer.created",
+            )
+
+            # Instant cloud replica projection so admin immediately sees it
+            from apps.customers.models import Customer
+            from apps.wallets.models import Wallet
+            from apps.ledger.models import LedgerEntry, LedgerEntryType
+
+            cloud_cust, _ = Customer.objects.update_or_create(
+                id=customer_id,
+                defaults={
+                    "edge_id": salon_server.id,
+                    "full_name": full_name,
+                    "username": username,
+                    "phone": phone,
+                    "group": group,
+                    "credit_limit": credit_limit,
+                    "notes": notes,
+                    "is_active": True,
+                    "is_replica": True,
+                },
+            )
+            if password:
+                cloud_cust.set_password(password)
+                cloud_cust.save(update_fields=["password_hash"])
+            wallet, _ = Wallet.objects.get_or_create(customer=cloud_cust, defaults={"balance": 0})
+
+            if initial_deposit > 0:
+                _issue(
+                    request,
+                    salon_server,
+                    "wallet.deposit",
+                    {
+                        "customer_id": customer_id,
+                        "amount": initial_deposit,
+                        "reason": "شارژ اولیه هنگام ثبت نام",
+                    },
+                    action="remote.customer.initial_deposit",
+                )
+                wallet.balance += initial_deposit
+                wallet.save(update_fields=["balance"])
+                LedgerEntry.objects.create(
+                    customer=cloud_cust,
+                    edge_id=salon_server.id,
+                    entry_type=LedgerEntryType.DEPOSIT,
+                    amount=initial_deposit,
+                    balance_after=wallet.balance,
+                    note="شارژ اولیه هنگام ثبت نام",
+                    is_replica=True,
+                )
+
+            messages.success(request, f"مشتری «{full_name}» با موفقیت ثبت شد.")
+            return redirect("cloud_customers")
+        except (ValueError, IntegrityError) as exc:
+            if "customers_unique_phone_per_edge" in str(exc) or "phone" in str(exc):
+                messages.error(request, "مشتری دیگری با این شماره تماس از قبل ثبت شده است.")
+            else:
+                messages.error(request, str(exc))
+
+    # GET request: render the form
+    groups = CustomerGroup.objects.filter(is_active=True).order_by("name")
+    return render(
+        request,
+        "cloud/customer_create.html",
+        {
+            "salon_server": salon_server,
+            "groups": groups,
+        },
+    )
 
 
 @login_required

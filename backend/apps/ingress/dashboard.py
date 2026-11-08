@@ -4,11 +4,12 @@ from __future__ import annotations
 
 from apps.core.redirects import safe_redirect_next
 
+from datetime import datetime, time, timedelta
 import logging
-from datetime import timedelta
 
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
+from django.db.models import Q, Sum
 from django.http import HttpResponseBadRequest
 from django.shortcuts import get_object_or_404, redirect, render
 from django.utils import timezone
@@ -20,6 +21,7 @@ from apps.commands.models import CommandStatus, RemoteCommand
 from apps.core.roles import require_cloud
 from apps.customers.models import Customer
 from apps.devices.models import RegistrationCode
+from apps.ledger.models import LedgerEntry, LedgerEntryType
 from apps.sessions.models import GamingSession, SessionStatus
 from apps.synchronization.command_service import issue_command
 from apps.synchronization.models import (
@@ -29,7 +31,6 @@ from apps.synchronization.models import (
     EdgeStatus,
     SyncEvent,
 )
-from django.db.models import Q
 import uuid
 
 logger = logging.getLogger("gamenet.dashboard.cloud")
@@ -55,7 +56,18 @@ def _counts():
     }
 
 
-def _annotate_devices(devices_qs):
+def _station_sort_key(d):
+    name = (d.name or "").upper().strip()
+    if name.startswith("PC-"):
+        part = name[3:]
+        if part.isdigit():
+            return (0, int(part))
+    return (1, name)
+
+
+def _annotate_devices(devices_qs, now=None):
+    if now is None:
+        now = timezone.now()
     devices = list(devices_qs)
     if not devices:
         return []
@@ -67,49 +79,137 @@ def _annotate_devices(devices_qs):
         s.device_id: s
         for s in GamingSession.objects.filter(
             device_id__in=device_ids, status=SessionStatus.ACTIVE
-        ).select_related("customer")
+        ).select_related("customer", "tariff")
     }
 
     for d in devices:
         d.edge_node = edges.get(d.edge_id)
         d.active_session = active_sessions.get(d.id)
+        if d.active_session:
+            d.elapsed_seconds = max(0, int((now - d.active_session.started_at).total_seconds()))
+            d.current_cost = int((d.elapsed_seconds / 3600) * d.active_session.hourly_rate)
+        else:
+            d.elapsed_seconds = 0
+            d.current_cost = 0
+
+    devices.sort(key=_station_sort_key)
     return devices
 
 
 @login_required
 def overview(request):
     require_cloud()
-    ctx = _counts()
-    devices_raw = ClientDevice.objects.filter(is_active=True).order_by("name")[:50]
-    ctx.update(
-        {
-            "edges": EdgeNode.objects.exclude(status=EdgeStatus.REVOKED).order_by("name"),
-            "devices": _annotate_devices(devices_raw),
-            "commands": RemoteCommand.objects.select_related("edge").order_by("-issued_at")[:8],
-            "events": SyncEvent.objects.select_related("edge").order_by("-local_sequence")[:8],
-            "config": ConfigSnapshot.objects.filter(is_active=True).order_by("-version").first(),
-        }
+    now = timezone.now()
+    today = timezone.localdate()
+    today_start = timezone.make_aware(datetime.combine(today, time.min))
+    month_start = timezone.make_aware(datetime.combine(today.replace(day=1), time.min))
+
+    # Single local salon server
+    salon_server = EdgeNode.objects.exclude(status=EdgeStatus.REVOKED).first()
+
+    devices_raw = ClientDevice.objects.filter(is_active=True)
+    devices_annotated = _annotate_devices(devices_raw, now)
+
+    total_devices = max(10, len(devices_annotated))
+    active_count = sum(1 for d in devices_annotated if d.status == ClientStatus.ACTIVE or d.active_session)
+    free_count = max(0, total_devices - active_count)
+    locked_count = sum(1 for d in devices_annotated if d.status == ClientStatus.LOCKED and not d.active_session)
+    offline_count = sum(1 for d in devices_annotated if d.status == ClientStatus.OFFLINE)
+
+    today_session_revenue = (
+        GamingSession.objects.filter(
+            ended_at__gte=today_start, status=SessionStatus.COMPLETED
+        ).aggregate(total=Sum("cost"))["total"]
+        or 0
     )
+    today_deposit_revenue = (
+        LedgerEntry.objects.filter(
+            created_at__gte=today_start, entry_type=LedgerEntryType.DEPOSIT
+        ).aggregate(total=Sum("amount"))["total"]
+        or 0
+    )
+    today_revenue = today_session_revenue + today_deposit_revenue
+
+    month_session_revenue = (
+        GamingSession.objects.filter(
+            ended_at__gte=month_start, status=SessionStatus.COMPLETED
+        ).aggregate(total=Sum("cost"))["total"]
+        or 0
+    )
+    month_deposit_revenue = (
+        LedgerEntry.objects.filter(
+            created_at__gte=month_start, entry_type=LedgerEntryType.DEPOSIT
+        ).aggregate(total=Sum("amount"))["total"]
+        or 0
+    )
+    month_revenue = month_session_revenue + month_deposit_revenue
+
+    customer_count = Customer.objects.filter(is_active=True).count()
+
+    # Chart data for last 7 days
+    revenue_chart = []
+    max_chart_val = 1
+    for i in range(6, -1, -1):
+        d = today - timedelta(days=i)
+        d_start = timezone.make_aware(datetime.combine(d, time.min))
+        d_end = timezone.make_aware(datetime.combine(d, time.max))
+        day_session = (
+            GamingSession.objects.filter(
+                ended_at__gte=d_start, ended_at__lte=d_end, status=SessionStatus.COMPLETED
+            ).aggregate(total=Sum("cost"))["total"]
+            or 0
+        )
+        day_deposit = (
+            LedgerEntry.objects.filter(
+                created_at__gte=d_start, created_at__lte=d_end, entry_type=LedgerEntryType.DEPOSIT
+            ).aggregate(total=Sum("amount"))["total"]
+            or 0
+        )
+        total_val = day_session + day_deposit
+        if total_val > max_chart_val:
+            max_chart_val = total_val
+        revenue_chart.append(
+            {
+                "label": f"{d.month}/{d.day}",
+                "day_name": ["دوشنبه", "سه‌شنبه", "چهارشنبه", "پنج‌شنبه", "جمعه", "شنبه", "یکشنبه"][d.weekday()],
+                "session": day_session,
+                "deposit": day_deposit,
+                "total": total_val,
+                "height_pct": 0,
+            }
+        )
+
+    for item in revenue_chart:
+        item["height_pct"] = max(8, int((item["total"] / max_chart_val) * 100)) if item["total"] > 0 else 5
+
+    ctx = {
+        "salon_server": salon_server,
+        "devices": devices_annotated,
+        "total_devices": total_devices,
+        "active_count": active_count,
+        "locked_count": locked_count,
+        "free_count": free_count,
+        "offline_count": offline_count,
+        "today_revenue": today_revenue,
+        "today_session_revenue": today_session_revenue,
+        "today_deposit_revenue": today_deposit_revenue,
+        "month_revenue": month_revenue,
+        "month_session_revenue": month_session_revenue,
+        "month_deposit_revenue": month_deposit_revenue,
+        "customer_count": customer_count,
+        "revenue_chart": revenue_chart,
+        "now": now,
+    }
     return render(request, "cloud/overview.html", ctx)
 
 
 @login_required
 def device_grid(request):
     require_cloud()
-    edge_id = request.GET.get("edge")
-    q = request.GET.get("q", "").strip()
-    status_filter = request.GET.get("status", "").strip()
-
-    qs = ClientDevice.objects.filter(is_active=True)
-    if edge_id:
-        qs = qs.filter(edge_id=edge_id)
-    if q:
-        qs = qs.filter(Q(name__icontains=q) | Q(hostname__icontains=q) | Q(ip_address__icontains=q))
-    if status_filter:
-        qs = qs.filter(status=status_filter)
-
-    devices = _annotate_devices(qs.order_by("name")[:100])
-    return render(request, "cloud/_device_grid.html", {"devices": devices})
+    now = timezone.now()
+    qs = ClientDevice.objects.filter(is_active=True).order_by("name")
+    devices = _annotate_devices(qs, now)
+    return render(request, "cloud/_device_grid.html", {"devices": devices, "now": now})
 
 
 @login_required
@@ -256,14 +356,20 @@ def create_client_code(request):
 @login_required
 def edges(request):
     require_cloud()
-    ctx = _counts()
-    ctx.update(
-        {
-            "edges": EdgeNode.objects.exclude(status=EdgeStatus.REVOKED).order_by("name"),
-            "codes": EdgeRegistrationCode.objects.select_related("used_by").order_by("-created_at")[:10],
-        }
+    salon_server = EdgeNode.objects.exclude(status=EdgeStatus.REVOKED).first()
+    devices = (
+        ClientDevice.objects.filter(is_active=True).order_by("name")
+        if salon_server
+        else []
     )
-    return render(request, "cloud/edges.html", ctx)
+    return render(
+        request,
+        "cloud/edges.html",
+        {
+            "salon_server": salon_server,
+            "devices": devices,
+        },
+    )
 
 
 @login_required
@@ -304,7 +410,7 @@ def create_code(request):
         object_id=str(reg.id),
         ip_address=request.META.get("REMOTE_ADDR"),
     )
-    messages.success(request, f"کد ثبت Edge: {reg.code} (۲۴ ساعت اعتبار)")
+    messages.success(request, f"کد ثبت سرور سالن: {reg.code} (۲۴ ساعت اعتبار)")
     return redirect("cloud_edges")
 
 
@@ -322,13 +428,6 @@ def edge_action(request, edge_id):
     if action not in mapping:
         return HttpResponseBadRequest("unknown action")
     command_type, payload = mapping[action]
-    if action == "test_event":
-        # The cloud command makes the *edge* emit a real outbox event, which then
-        # round-trips through ingest — the Phase 0 end-to-end proof.
-        issue_command(edge, "edge.test_event", payload, actor=request.user)
-        messages.success(request, "دستور ساخت رویداد آزمایشی برای Edge ارسال شد.")
-        return redirect("cloud_edge_detail", edge_id=edge.id)
-
     issue_command(edge, command_type, payload, actor=request.user)
     AuditLog.objects.create(
         actor=request.user,
@@ -338,8 +437,8 @@ def edge_action(request, edge_id):
         object_id=str(edge.id),
         ip_address=request.META.get("REMOTE_ADDR"),
     )
-    messages.success(request, f"دستور {command_type} برای {edge.name} ارسال شد.")
-    return redirect("cloud_edge_detail", edge_id=edge.id)
+    messages.success(request, f"دستور برای سرور سالن ارسال شد.")
+    return safe_redirect_next(request, "cloud_edges")
 
 
 @login_required

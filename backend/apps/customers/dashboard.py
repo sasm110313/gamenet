@@ -72,35 +72,62 @@ def customers(request):
 
 
 @login_required
-@require_POST
 def customer_create(request):
-    group = None
-    group_id = request.POST.get("group_id")
-    if group_id:
-        group = CustomerGroup.objects.filter(id=group_id).first()
-        if group is None:
-            messages.error(request, "گروه انتخاب‌شده معتبر نیست.")
-            return redirect("edge_customers")
-    try:
-        credit_limit = _int(
-            request.POST.get("credit_limit"),
-            default=int(edge_common()["config"].get("default_credit_limit", 60_000)),
-        )
-        customer = create_customer(
-            full_name=request.POST.get("full_name", ""),
-            phone=request.POST.get("phone", ""),
-            group=group,
-            credit_limit=credit_limit,
-            notes=request.POST.get("notes", ""),
-            actor=request.user,
-        )
-    except (CustomerError, ValueError) as exc:
-        messages.error(request, str(exc))
-        return redirect("edge_customers")
+    if request.method == "POST":
+        group = None
+        group_id = request.POST.get("group_id")
+        if group_id:
+            group = CustomerGroup.objects.filter(id=group_id).first()
+            if group is None:
+                messages.error(request, "گروه انتخاب‌شده معتبر نیست.")
+                return redirect("edge_customer_create")
+        try:
+            credit_limit = _int(
+                request.POST.get("credit_limit"),
+                default=int(edge_common()["config"].get("default_credit_limit", 60_000)),
+            )
+            initial_deposit = _int(request.POST.get("initial_deposit", 0), default=0)
+            full_name = request.POST.get("full_name", "").strip()
+            username = request.POST.get("username", "").strip()
+            password = request.POST.get("password", "").strip()
+            phone = request.POST.get("phone", "").strip()
+            notes = request.POST.get("notes", "").strip()
 
-    _audit(request, "customer.created", "customer", customer.id, {"name": customer.full_name})
-    messages.success(request, f"مشتری {customer.full_name} ثبت شد.")
-    return redirect("edge_customer_detail", customer_id=customer.id)
+            if not full_name:
+                raise CustomerError("وارد کردن نام و نام خانوادگی الزامی است.")
+
+            customer = create_customer(
+                full_name=full_name,
+                username=username,
+                password=password,
+                phone=phone,
+                group=group,
+                credit_limit=credit_limit,
+                notes=notes,
+                actor=request.user,
+            )
+            if initial_deposit > 0:
+                from apps.ledger.services import deposit_manual
+                deposit_manual(
+                    customer=customer,
+                    amount=initial_deposit,
+                    note="شارژ اولیه هنگام ثبت نام",
+                    actor=request.user,
+                )
+        except (CustomerError, ValueError) as exc:
+            messages.error(request, str(exc))
+            return redirect("edge_customer_create")
+
+        _audit(request, "customer.created", "customer", customer.id, {"name": customer.full_name})
+        messages.success(request, f"مشتری {customer.full_name} با موفقیت ثبت شد.")
+        return redirect("edge_customer_detail", customer_id=customer.id)
+
+    # GET
+    ctx = edge_common()
+    ctx.update({
+        "groups": CustomerGroup.objects.filter(is_active=True).order_by("name"),
+    })
+    return render(request, "edge/customer_create.html", ctx)
 
 
 @login_required
@@ -253,6 +280,8 @@ def customer_update(request, customer_id):
         update_customer(
             customer,
             full_name=request.POST.get("full_name", ""),
+            username=request.POST.get("username", ""),
+            password=request.POST.get("password", "") or None,
             phone=request.POST.get("phone", ""),
             group=group,
             clear_group=not bool(group),

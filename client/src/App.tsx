@@ -73,6 +73,15 @@ function ShieldIcon({ className = "" }: { className?: string }): JSX.Element {
   );
 }
 
+function UserIcon({ className = "" }: { className?: string }): JSX.Element {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className={className} aria-hidden="true">
+      <circle cx="12" cy="8" r="4" />
+      <path d="M6 20v-1a6 6 0 0 1 12 0v1" strokeLinecap="round" />
+    </svg>
+  );
+}
+
 function WifiIcon({ className = "" }: { className?: string }): JSX.Element {
   return (
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className={className} aria-hidden="true">
@@ -339,53 +348,174 @@ function LockedScreen({
   onPreview: () => void;
 }): JSX.Element {
   const ready = state.phase === "connected";
-  return (
-    <section className="fade-up mx-auto w-full max-w-3xl">
-      <div className="panel relative overflow-hidden p-6 text-center sm:p-8">
-        <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-l from-transparent via-neon/60 to-transparent" />
-        <div className="pointer-events-none absolute left-1/2 top-0 h-72 w-72 -translate-x-1/2 rounded-full bg-neon/5 blur-3xl" />
+  const [username, setUsername] = useState("");
+  const [password, setPassword] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+  const [loginError, setLoginError] = useState("");
 
-        <div className="relative mx-auto grid h-32 w-32 place-items-center">
-          <div className="lock-orbit">
-            <LockIcon className="h-12 w-12 text-neon" />
+  const handleLogin = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!username.trim() || !password) {
+      setLoginError("لطفاً نام کاربری و رمز عبور را وارد کنید.");
+      return;
+    }
+    setLoginError("");
+    setSubmitting(true);
+    try {
+      const res = await window.gamenet.userLogin({ username: username.trim(), password });
+      if (!res.ok) {
+        setLoginError(res.error || "نام کاربری یا رمز عبور اشتباه است.");
+      }
+    } catch (err) {
+      setLoginError(err instanceof Error ? err.message : "خطا در برقراری ارتباط با هاب");
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  return (
+    <section className="fade-up mx-auto w-full max-w-4xl">
+      <div className="grid gap-6 md:grid-cols-2">
+        {/* Left: Station status info */}
+        <div className="panel relative flex flex-col justify-between overflow-hidden p-6 sm:p-8">
+          <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-l from-transparent via-neon/60 to-transparent" />
+          <div className="pointer-events-none absolute -left-20 -top-20 h-64 w-64 rounded-full bg-neon/5 blur-3xl" />
+
+          <div>
+            <div className="flex items-center justify-between">
+              <span className="chip">
+                <span className="h-2 w-2 rounded-full bg-neon animate-pulse" />
+                {state.deviceName || "رایانه بازی"}
+              </span>
+              <span className="text-xs text-mist">{state.hubName || "هاب سالن"}</span>
+            </div>
+
+            <div className="mt-8 text-center">
+              <div className="mx-auto grid h-24 w-24 place-items-center rounded-2xl border border-line/70 bg-ink/60 shadow-inner">
+                <LockIcon className="h-10 w-10 text-mist" />
+              </div>
+              <h1 className="mt-4 text-2xl font-bold">این رایانه قفل است</h1>
+              <p className="mt-2 text-xs leading-6 text-mist">
+                برای شروع بازی، نام کاربری و رمز عبور خود را وارد کنید یا از مسئول سالن بخواهید بازی را باز کند.
+              </p>
+            </div>
+
+            <OfflineBanner state={state} />
+          </div>
+
+          <div className="mt-6 border-t border-line/60 pt-4">
+            <div className="grid grid-cols-2 gap-2 text-center text-xs">
+              <div className="rounded-xl border border-line/60 bg-ink/40 p-2.5">
+                <span className="text-[10px] text-mist block">وضعیت شبکه</span>
+                <span className="font-semibold text-neon mt-0.5 block">{PHASE[state.phase].label}</span>
+              </div>
+              <div className="rounded-xl border border-line/60 bg-ink/40 p-2.5">
+                <span className="text-[10px] text-mist block">تعرفه ساعت</span>
+                <span className="font-semibold text-paper mt-0.5 block">بر اساس حساب کاربری</span>
+              </div>
+            </div>
+
+            {state.canPreview && (
+              <button
+                type="button"
+                className="mt-3 w-full btn btn-ghost text-xs py-2"
+                onClick={onPreview}
+                disabled={!ready || busy}
+              >
+                پیش‌نمایش محیط بازی (توسعه)
+              </button>
+            )}
           </div>
         </div>
 
-        <span className="chip relative mt-5">{state.deviceName || "رایانه"} • {state.hubName || "هاب سالن"}</span>
-        <h1 className="relative mt-3 text-3xl font-bold">این رایانه قفل است</h1>
-        <p className="relative mx-auto mt-2 max-w-xl text-sm leading-6 text-mist">
-          برای شروع بازی، مدیر سالن باید نشست را از داشبورد باز کند. تا آن زمان
-          صفحه قفل می‌ماند و هیچ هزینه‌ای ثبت نمی‌شود.
-        </p>
+        {/* Right: Gamer Login Form */}
+        <form onSubmit={handleLogin} className="panel relative flex flex-col justify-between overflow-hidden p-6 sm:p-8" noValidate>
+          <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-l from-transparent via-neon/60 to-transparent" />
 
-        <OfflineBanner state={state} />
+          <div>
+            <div className="flex items-center gap-3">
+              <span className="grid h-10 w-10 place-items-center rounded-xl bg-neon/10 text-neon border border-neon/25">
+                <UserIcon className="h-5 w-5" />
+              </span>
+              <div>
+                <h2 className="text-lg font-bold text-paper">ورود گیمر به سیستم</h2>
+                <p className="text-[11px] text-mist">محاسبه دقیق زمان و کسر خودکار از کیف پول</p>
+              </div>
+            </div>
 
-        {state.canPreview ? <div className="relative mt-6 flex flex-col items-stretch justify-center gap-3 sm:flex-row">
-          <button
-            type="button"
-            className="btn btn-primary sm:min-w-64"
-            onClick={onPreview}
-            disabled={!ready || busy}
-          >
-            {busy ? <Spinner className="h-4 w-4" /> : <UnlockIcon className="h-4 w-4" />}
-            پیش‌نمایش بدون صورتحساب
-          </button>
-        </div> : null}
-        {state.canPreview ? <p className="relative mt-3 text-[11px] leading-5 text-mist">
-          {ready
-            ? "پیش‌نمایش فقط برای آزمایش صفحه است؛ نشست و صورتحساب ایجاد نمی‌کند."
-            : "پیش‌نمایش پس از برقراری ارتباط با هاب فعال می‌شود."}
-        </p> : null}
-      </div>
+            <div className="mt-6 space-y-4">
+              <Field id="login-username" label="نام کاربری یا شماره همراه">
+                <input
+                  id="login-username"
+                  className="field text-sm"
+                  dir="ltr"
+                  autoComplete="username"
+                  placeholder="ali یا 0912..."
+                  value={username}
+                  onChange={(e) => setUsername(e.target.value)}
+                  disabled={!ready || submitting}
+                  autoFocus
+                />
+              </Field>
 
-      <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-3">
-        <InfoChip label="هاب" value={state.hubName || "—"} />
-        <InfoChip label="وضعیت اتصال" value={PHASE[state.phase].label} />
-        <InfoChip label="نسخه تنظیمات" value={`v${fa(state.configVersion)}`} />
+              <Field id="login-password" label="رمز عبور">
+                <input
+                  id="login-password"
+                  type="password"
+                  className="field text-sm font-mono"
+                  dir="ltr"
+                  autoComplete="current-password"
+                  placeholder="••••••••"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  disabled={!ready || submitting}
+                />
+              </Field>
+            </div>
+
+            {loginError ? (
+              <div role="alert" className="mt-4 rounded-xl border border-danger/30 bg-danger/10 p-3 text-xs leading-5 text-danger">
+                {loginError}
+              </div>
+            ) : null}
+          </div>
+
+          <div className="mt-6 pt-4 border-t border-line/60">
+            <button
+              type="submit"
+              className="btn btn-primary w-full text-sm py-3"
+              disabled={!ready || submitting}
+            >
+              {submitting ? <Spinner className="h-4 w-4" /> : <GamepadMark className="h-4 w-4" />}
+              {submitting ? "در حال اعتبارسنجی…" : "ورود و شروع بازی"}
+            </button>
+            <p className="mt-3 text-center text-[11px] text-mist leading-5">
+              حساب کاربری ندارید یا شارژ تمام شده؟ به مسئول صندوق سالن مراجعه کنید.
+            </p>
+          </div>
+        </form>
       </div>
     </section>
   );
 }
+
+interface GameItem {
+  id: string;
+  name: string;
+  category: string;
+  icon: string;
+  executable?: string;
+  color: string;
+}
+
+const GAMES_LIST: GameItem[] = [
+  { id: "cs2", name: "Counter-Strike 2", category: "شوتر رقابتی", icon: "🎯", executable: "cs2.exe", color: "border-amber/30 bg-amber/[0.06]" },
+  { id: "dota2", name: "Dota 2", category: "استراتژی تیمی", icon: "⚔️", executable: "dota2.exe", color: "border-danger/30 bg-danger/[0.06]" },
+  { id: "fc24", name: "EA SPORTS FC 24", category: "فوتبال و ورزشی", icon: "⚽", executable: "fc24.exe", color: "border-neon/30 bg-neon/[0.06]" },
+  { id: "gta5", name: "Grand Theft Auto V", category: "جهان‌باز و اکشن", icon: "🚗", executable: "gta5.exe", color: "border-sky-500/30 bg-sky-500/[0.06]" },
+  { id: "warzone", name: "Call of Duty: Warzone", category: "بتل رویال", icon: "🪖", executable: "warzone.exe", color: "border-purple-500/30 bg-purple-500/[0.06]" },
+  { id: "nfs", name: "Need for Speed", category: "اتومبیل‌رانی", icon: "🏎️", executable: "nfs.exe", color: "border-orange-500/30 bg-orange-500/[0.06]" },
+];
 
 function UnlockedScreen({
   state,
@@ -396,55 +526,172 @@ function UnlockedScreen({
   busy: boolean;
   onLock: () => void;
 }): JSX.Element {
+  const session = state.userSession;
   const [unlockedAt, setUnlockedAt] = useState(() => Date.now());
+  const [activeGameId, setActiveGameId] = useState<string | null>(null);
+  const [launchingId, setLaunchingId] = useState<string | null>(null);
+
   useEffect(() => {
     setUnlockedAt(Date.now());
   }, [state.locked]);
   const now = useNow(!state.locked);
-  const elapsed = useMemo(() => duration(now - unlockedAt), [now, unlockedAt]);
+  const elapsedSec = Math.max(0, Math.floor((now - unlockedAt) / 1000));
+  const elapsedFormatted = useMemo(() => duration(now - unlockedAt), [now, unlockedAt]);
+
+  const hourlyRate = session?.hourlyRate || 40000;
+  const currentCost = Math.ceil((elapsedSec * hourlyRate) / 3600);
+  const remainingWallet = session ? Math.max(0, session.walletBalance - currentCost) : 0;
+
+  const handleLaunchGame = async (game: GameItem) => {
+    setLaunchingId(game.id);
+    try {
+      const res = await window.gamenet.launchGame({
+        id: game.id,
+        name: game.name,
+        executable: game.executable,
+      });
+      if (res.ok) {
+        setActiveGameId(game.id);
+      }
+    } catch {
+      // Ignored
+    } finally {
+      setLaunchingId(null);
+    }
+  };
 
   return (
-    <section className="fade-up mx-auto w-full max-w-4xl">
-      <div className="panel relative overflow-hidden p-8 sm:p-10">
+    <section className="fade-up mx-auto w-full max-w-4xl space-y-6">
+      <div className="panel relative overflow-hidden p-6 sm:p-10">
         <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-l from-transparent via-neon/70 to-transparent" />
         <div className="pointer-events-none absolute -left-20 -top-24 h-72 w-72 rounded-full bg-neon/10 blur-3xl" />
 
-        <div className="relative flex flex-col justify-between gap-8 md:flex-row md:items-start">
+        <div className="relative flex flex-col justify-between gap-6 md:flex-row md:items-start">
           <div className="min-w-0">
             <span className="chip chip-live">
-              <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-neon" />
-              رایانه از طرف هاب باز شده است
+              <span className="h-2 w-2 animate-pulse rounded-full bg-neon" />
+              نشست بازی فعال است
             </span>
-            <h1 className="mt-5 text-3xl font-bold sm:text-4xl">
-              آماده بازی، <span className="text-neon">{state.deviceName || "رایانه"}</span>
+            <h1 className="mt-4 text-3xl font-bold sm:text-4xl text-paper">
+              خوش آمدید، <span className="text-neon">{session?.customerName || state.deviceName || "گیمر عزیز"}</span>
             </h1>
-            <p className="mt-3 max-w-lg text-sm leading-7 text-mist">
-              وضعیت نشست و هزینه را از مسئول سالن پیگیری کنید.
+            <p className="mt-2 text-sm text-mist">
+              {session?.username ? `@${session.username} • ` : ""}{session?.tariffName || "تعرفه بازی"} ({fa(hourlyRate.toLocaleString())} تومان/ساعت)
             </p>
           </div>
 
-          <div className="shrink-0 rounded-2xl border border-neon/20 bg-neon/[0.06] px-6 py-5 text-center">
-            <p className="text-[10px] uppercase tracking-[0.18em] text-mist">زمان از باز شدن صفحه</p>
-            <p className="timer mt-2 text-3xl font-bold text-neon">{elapsed}</p>
-            <p className="mt-1 text-[10px] text-mist">مبنای صورتحساب نیست</p>
+          <div className="shrink-0 rounded-2xl border border-neon/30 bg-neon/[0.08] px-7 py-5 text-center shadow-glow">
+            <p className="text-[10px] uppercase tracking-[0.18em] text-mist">مدت زمان بازی</p>
+            <p className="timer mt-2 text-3xl font-bold text-neon">{elapsedFormatted}</p>
+            <p className="mt-1 text-[11px] text-mist font-medium">هزینه جاری: {fa(currentCost.toLocaleString())} ت</p>
           </div>
         </div>
 
-        <div className="relative mt-9 grid grid-cols-2 gap-3 sm:grid-cols-4">
-          <InfoChip label="هاب" value={state.hubName || "—"} />
-          <InfoChip label="اتصال" value={PHASE[state.phase].label} />
-          <InfoChip label="تنظیمات" value={`v${fa(state.configVersion)}`} />
-          <InfoChip label="ضربان" value={`${fa(state.heartbeatSeconds)} ثانیه`} />
+        {/* Low balance warning */}
+        {remainingWallet <= 5000 && (
+          <div className="mt-4 rounded-xl border border-amber/40 bg-amber/10 p-3 text-xs text-amber flex items-center gap-2">
+            <span>⚠️</span>
+            <span>اعتبار شما رو به پایان است ({fa(remainingWallet.toLocaleString())} تومان). جهت تمدید به مسئول صندوق مراجعه فرمایید.</span>
+          </div>
+        )}
+
+        {/* Live Metrics */}
+        <div className="relative mt-6 grid grid-cols-2 gap-3 sm:grid-cols-4">
+          <div className="rounded-2xl border border-line/70 bg-ink/50 p-4">
+            <p className="text-[10px] uppercase tracking-wider text-mist">دستگاه</p>
+            <p className="mt-1 text-sm font-bold text-paper truncate">{state.deviceName || "PC-01"}</p>
+          </div>
+          <div className="rounded-2xl border border-line/70 bg-ink/50 p-4">
+            <p className="text-[10px] uppercase tracking-wider text-mist">مانده کیف پول</p>
+            <p className="mt-1 text-sm font-bold text-neon">{session ? `${fa(remainingWallet.toLocaleString())} ت` : "—"}</p>
+          </div>
+          <div className="rounded-2xl border border-line/70 bg-ink/50 p-4">
+            <p className="text-[10px] uppercase tracking-wider text-mist">نرخ تعرفه</p>
+            <p className="mt-1 text-sm font-bold text-paper">{fa(hourlyRate.toLocaleString())} ت/س</p>
+          </div>
+          <div className="rounded-2xl border border-line/70 bg-ink/50 p-4">
+            <p className="text-[10px] uppercase tracking-wider text-mist">هاب سالن محلی</p>
+            <p className="mt-1 text-sm font-bold text-mist truncate">{state.hubName || "سالن اصلی"}</p>
+          </div>
+        </div>
+
+        {/* ======================================================== */}
+        {/* Game Launcher Section */}
+        {/* ======================================================== */}
+        <div className="mt-8 border-t border-line/60 pt-6">
+          <div className="flex items-center justify-between mb-4">
+            <div>
+              <h2 className="text-lg font-bold text-paper flex items-center gap-2">
+                <span>🎮</span> منوی بازی‌ها (لانچر کیوسک سالن)
+              </h2>
+              <p className="text-xs text-mist mt-0.5">روی بازی مورد نظر کلیک کنید تا اجرا و فعال شود</p>
+            </div>
+            {activeGameId && (
+              <span className="chip border-neon/40 text-neon bg-neon/10">
+                <span className="h-2 w-2 rounded-full bg-neon animate-pulse" />
+                یک بازی در حال اجرا است
+              </span>
+            )}
+          </div>
+
+          <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+            {GAMES_LIST.map((game) => {
+              const isRunning = activeGameId === game.id;
+              const isLaunching = launchingId === game.id;
+
+              return (
+                <div
+                  key={game.id}
+                  className={`rounded-2xl border p-4 transition-all duration-150 flex flex-col justify-between ${game.color} ${isRunning ? "ring-2 ring-neon" : "hover:scale-[1.02]"}`}
+                >
+                  <div className="flex items-start justify-between">
+                    <span className="text-2xl">{game.icon}</span>
+                    <span className="text-[10px] text-mist font-medium px-2 py-0.5 rounded-md bg-ink/60 border border-line/50">
+                      {game.category}
+                    </span>
+                  </div>
+
+                  <div className="mt-3">
+                    <h3 className="text-sm font-bold text-paper">{game.name}</h3>
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={() => handleLaunchGame(game)}
+                    disabled={isLaunching || busy}
+                    className={`mt-4 w-full text-xs py-2 rounded-xl font-bold flex items-center justify-center gap-1.5 transition-all ${
+                      isRunning
+                        ? "bg-neon text-ink hover:bg-neon/90"
+                        : "bg-ink/70 hover:bg-ink text-paper border border-line/70"
+                    }`}
+                  >
+                    {isLaunching ? (
+                      <Spinner className="h-3.5 w-3.5" />
+                    ) : isRunning ? (
+                      <span>در حال اجرا • اجرای مجدد</span>
+                    ) : (
+                      <span>شروع بازی</span>
+                    )}
+                  </button>
+                </div>
+              );
+            })}
+          </div>
         </div>
 
         <div className="relative mt-8 flex flex-wrap items-center justify-between gap-4 border-t border-line/60 pt-6">
-          <p className="flex items-center gap-2 text-[11px] text-mist">
+          <p className="flex items-center gap-2 text-xs text-mist">
             <ShieldIcon className="h-4 w-4 text-neon" />
-            قفل ایمنی هنگام قطع ارتباط به‌صورت خودکار فعال می‌شود.
+            کیوسک مد فعال است؛ با خروج، تمامی برنامه‌ها بسته شده و سیستم قفل می‌شود.
           </p>
-          <button type="button" className="btn btn-ghost" onClick={onLock} disabled={busy}>
+          <button
+            type="button"
+            className="btn btn-ghost hover:bg-danger/20 hover:text-danger hover:border-danger/40 transition-colors"
+            onClick={onLock}
+            disabled={busy}
+          >
             {busy ? <Spinner className="h-4 w-4" /> : <LockIcon className="h-4 w-4" />}
-            قفل کردن رایانه
+            پایان بازی و خروج از حساب
           </button>
         </div>
       </div>
@@ -521,12 +768,15 @@ export default function App(): JSX.Element {
     };
   }, []);
 
-  async function act(action: "preview" | "lock" | "unpair"): Promise<void> {
+  async function act(action: "preview" | "lock" | "unpair" | "userLogout"): Promise<void> {
     if (busy) return;
     setBusy(true);
     try {
       if (action === "preview") {
         setState(await window.gamenet.preview(true));
+      } else if (action === "userLogout") {
+        const res = await window.gamenet.userLogout();
+        setState(res.state);
       } else if (action === "lock") {
         setState(await window.gamenet.lock());
       } else {
@@ -586,7 +836,7 @@ export default function App(): JSX.Element {
             ) : state.locked ? (
               <LockedScreen state={state} busy={busy} onPreview={() => void act("preview")} />
             ) : (
-              <UnlockedScreen state={state} busy={busy} onLock={() => void act("lock")} />
+              <UnlockedScreen state={state} busy={busy} onLock={() => void act("userLogout")} />
             )}
           </div>
         </div>
