@@ -173,7 +173,81 @@ def customer_detail(request, customer_id):
             "effective_rate_name": effective_rate_name,
         }
     )
+
+    # استعلام وضعیت از سامانه رهرو
+    rahro_status = None
+    try:
+        import requests
+        from django.conf import settings
+        rahro_url = getattr(settings, "RAHRO_API_URL", "http://127.0.0.1:8000/rahro/api/gamenet/")
+        shared_secret = getattr(settings, "RAHRO_GAMENET_SHARED_SECRET", "rahro_gamenet_secret_2026")
+        r = requests.get(
+            f"{rahro_url.rstrip('/')}/status/",
+            params={"phone": customer.phone, "username": customer.username},
+            headers={"X-Internal-Secret": shared_secret},
+            timeout=1.5,
+        )
+        if r.status_code == 200:
+            rahro_status = r.json()
+    except Exception:
+        pass
+    ctx["rahro_status"] = rahro_status
+
     return render(request, "edge/customer_detail.html", ctx)
+
+
+@login_required
+@require_POST
+def customer_rahro_discount(request, customer_id):
+    """اعمال کوپن یا تخفیف رهرو برای مشتری در پنل محلی"""
+    customer = get_object_or_404(Customer, id=customer_id)
+    try:
+        discount_percent = int(request.POST.get("discount_percent", 50))
+        session_id = request.POST.get("session_id")
+
+        import requests
+        from django.conf import settings
+        rahro_url = getattr(settings, "RAHRO_API_URL", "http://127.0.0.1:8000/rahro/api/gamenet/")
+        shared_secret = getattr(settings, "RAHRO_GAMENET_SHARED_SECRET", "rahro_gamenet_secret_2026")
+
+        actor_name = request.user.get_full_name() or request.user.username or "مسئول گیم‌نت"
+        resp = requests.post(
+            f"{rahro_url.rstrip('/')}/apply-discount/",
+            json={
+                "phone": customer.phone,
+                "username": customer.username,
+                "discount_percent": discount_percent,
+                "session_id": str(session_id) if session_id else None,
+                "actor_name": actor_name,
+            },
+            headers={"X-Internal-Secret": shared_secret, "Content-Type": "application/json"},
+            timeout=3.0,
+        )
+        if resp.status_code != 200:
+            raise ValueError("عدم پاسخ سرور سامانه رهرو.")
+
+        data = resp.json()
+        if not data.get("success"):
+            raise ValueError(data.get("error", "خطا در اعمال تخفیف از سامانه رهرو."))
+
+        active_session = None
+        if session_id:
+            active_session = customer.sessions.filter(id=session_id, status=SessionStatus.ACTIVE).first()
+        if not active_session:
+            active_session = customer.sessions.filter(status=SessionStatus.ACTIVE).first()
+
+        if active_session:
+            active_session.discount_percent = discount_percent
+            active_session.discount_source = data.get("source", "RAHRO")
+            active_session.save(update_fields=["discount_percent", "discount_source", "updated_at"])
+            messages.success(request, f"تخفیف {discount_percent}٪ با موفقیت روی نشست جاری {customer.full_name} ثبت شد. ({data.get('message')})")
+        else:
+            messages.success(request, f"تخفیف {discount_percent}٪ برای {customer.full_name} در رهرو ثبت و کوپن صادر شد: {data.get('message')}")
+
+    except Exception as exc:
+        messages.error(request, str(exc))
+
+    return redirect("edge_customer_detail", customer_id=customer.id)
 
 
 @login_required

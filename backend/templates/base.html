@@ -5,11 +5,11 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="color-scheme" content="dark light">
   <title>{% block title %}GameNet{% endblock %} · {% if is_edge %}سرور سالن گیم‌نت{% else %}پنل آنلاین گیم‌نت{% endif %}</title>
-  <link rel="stylesheet" href="{% static 'vendor/css/tabler.rtl.min.css' %}">
-  <link rel="stylesheet" href="{% static 'vendor/css/tabler-icons.min.css' %}">
-  <link rel="stylesheet" href="{% static 'css/app.css' %}">
-  <script src="{% static 'vendor/js/htmx.min.js' %}" defer></script>
-  <script src="{% static 'js/app.js' %}" defer></script>
+  <link rel="stylesheet" href="{% static 'vendor/css/tabler.rtl.min.css' %}?v={{ gamenet_version|default:'0.2.0' }}-20261108">
+  <link rel="stylesheet" href="{% static 'vendor/css/tabler-icons.min.css' %}?v={{ gamenet_version|default:'0.2.0' }}-20261108">
+  <link rel="stylesheet" href="{% static 'css/app.css' %}?v={{ gamenet_version|default:'0.2.0' }}-20261108c">
+  <script src="{% static 'vendor/js/htmx.min.js' %}?v={{ gamenet_version|default:'0.2.0' }}-20261108" defer></script>
+  <script src="{% static 'js/app.js' %}?v={{ gamenet_version|default:'0.2.0' }}-20261108c" defer></script>
 </head>
 <body>
 <div class="gn-shell">
@@ -90,9 +90,14 @@
 
   <div class="gn-main">
     <header class="gn-topbar">
-      <div>
-        <h1 class="gn-title">{% block page_title %}داشبورد{% endblock %}</h1>
-        <p class="gn-subtitle">{% block page_subtitle %}{% endblock %}</p>
+      <div class="d-flex align-items-center gap-2">
+        <button class="gn-btn sm d-md-none" type="button" onclick="document.querySelector('.gn-sidebar').classList.toggle('is-open')" title="منوی ناوبری">
+          <i class="ti ti-menu-2"></i>
+        </button>
+        <div>
+          <h1 class="gn-title">{% block page_title %}داشبورد{% endblock %}</h1>
+          <p class="gn-subtitle">{% block page_subtitle %}{% endblock %}</p>
+        </div>
       </div>
       <div class="d-flex align-items-center gap-3">
         {% if is_edge %}

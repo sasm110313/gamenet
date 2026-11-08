@@ -16,7 +16,7 @@
       <!-- Center Status & Gamer Info -->
       <div class="baz-card-center">
         {% if device.active_session %}
-          <div class="baz-status-big green">فعال</div>
+          <div class="baz-status-big green">در حال بازی</div>
           <div class="baz-gamer-name">{{ device.active_session.customer.full_name }}</div>
           {% if device.active_session.customer.username %}
             <div class="baz-gamer-user">@{{ device.active_session.customer.username }}</div>
@@ -29,7 +29,7 @@
           <div class="baz-status-big gray">آزاد</div>
           <span class="text-muted" style="font-size: 11px; margin-top: 4px;">آماده شروع</span>
         {% elif device.status == 'LOCKED' %}
-          <div class="baz-status-big amber">متوقف</div>
+          <div class="baz-status-big amber">قفل / آماده</div>
           <span class="text-muted" style="font-size: 11px; margin-top: 4px;">آماده لاگین گیمر</span>
         {% else %}
           <div class="baz-status-big gray">آفلاین</div>

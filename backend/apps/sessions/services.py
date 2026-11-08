@@ -225,18 +225,28 @@ def stop_session(
 
     now = timezone.now()
     elapsed = max(0, int((now - session.started_at).total_seconds()))
-    cost = session_cost(session.hourly_rate, elapsed)
+    base_cost = session_cost(session.hourly_rate, elapsed)
+
+    if session.discount_percent > 0:
+        discount_amount = (base_cost * session.discount_percent + 50) // 100
+        cost = max(0, base_cost - discount_amount)
+    else:
+        discount_amount = 0
+        cost = base_cost
 
     entry = LedgerEntry.objects.filter(
         session=session, entry_type=LedgerEntryType.SESSION_CHARGE
     ).first()
     if entry is None and cost > 0:
+        note_text = f"شارژ نشست {str(session.id)[:8]}"
+        if session.discount_percent > 0:
+            note_text += f" (تخفیف {session.discount_percent}٪)"
         entry = post_entry(
             customer=session.customer,
             amount=-cost,
             entry_type=LedgerEntryType.SESSION_CHARGE,
             session=session,
-            note=f"شارژ نشست {str(session.id)[:8]}",
+            note=note_text,
             actor=actor,
             allow_over_limit=True,
         )
@@ -245,14 +255,46 @@ def stop_session(
     session.ended_at = now
     session.elapsed_seconds = elapsed
     session.cost = cost
+    session.discount_amount = discount_amount
     session.ended_by = actor if getattr(actor, "pk", None) else None
     session.end_reason = (reason or "")[:120]
     session.save(
         update_fields=[
-            "status", "ended_at", "elapsed_seconds", "cost", "ended_by",
-            "end_reason", "updated_at",
+            "status", "ended_at", "elapsed_seconds", "cost", "discount_amount",
+            "ended_by", "end_reason", "updated_at",
         ]
     )
+
+    # اطلاع به سامانه رهرو جهت ثبت دقایق بازی در پنل دانش‌آموز
+    try:
+        import requests
+        from django.conf import settings
+        rahro_url = getattr(settings, "RAHRO_API_URL", "http://127.0.0.1:8000/rahro/api/gamenet/")
+        shared_secret = getattr(settings, "RAHRO_GAMENET_SHARED_SECRET", "rahro_gamenet_secret_2026")
+        payload = {
+            "session_id": str(session.id),
+            "phone": session.customer.phone,
+            "username": session.customer.username,
+            "device_name": session.device.name if session.device else "",
+            "started_at": session.started_at.isoformat(),
+            "ended_at": now.isoformat(),
+            "duration_seconds": elapsed,
+            "hourly_rate": session.hourly_rate,
+            "base_cost": base_cost,
+            "discount_percent": session.discount_percent,
+            "discount_amount": discount_amount,
+            "final_cost": cost,
+            "discount_source": session.discount_source,
+        }
+        requests.post(
+            f"{rahro_url.rstrip('/')}/record-session/",
+            json=payload,
+            headers={"X-Internal-Secret": shared_secret, "Content-Type": "application/json"},
+            timeout=3,
+        )
+    except Exception as exc:
+        import logging
+        logging.getLogger("gamenet.sessions").warning(f"Failed to notify Rahro of session {session.id}: {exc}")
 
     from apps.devices.services import set_status
 
@@ -277,6 +319,9 @@ def stop_session(
             "ended_at": session.ended_at.isoformat(),
             "elapsed_seconds": elapsed,
             "cost": cost,
+            "discount_percent": session.discount_percent,
+            "discount_amount": session.discount_amount,
+            "discount_source": session.discount_source,
             "end_reason": session.end_reason,
             "ledger_entry_id": str(entry.id) if entry is not None else None,
         },

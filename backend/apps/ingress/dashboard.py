@@ -88,9 +88,21 @@ def _annotate_devices(devices_qs, now=None):
         if d.active_session:
             d.elapsed_seconds = max(0, int((now - d.active_session.started_at).total_seconds()))
             d.current_cost = int((d.elapsed_seconds / 3600) * d.active_session.hourly_rate)
+            wallet = getattr(d.active_session.customer, "wallet", None)
+            total_credit = (wallet.balance if wallet else 0) + (d.active_session.customer.credit_limit or 0)
+            d.remaining_money = max(0, total_credit - d.current_cost)
+            hourly_rate = d.active_session.hourly_rate or 40000
+            d.remaining_seconds = int((d.remaining_money / hourly_rate) * 3600)
+            d.is_low_balance = d.remaining_money <= 5000
+            d.spent_percent = min(100, int((d.current_cost / max(1, total_credit)) * 100)) if total_credit > 0 else 100
         else:
             d.elapsed_seconds = 0
             d.current_cost = 0
+            d.remaining_money = 0
+            d.remaining_seconds = 0
+            d.is_low_balance = False
+            d.spent_percent = 0
+        d.active_app = (d.metadata or {}).get("active_app") or (d.metadata or {}).get("foreground_window") or ""
 
     devices.sort(key=_station_sort_key)
     return devices
@@ -105,9 +117,11 @@ def overview(request):
     month_start = timezone.make_aware(datetime.combine(today.replace(day=1), time.min))
 
     # Single local salon server
-    salon_server = EdgeNode.objects.exclude(status=EdgeStatus.REVOKED).first()
+    salon_server = EdgeNode.objects.exclude(status=EdgeStatus.REVOKED).order_by("-last_heartbeat_at").first()
 
     devices_raw = ClientDevice.objects.filter(is_active=True)
+    if salon_server:
+        devices_raw = devices_raw.filter(edge_id=salon_server.id)
     devices_annotated = _annotate_devices(devices_raw, now)
 
     total_devices = max(10, len(devices_annotated))

@@ -79,6 +79,66 @@
     </form>
   </div>
 
+  <div class="gn-card" style="border-right: 4px solid var(--gn-primary, #2563eb);">
+    <div class="d-flex justify-content-between align-items-center mb-2 flex-wrap gap-2">
+      <div class="d-flex align-items-center gap-2">
+        <span style="font-size: 1.25rem;">🎮</span>
+        <h6 class="mb-0 font-bold">کوپن و تخفیف سامانه رهرو</h6>
+      </div>
+      {% if rahro_status and rahro_status.found %}
+        <span class="gn-chip accent">عضو تاییدشده رهرو</span>
+      {% else %}
+        <span class="gn-chip">عدم تطابق با رهرو</span>
+      {% endif %}
+    </div>
+
+    {% if rahro_status and rahro_status.found %}
+      <div class="p-2 rounded mb-2" style="background: rgba(37,99,235,0.06); font-size: 12px; border: 1px solid rgba(37,99,235,0.15)">
+        <div class="d-flex justify-content-between mb-1">
+          <span class="text-muted">سطح:</span><strong>{{ rahro_status.level_name }}</strong>
+        </div>
+        <div class="d-flex justify-content-between mb-1">
+          <span class="text-muted">موجودی امتیاز:</span><strong style="color: #059669">{{ rahro_status.current_balance }} امتیاز</strong>
+        </div>
+        <div class="d-flex justify-content-between">
+          <span class="text-muted">سهمیه ۵۰٪ ماه:</span>
+          {% if rahro_status.has_free_monthly_quota %}
+            <strong style="color: #0284c7">{{ rahro_status.remaining_monthly_quotas }} باقی‌مانده</strong>
+          {% else %}
+            <span class="text-muted">ندارد (کسر امتیاز)</span>
+          {% endif %}
+        </div>
+      </div>
+
+      <form method="post" action="{% url 'edge_customer_rahro_discount' customer.id %}">
+        {% csrf_token %}
+        {% if active_session %}
+          <input type="hidden" name="session_id" value="{{ active_session.id }}">
+        {% endif %}
+        <label class="gn-label">درصد تخفیف مورد نظر:</label>
+        <div class="d-flex align-items-center gap-1.5 flex-wrap mb-2">
+          <label class="gn-chip" style="cursor: pointer; font-size: 11px">
+            <input type="radio" name="disc_r" value="30" onchange="document.getElementById('edge-disc-{{ customer.id }}').value='30'"> ۳۰٪ (۲۰ امتیاز)
+          </label>
+          <label class="gn-chip accent" style="cursor: pointer; font-size: 11px">
+            <input type="radio" name="disc_r" value="50" checked onchange="document.getElementById('edge-disc-{{ customer.id }}').value='50'"> ۵۰٪ (سهمیه/۳۵ امتیاز)
+          </label>
+          <label class="gn-chip" style="cursor: pointer; font-size: 11px">
+            <input type="radio" name="disc_r" value="100" onchange="document.getElementById('edge-disc-{{ customer.id }}').value='100'"> ۱۰۰٪ (۸۰ امتیاز)
+          </label>
+        </div>
+        <div class="d-flex gap-2">
+          <input class="gn-input num" id="edge-disc-{{ customer.id }}" name="discount_percent" value="50" inputmode="numeric" style="max-width: 100px" placeholder="%">
+          <button class="gn-btn primary flex-grow-1" type="submit" style="font-size: 12px">
+            <i class="ti ti-ticket"></i> اعمال تخفیف
+          </button>
+        </div>
+      </form>
+    {% else %}
+      <p class="text-muted mb-0" style="font-size: 11.5px">شماره تماس یا نام کاربری در سامانه رهرو یافت نشد.</p>
+    {% endif %}
+  </div>
+
   <div class="gn-card">
     <h6>نشست</h6>
     {% if active_session %}

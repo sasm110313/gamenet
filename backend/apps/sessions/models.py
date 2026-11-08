@@ -45,6 +45,9 @@ class GamingSession(models.Model):
     ended_at = models.DateTimeField(null=True, blank=True)
     elapsed_seconds = models.PositiveIntegerField(null=True, blank=True)
     cost = models.PositiveIntegerField(null=True, blank=True)
+    discount_percent = models.PositiveSmallIntegerField(default=0)
+    discount_amount = models.PositiveIntegerField(default=0)
+    discount_source = models.CharField(max_length=80, blank=True)
     started_by = models.ForeignKey(
         settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL, related_name="+"
     )

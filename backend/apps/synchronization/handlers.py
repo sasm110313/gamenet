@@ -371,10 +371,45 @@ def session_ended(event: SyncEvent) -> None:
     session.elapsed_seconds = int(p.get("elapsed_seconds", 0))
     session.cost = int(p.get("cost", 0))
     session.end_reason = p.get("end_reason", "")
+    session.discount_percent = int(p.get("discount_percent", session.discount_percent or 0))
+    session.discount_amount = int(p.get("discount_amount", session.discount_amount or 0))
+    session.discount_source = p.get("discount_source", session.discount_source or "")
     session.is_replica = True
     session.save(
         update_fields=[
             "status", "ended_at", "elapsed_seconds", "cost", "end_reason",
+            "discount_percent", "discount_amount", "discount_source",
             "is_replica", "updated_at",
         ]
     )
+
+    # همگام‌سازی تضمینی زمان بازی با سامانه رهرو از سمت ابر
+    try:
+        import requests
+        from django.conf import settings
+        rahro_url = getattr(settings, "RAHRO_API_URL", "http://127.0.0.1:8000/rahro/api/gamenet/")
+        shared_secret = getattr(settings, "RAHRO_GAMENET_SHARED_SECRET", "rahro_gamenet_secret_2026")
+        cust = session.customer
+        payload = {
+            "session_id": str(session.id),
+            "phone": cust.phone if cust else "",
+            "username": cust.username if cust else "",
+            "device_name": session.device.name if session.device else "",
+            "started_at": session.started_at.isoformat() if session.started_at else "",
+            "ended_at": session.ended_at.isoformat() if session.ended_at else "",
+            "duration_seconds": session.elapsed_seconds,
+            "hourly_rate": session.hourly_rate,
+            "base_cost": (session.cost or 0) + (session.discount_amount or 0),
+            "discount_percent": session.discount_percent,
+            "discount_amount": session.discount_amount,
+            "final_cost": session.cost,
+            "discount_source": session.discount_source,
+        }
+        requests.post(
+            f"{rahro_url.rstrip('/')}/record-session/",
+            json=payload,
+            headers={"X-Internal-Secret": shared_secret, "Content-Type": "application/json"},
+            timeout=3,
+        )
+    except Exception:
+        pass

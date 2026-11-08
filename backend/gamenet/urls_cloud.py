@@ -44,6 +44,11 @@ urlpatterns = [
         name="cloud_manage_customer_update",
     ),
     path(
+        "manage/customers/<uuid:customer_id>/rahro-discount",
+        management.customer_rahro_discount,
+        name="cloud_manage_customer_rahro_discount",
+    ),
+    path(
         "manage/customers/<uuid:customer_id>/wallet",
         management.wallet,
         name="cloud_manage_wallet",
@@ -93,4 +98,6 @@ urlpatterns = [
     path("api/v1/edge/heartbeat", api.EdgeHeartbeatView.as_view(), name="api_edge_heartbeat"),
     path("api/v1/edge/commands/pending", api.EdgeCommandsPendingView.as_view(), name="api_edge_commands"),
     path("api/v1/edge/config", api.EdgeConfigView.as_view(), name="api_edge_config"),
+    # integration API (Rahro <-> GameNet)
+    path("api/v1/integration/sync-customer/", api.RahroCustomerSyncView.as_view(), name="api_rahro_customer_sync"),
 ] + base_patterns()

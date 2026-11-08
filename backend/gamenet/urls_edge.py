@@ -17,6 +17,11 @@ urlpatterns = [
     path("customers/create/", customers_dash.customer_create),
     path("customers/<uuid:customer_id>/", customers_dash.customer_detail, name="edge_customer_detail"),
     path("customers/<uuid:customer_id>/update", customers_dash.customer_update, name="edge_customer_update"),
+    path(
+        "customers/<uuid:customer_id>/rahro-discount",
+        customers_dash.customer_rahro_discount,
+        name="edge_customer_rahro_discount",
+    ),
     path("customers/<uuid:customer_id>/toggle", customers_dash.customer_toggle, name="edge_customer_toggle"),
     path("customers/<uuid:customer_id>/deposit", customers_dash.customer_deposit, name="edge_customer_deposit"),
     path("customers/<uuid:customer_id>/adjust", customers_dash.customer_adjust, name="edge_customer_adjust"),

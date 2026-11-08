@@ -226,3 +226,134 @@ class EdgeConfigView(APIView):
                 "server_time": timezone.now().isoformat(),
             }
         )
+
+
+class RahroCustomerSyncView(APIView):
+    """
+    دریافت و ثبت/به‌روزرسانی خودکار کاربران سامانه رهرو در گیم‌نت:
+    تخصیص خودکار به گروه مالی «اعضای رهرو» با نرخ ساعتی ۴۰,۰۰۰ تومان
+    """
+    authentication_classes = []
+    permission_classes = []
+
+    def post(self, request):
+        secret = getattr(settings, "RAHRO_GAMENET_SHARED_SECRET", "rahro_gamenet_secret_2026")
+        token = request.headers.get("X-Internal-Secret") or request.data.get("secret")
+        if token != secret:
+            return Response({"error": "Forbidden (invalid secret)"}, status=status.HTTP_403_FORBIDDEN)
+
+        data = request.data
+        username = (data.get("username") or "").strip()
+        phone = (data.get("phone") or "").strip()
+        full_name = (data.get("full_name") or "").strip() or username
+        password_hash = data.get("password_hash") or ""
+        is_active = bool(data.get("is_active", True))
+
+        if not phone and not username:
+            return Response({"error": "phone or username required"}, status=status.HTTP_400_BAD_REQUEST)
+
+        import uuid
+        from apps.customers.models import Customer
+        from apps.customer_groups.models import CustomerGroup
+        from apps.pricing.models import Tariff
+        from apps.wallets.models import Wallet
+        from apps.synchronization.models import EdgeNode
+        from apps.ingress.management import _issue
+
+        # پیدا کردن سرور لبه (سالن اصلی)
+        edge = EdgeNode.objects.filter(revoked_at__isnull=True).order_by("-last_heartbeat_at").first()
+        edge_id = edge.id if edge else uuid.UUID("01a18e45-00ea-7f5b-8631-0d6406670e55")
+
+        # تضمین وجود تعرفه ۴۰ هزار تومانی رهرو
+        rahro_tariff, _ = Tariff.objects.get_or_create(
+            name="تعرفه اعضای رهرو",
+            edge_id=edge_id,
+            defaults={"hourly_rate": 40000, "is_active": True, "is_replica": False}
+        )
+        if rahro_tariff.hourly_rate != 40000:
+            rahro_tariff.hourly_rate = 40000
+            rahro_tariff.save(update_fields=["hourly_rate"])
+
+        # تضمین وجود گروه مشتریان اعضای رهرو
+        rahro_group, _ = CustomerGroup.objects.get_or_create(
+            name="اعضای رهرو",
+            edge_id=edge_id,
+            defaults={"tariff": rahro_tariff, "is_active": True, "is_replica": False}
+        )
+        if rahro_group.tariff_id != rahro_tariff.id:
+            rahro_group.tariff = rahro_tariff
+            rahro_group.save(update_fields=["tariff"])
+
+        # جستجو یا ایجاد مشتری
+        customer = None
+        if phone:
+            customer = Customer.objects.filter(phone=phone).first()
+        if not customer and username:
+            customer = Customer.objects.filter(username=username).first()
+
+        created = False
+        if customer is None:
+            customer_id = uuid.uuid4()
+            customer = Customer.objects.create(
+                id=customer_id,
+                edge_id=edge_id,
+                full_name=full_name,
+                username=username,
+                phone=phone,
+                password_hash=password_hash,
+                group=rahro_group,
+                credit_limit=getattr(settings, "DEFAULT_CREDIT_LIMIT", 60000),
+                is_active=is_active,
+                notes="عضو سامانه رهرو (همگام‌سازی خودکار)",
+                is_replica=True,
+            )
+            created = True
+        else:
+            customer.full_name = full_name or customer.full_name
+            if username:
+                customer.username = username
+            if phone:
+                customer.phone = phone
+            if password_hash:
+                customer.password_hash = password_hash
+            customer.group = rahro_group
+            customer.is_active = is_active
+            customer.save(update_fields=["full_name", "username", "phone", "password_hash", "group", "is_active", "updated_at"])
+
+        # تضمین وجود کیف پول
+        wallet, _ = Wallet.objects.get_or_create(customer=customer, defaults={"balance": 0})
+
+        # ارسال فرمان به لبه در صورت فعال بودن
+        if edge is not None:
+            try:
+                _issue(
+                    request,
+                    edge,
+                    "catalog.customer.upsert",
+                    {
+                        "customer_id": str(customer.id),
+                        "base_revision": customer.revision,
+                        "full_name": customer.full_name,
+                        "username": customer.username,
+                        "password": "",
+                        "phone": customer.phone,
+                        "group_id": str(rahro_group.id),
+                        "credit_limit": customer.credit_limit,
+                        "notes": customer.notes,
+                        "is_active": customer.is_active,
+                    },
+                    action="remote.customer.synced_from_rahro",
+                )
+            except Exception:
+                pass
+
+        return Response({
+            "success": True,
+            "created": created,
+            "customer_id": str(customer.id),
+            "full_name": customer.full_name,
+            "username": customer.username,
+            "phone": customer.phone,
+            "group": rahro_group.name,
+            "hourly_rate": rahro_tariff.hourly_rate,
+        })
