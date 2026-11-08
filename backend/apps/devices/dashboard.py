@@ -82,19 +82,46 @@ def _enrich_devices(device_list, now):
     for d in device_list:
         d.active_session = active_sessions.get(d.id)
         if d.active_session:
-            d.elapsed_seconds = max(0, int((now - d.active_session.started_at).total_seconds()))
-            d.current_cost = int((d.elapsed_seconds / 3600) * d.active_session.hourly_rate)
-            cust = d.active_session.customer
-            if hasattr(cust, "wallet") and cust.wallet:
-                d.wallet_balance = cust.wallet.balance
+            sess = d.active_session
+            d.elapsed_seconds = max(0, int((now - sess.started_at).total_seconds()))
+            d.current_cost = int((d.elapsed_seconds / 3600) * sess.hourly_rate)
+            cust = sess.customer
+            base_wallet = cust.wallet.balance if (hasattr(cust, "wallet") and cust.wallet) else 0
+            credit_limit = getattr(cust, "credit_limit", 0) or 0
+            total_available = base_wallet + credit_limit
+
+            # Remaining money for gamer
+            d.remaining_money = max(0, total_available - d.current_cost)
+            d.wallet_balance = base_wallet
+
+            # Remaining time (seconds)
+            if sess.hourly_rate > 0:
+                d.remaining_seconds = int((d.remaining_money / sess.hourly_rate) * 3600)
             else:
-                d.wallet_balance = 0
-            d.started_at_str = d.active_session.started_at.strftime("%H:%M")
+                d.remaining_seconds = 0
+
+            # Low balance warning flag (under 10 minutes or under 5000 Tomans)
+            d.is_low_balance = d.remaining_seconds < 600 or d.remaining_money < 5000
+
+            # Progress percentage
+            total_budget = max(1, d.current_cost + d.remaining_money)
+            d.spent_percent = min(100, max(0, int((d.current_cost / total_budget) * 100)))
+
+            # Active software / game running
+            meta = d.metadata or {}
+            d.active_app = meta.get("active_app") or meta.get("current_game") or "لانچر بازی گیم‌نت"
+            d.started_at_str = sess.started_at.strftime("%H:%M")
         else:
             d.elapsed_seconds = 0
             d.current_cost = 0
+            d.remaining_money = 0
+            d.remaining_seconds = 0
+            d.is_low_balance = False
+            d.spent_percent = 0
+            d.active_app = "—"
             d.wallet_balance = 0
             d.started_at_str = ""
+
     device_list.sort(key=_station_sort_key)
     return device_list
 

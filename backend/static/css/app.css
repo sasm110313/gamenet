@@ -744,3 +744,272 @@ body { font-family: "Vazirmatn", system-ui, sans-serif; }
   color: #64748b;
   font-weight: 500;
 }
+
+/* ==========================================================================
+   PRO GAMING STATIONS DASHBOARD (Salon Edge 10 Stations)
+   ========================================================================== */
+
+.pro-station-grid {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 16px;
+  width: 100%;
+}
+
+@media (max-width: 1400px) {
+  .pro-station-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 900px) {
+  .pro-station-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 600px) {
+  .pro-station-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.pro-card {
+  position: relative;
+  background: #0d1220;
+  border: 1px solid #1e2840;
+  border-radius: 18px;
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  min-height: 290px;
+  transition: all 200ms ease;
+  box-shadow: 0 4px 18px rgba(0, 0, 0, 0.35);
+  overflow: hidden;
+}
+
+.pro-card:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.5);
+}
+
+.pro-card.is-active {
+  background: linear-gradient(180deg, #12152d 0%, #0c101c 100%);
+  border-color: rgba(139, 92, 246, 0.55);
+  box-shadow: 0 0 25px rgba(139, 92, 246, 0.15);
+}
+
+.pro-card.is-active::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 3px;
+  background: linear-gradient(90deg, #8b5cf6, #10b981, #8b5cf6);
+}
+
+.pro-card.is-locked {
+  background: linear-gradient(180deg, #18151f 0%, #0c101c 100%);
+  border-color: rgba(245, 158, 11, 0.4);
+}
+
+.pro-card.is-idle {
+  background: linear-gradient(180deg, #0e1a26 0%, #0c101c 100%);
+  border-color: rgba(6, 182, 212, 0.4);
+}
+
+.pro-card.is-offline {
+  opacity: 0.6;
+  border-style: dashed;
+  border-color: #334155;
+}
+
+.pro-card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 12px;
+}
+
+.pro-station-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.pro-station-badge {
+  font-size: 20px;
+  font-weight: 800;
+  color: #f8fafc;
+  letter-spacing: -0.02em;
+}
+
+.pro-status-pill {
+  font-size: 11px;
+  font-weight: 700;
+  padding: 3px 9px;
+  border-radius: 20px;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.pro-status-pill.active {
+  background: rgba(16, 185, 129, 0.15);
+  color: #34d399;
+  border: 1px solid rgba(16, 185, 129, 0.3);
+}
+
+.pro-status-pill.locked {
+  background: rgba(245, 158, 11, 0.15);
+  color: #fbbf24;
+  border: 1px solid rgba(245, 158, 11, 0.3);
+}
+
+.pro-status-pill.idle {
+  background: rgba(6, 182, 212, 0.15);
+  color: #22d3ee;
+  border: 1px solid rgba(6, 182, 212, 0.3);
+}
+
+.pro-status-pill.offline {
+  background: rgba(100, 116, 139, 0.15);
+  color: #94a3b8;
+  border: 1px solid rgba(100, 116, 139, 0.3);
+}
+
+.pro-gamer-section {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 10px;
+  background: rgba(255, 255, 255, 0.04);
+  border-radius: 12px;
+  margin-bottom: 10px;
+}
+
+.pro-avatar {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #8b5cf6, #3b82f6);
+  color: #fff;
+  font-weight: 700;
+  font-size: 14px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.pro-gamer-meta {
+  overflow: hidden;
+}
+
+.pro-gamer-name {
+  font-size: 13.5px;
+  font-weight: 700;
+  color: #f1f5f9;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.pro-gamer-user {
+  font-size: 11px;
+  color: #94a3b8;
+  direction: ltr;
+  text-align: right;
+}
+
+.pro-app-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11.5px;
+  color: #cbd5e1;
+  background: rgba(139, 92, 246, 0.12);
+  border: 1px solid rgba(139, 92, 246, 0.25);
+  padding: 4px 9px;
+  border-radius: 8px;
+  margin-bottom: 10px;
+  width: 100%;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.pro-metrics-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+.pro-metric-box {
+  background: rgba(0, 0, 0, 0.25);
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  border-radius: 10px;
+  padding: 6px 8px;
+  display: flex;
+  flex-direction: column;
+}
+
+.pro-metric-label {
+  font-size: 10.5px;
+  color: #94a3b8;
+  margin-bottom: 2px;
+}
+
+.pro-metric-val {
+  font-size: 13px;
+  font-weight: 700;
+  color: #f8fafc;
+  font-family: ui-monospace, SFMono-Regular, monospace;
+}
+
+.pro-metric-val.time-left {
+  color: #38bdf8;
+}
+
+.pro-metric-val.money-left {
+  color: #34d399;
+}
+
+.pro-metric-val.money-left.low {
+  color: #f87171;
+  animation: baz-pulse 1.8s infinite;
+}
+
+.pro-metric-val.spent {
+  color: #fbbf24;
+}
+
+.pro-bar-wrap {
+  width: 100%;
+  height: 6px;
+  background: rgba(255, 255, 255, 0.08);
+  border-radius: 6px;
+  overflow: hidden;
+  margin-bottom: 12px;
+}
+
+.pro-bar-fill {
+  height: 100%;
+  border-radius: 6px;
+  background: linear-gradient(90deg, #10b981, #f59e0b);
+  transition: width 300ms ease;
+}
+
+.pro-bar-fill.low {
+  background: linear-gradient(90deg, #f59e0b, #ef4444);
+}
+
+.pro-card-actions {
+  display: flex;
+  gap: 6px;
+  margin-top: auto;
+}
+

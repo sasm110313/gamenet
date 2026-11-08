@@ -212,8 +212,12 @@ SYNC_SCHEMA_VERSION = 1
 COMMAND_CLOCK_SKEW_SECONDS = env.int("COMMAND_CLOCK_SKEW_SECONDS", default=60)
 
 # --- Money defaults ---------------------------------------------------------
-DEFAULT_HOURLY_RATE = env.int("DEFAULT_HOURLY_RATE", default=40_000)  # Toman
+DEFAULT_HOURLY_RATE = env.int("DEFAULT_HOURLY_RATE", default=60_000)  # Toman (تعرفه عادی غیر رهرو)
 DEFAULT_CREDIT_LIMIT = env.int("DEFAULT_CREDIT_LIMIT", default=60_000)  # Toman
+
+# --- Rahro Integration -----------------------------------------------------
+RAHRO_GAMENET_SHARED_SECRET = env("RAHRO_GAMENET_SHARED_SECRET", default="rahro_gamenet_secret_2026")
+RAHRO_API_URL = env("RAHRO_API_URL", default="http://127.0.0.1:8000/rahro/api/gamenet/")
 
 # --- Security ---------------------------------------------------------------
 if not DEBUG:

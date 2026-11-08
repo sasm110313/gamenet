@@ -1,155 +1,174 @@
 {% load gn %}
 
-<div class="baz-station-grid" id="stations-grid">
+<div class="pro-station-grid" id="stations-grid">
   {% for device in devices %}
-    <div class="baz-station-card {% if device.active_session or device.status == 'ACTIVE' %}is-active{% elif device.status == 'LOCKED' %}is-locked{% elif device.status == 'OFFLINE' %}is-offline{% else %}is-idle{% endif %}" id="card-{{ device.id }}">
+    <div class="pro-card {% if device.active_session or device.status == 'ACTIVE' %}is-active{% elif device.status == 'LOCKED' %}is-locked{% elif device.status == 'OFFLINE' %}is-offline{% else %}is-idle{% endif %}" id="card-{{ device.id }}">
 
-      <!-- Card Top: Station Badge, Live Status Dot, and Settings Icon -->
-      <div class="baz-card-top">
-        <div class="d-flex align-items-center gap-2">
-          <span class="baz-station-dot {% if device.active_session or device.status == 'ACTIVE' %}green{% elif device.status == 'LOCKED' %}amber{% elif device.status == 'OFFLINE' %}gray{% else %}green{% endif %}"></span>
-          <div>
-            <div class="baz-station-num-big">{{ device.name }}</div>
-            <div class="baz-station-sub-type">
-              {% if device.active_session or device.status == 'ACTIVE' %}
-                <span class="text-success font-weight-bold">در حال بازی</span>
-              {% elif device.status == 'LOCKED' %}
-                <span class="text-warning">قفل / آماده ورود</span>
-              {% elif device.status == 'IDLE' %}
-                <span class="text-info">آزاد</span>
-              {% else %}
-                <span class="text-muted">آفلاین</span>
-              {% endif %}
-            </div>
-          </div>
+      <!-- Header: Station Number + Live Status + Settings Cog -->
+      <div class="pro-card-header">
+        <div class="pro-station-title">
+          <span class="pro-station-badge">{{ device.name }}</span>
+          {% if device.active_session or device.status == 'ACTIVE' %}
+            <span class="pro-status-pill active">
+              <span class="baz-station-dot green"></span> در حال بازی
+            </span>
+          {% elif device.status == 'LOCKED' %}
+            <span class="pro-status-pill locked">
+              <span class="baz-station-dot amber"></span> قفل
+            </span>
+          {% elif device.status == 'IDLE' %}
+            <span class="pro-status-pill idle">
+              <span class="baz-station-dot cyan"></span> آزاد
+            </span>
+          {% else %}
+            <span class="pro-status-pill offline">
+              <span class="baz-station-dot gray"></span> خاموش
+            </span>
+          {% endif %}
         </div>
 
-        <div class="d-flex align-items-center gap-1">
-          <button type="button" class="baz-mini-btn" title="تنظیمات این استیشن" onclick="openStationSettings('{{ device.id }}', '{{ device.name }}', '{{ device.metadata.default_tariff_id|default:'' }}', '{{ device.is_active|yesno:'1,0' }}')">
-            <i class="ti ti-settings"></i>
-          </button>
-        </div>
+        <button type="button" class="baz-mini-btn" title="تنظیمات استیشن" onclick="openStationSettings('{{ device.id }}', '{{ device.name }}', '{{ device.metadata.default_tariff_id|default:'' }}', '{{ device.is_active|yesno:'1,0' }}')">
+          <i class="ti ti-settings"></i>
+        </button>
       </div>
 
-      <!-- Card Center: Active Gamer Info OR Standby Status -->
-      <div class="baz-card-center">
-        {% if device.active_session %}
-          <div class="baz-gamer-name" style="font-size: 15px;">
-            <i class="ti ti-user"></i> {{ device.active_session.customer.full_name }}
+      {% if device.active_session %}
+        <!-- 1. GAMER IN THE STATION (چه کسی توشه) -->
+        <div class="pro-gamer-section">
+          <div class="pro-avatar">{{ device.active_session.customer.full_name|slice:":1" }}</div>
+          <div class="pro-gamer-meta flex-grow-1">
+            <div class="pro-gamer-name">{{ device.active_session.customer.full_name }}</div>
+            {% if device.active_session.customer.username %}
+              <div class="pro-gamer-user">@{{ device.active_session.customer.username }}</div>
+            {% endif %}
           </div>
-          {% if device.active_session.customer.username %}
-            <div class="baz-gamer-user">@{{ device.active_session.customer.username }}</div>
-          {% endif %}
+        </div>
 
-          <div class="baz-timer-badge" data-started="{{ device.active_session.started_at|date:'U' }}">
-            <i class="ti ti-clock"></i> {{ device.elapsed_seconds|duration_hms }}
-          </div>
+        <!-- 2. RUNNING SOFTWARE / GAME (چه نرم‌افزاری اجراست) -->
+        <div class="pro-app-badge" title="نرم‌افزار یا بازی در حال اجرا">
+          <i class="ti ti-device-gamepad-2 text-primary"></i>
+          <span>{{ device.active_app }}</span>
+        </div>
 
-          <div class="baz-cost-label mt-1">
-            هزینه: <strong class="num text-warning font-weight-bold" style="font-size: 13px;">{{ device.current_cost|toman }} تومان</strong>
-          </div>
-
-          <div class="mt-1" style="font-size: 11.5px;">
-            موجودی:
-            <span class="num font-weight-bold {% if device.wallet_balance > 20000 %}text-success{% else %}text-danger{% endif %}">
-              {{ device.wallet_balance|toman }} تومان
+        <!-- 3. METRICS: TIME & MONEY LEFT / SPENT (چقدر زمان و پول مونده) -->
+        <div class="pro-metrics-grid">
+          <!-- زمان بازی کرده -->
+          <div class="pro-metric-box">
+            <span class="pro-metric-label">⏱️ زمان سپری‌شده</span>
+            <span class="pro-metric-val baz-timer-badge p-0 bg-transparent border-0" data-started="{{ device.active_session.started_at|date:'U' }}">
+              {{ device.elapsed_seconds|duration_hms }}
             </span>
           </div>
 
-          <div class="text-muted mt-1" style="font-size: 11px;">
-            شروع: {{ device.started_at_str }} · {{ device.active_session.hourly_rate|toman }} ت/ساعت
+          <!-- زمان باقی‌مانده -->
+          <div class="pro-metric-box">
+            <span class="pro-metric-label">⏳ زمان مانده</span>
+            <span class="pro-metric-val time-left {% if device.is_low_balance %}text-danger{% endif %}">
+              {{ device.remaining_seconds|duration_hms }}
+            </span>
           </div>
 
-        {% elif device.status == 'LOCKED' %}
-          <div class="py-2 text-center">
-            <i class="ti ti-lock text-warning" style="font-size: 32px; opacity: 0.85;"></i>
-            <div class="mt-1 font-weight-bold text-light" style="font-size: 13px;">آماده ورود گیمر</div>
-            <div class="text-muted" style="font-size: 11px;">کلاینت قفل است</div>
+          <!-- هزینه تا الان -->
+          <div class="pro-metric-box">
+            <span class="pro-metric-label">💸 هزینه تا الان</span>
+            <span class="pro-metric-val spent num">{{ device.current_cost|toman }} ت</span>
           </div>
-        {% elif device.status == 'IDLE' %}
-          <div class="py-2 text-center">
-            <i class="ti ti-lock-open text-success" style="font-size: 32px; opacity: 0.85;"></i>
-            <div class="mt-1 font-weight-bold text-success" style="font-size: 13px;">سیستم آزاد</div>
-            <div class="text-muted" style="font-size: 11px;">قفل دستی باز است</div>
-          </div>
-        {% else %}
-          <div class="py-2 text-center">
-            <i class="ti ti-power text-muted" style="font-size: 32px; opacity: 0.5;"></i>
-            <div class="mt-1 text-muted font-weight-bold" style="font-size: 13px;">سیستم خاموش است</div>
-          </div>
-        {% endif %}
-      </div>
 
-      <!-- Card Bottom: Quick Actions -->
-      <div class="baz-card-bottom flex-column gap-2 mt-2 pt-2" style="border-top: 1px solid rgba(255,255,255,0.06);">
-        {% if device.active_session %}
-          <!-- Active Session Actions -->
-          <div class="d-flex gap-1 w-100">
-            <form method="post" action="{% url 'edge_session_stop' device.active_session.id %}" class="flex-grow-1" onsubmit="return confirm('آیا از پایان بازی و قفل کردن {{ device.name }} مطمئنید؟')">
+          <!-- اعتبار و پول مانده -->
+          <div class="pro-metric-box">
+            <span class="pro-metric-label">💰 پول مانده</span>
+            <span class="pro-metric-val money-left num {% if device.is_low_balance %}low{% endif %}">
+              {{ device.remaining_money|toman }} ت
+            </span>
+          </div>
+        </div>
+
+        <!-- Progress Bar: Credit consumption -->
+        <div class="pro-bar-wrap" title="درصد مصرف اعتبار">
+          <div class="pro-bar-fill {% if device.is_low_balance %}low{% endif %}" style="width: {{ device.spent_percent }}%;"></div>
+        </div>
+
+        <!-- Quick Actions for Active Session -->
+        <div class="pro-card-actions">
+          <form method="post" action="{% url 'edge_session_stop' device.active_session.id %}" class="flex-grow-1" onsubmit="return confirm('آیا از پایان بازی و بستن حساب {{ device.name }} مطمئنید؟')">
+            {% csrf_token %}
+            <input type="hidden" name="next" value="edge_devices">
+            <button type="submit" class="gn-btn sm danger w-100 justify-content-center" style="font-size: 11.5px; padding: 6px;">
+              <i class="ti ti-player-stop"></i> پایان بازی
+            </button>
+          </form>
+
+          <button type="button" class="gn-btn sm" style="font-size: 11.5px; padding: 6px 10px; color: #38bdf8; border-color: rgba(56, 189, 248, 0.4);" title="شارژ سریع کیف پول گیمر" onclick="openQuickDeposit('{{ device.active_session.customer.id }}', '{{ device.active_session.customer.full_name|escapejs }}', '{{ device.wallet_balance }}')">
+            <i class="ti ti-plus"></i> شارژ
+          </button>
+        </div>
+
+      {% else %}
+        <!-- STANDBY / NO GAMER -->
+        <div class="d-flex flex-column align-items-center justify-content-center py-4 my-auto text-center">
+          {% if device.status == 'LOCKED' %}
+            <div style="width: 52px; height: 52px; border-radius: 50%; background: rgba(245, 158, 11, 0.12); display: flex; align-items: center; justify-content: center; margin-bottom: 8px;">
+              <i class="ti ti-lock text-warning" style="font-size: 26px;"></i>
+            </div>
+            <div class="font-weight-bold text-light" style="font-size: 14px;">آماده ورود گیمر</div>
+            <div class="gn-muted mt-1" style="font-size: 11px;">ورود با نام‌کاربری پای سیستم</div>
+          {% elif device.status == 'IDLE' %}
+            <div style="width: 52px; height: 52px; border-radius: 50%; background: rgba(6, 182, 212, 0.12); display: flex; align-items: center; justify-content: center; margin-bottom: 8px;">
+              <i class="ti ti-lock-open text-info" style="font-size: 26px;"></i>
+            </div>
+            <div class="font-weight-bold text-info" style="font-size: 14px;">سیستم آزاد</div>
+            <div class="gn-muted mt-1" style="font-size: 11px;">قفل امنیتی باز است</div>
+          {% else %}
+            <div style="width: 52px; height: 52px; border-radius: 50%; background: rgba(100, 116, 139, 0.12); display: flex; align-items: center; justify-content: center; margin-bottom: 8px;">
+              <i class="ti ti-power text-muted" style="font-size: 26px;"></i>
+            </div>
+            <div class="font-weight-bold text-muted" style="font-size: 14px;">سیستم خاموش است</div>
+            <div class="gn-muted mt-1" style="font-size: 11px;">کلاینت متصل نیست</div>
+          {% endif %}
+        </div>
+
+        <!-- Quick Actions for Inactive Station -->
+        <div class="pro-card-actions">
+          {% if device.status == 'LOCKED' or device.status == 'OFFLINE' %}
+            <form method="post" action="{% url 'edge_device_action' device.id %}" class="flex-grow-1">
               {% csrf_token %}
               <input type="hidden" name="next" value="edge_devices">
-              <button type="submit" class="gn-btn sm danger w-100 justify-content-center" style="font-size: 11.5px; padding: 4px 6px;">
-                <i class="ti ti-player-stop"></i> پایان نشست
+              <input type="hidden" name="action" value="unlock">
+              <button type="submit" class="gn-btn sm success w-100 justify-content-center" style="font-size: 11.5px; padding: 6px;">
+                <i class="ti ti-lock-open"></i> باز کردن
               </button>
             </form>
+          {% else %}
+            <form method="post" action="{% url 'edge_device_action' device.id %}" class="flex-grow-1">
+              {% csrf_token %}
+              <input type="hidden" name="next" value="edge_devices">
+              <input type="hidden" name="action" value="lock">
+              <button type="submit" class="gn-btn sm warning w-100 justify-content-center" style="font-size: 11.5px; padding: 6px;">
+                <i class="ti ti-lock"></i> قفل کردن
+              </button>
+            </form>
+          {% endif %}
 
-            <button type="button" class="gn-btn sm" style="font-size: 11.5px; padding: 4px 8px; color: #38bdf8; border-color: rgba(56, 189, 248, 0.3);" title="شارژ سریع کیف پول گیمر" onclick="openQuickDeposit('{{ device.active_session.customer.id }}', '{{ device.active_session.customer.full_name|escapejs }}', '{{ device.wallet_balance }}')">
-              <i class="ti ti-plus"></i> شارژ
-            </button>
-          </div>
-        {% else %}
-          <!-- Inactive / Standby Actions -->
-          <div class="d-flex gap-1 w-100">
-            {% if device.status == 'LOCKED' or device.status == 'OFFLINE' %}
-              <form method="post" action="{% url 'edge_device_action' device.id %}" class="flex-grow-1">
-                {% csrf_token %}
-                <input type="hidden" name="next" value="edge_devices">
-                <input type="hidden" name="action" value="unlock">
-                <button type="submit" class="gn-btn sm success w-100 justify-content-center" style="font-size: 11.5px; padding: 4px 6px;">
-                  <i class="ti ti-lock-open"></i> باز کردن قفل
-                </button>
-              </form>
-            {% else %}
-              <form method="post" action="{% url 'edge_device_action' device.id %}" class="flex-grow-1">
-                {% csrf_token %}
-                <input type="hidden" name="next" value="edge_devices">
-                <input type="hidden" name="action" value="lock">
-                <button type="submit" class="gn-btn sm warning w-100 justify-content-center" style="font-size: 11.5px; padding: 4px 6px;">
-                  <i class="ti ti-lock"></i> قفل کردن
-                </button>
-              </form>
-            {% endif %}
-
-            <button type="button" class="gn-btn sm" style="font-size: 11.5px; padding: 4px 8px;" title="شروع نشست دستی برای مشتری" onclick="openStartSession('{{ device.id }}', '{{ device.name }}')">
-              <i class="ti ti-play"></i> شروع
-            </button>
-          </div>
-        {% endif %}
-
-        <!-- Secondary Utility Row: Ping, Restart, Detail link -->
-        <div class="d-flex justify-content-between align-items-center w-100" style="font-size: 11px;">
-          <form method="post" action="{% url 'edge_device_action' device.id %}" class="gn-inline-form">
-            {% csrf_token %}
-            <input type="hidden" name="next" value="edge_devices">
-            <input type="hidden" name="action" value="ping">
-            <button type="submit" class="baz-mini-btn" title="تست اتصال (پینگ)">
-              <i class="ti ti-activity"></i>
-            </button>
-          </form>
-
-          <form method="post" action="{% url 'edge_device_action' device.id %}" class="gn-inline-form" onsubmit="return confirm('آیا از ری‌استارت سیستم {{ device.name }} مطمئنید؟')">
-            {% csrf_token %}
-            <input type="hidden" name="next" value="edge_devices">
-            <input type="hidden" name="action" value="restart">
-            <button type="submit" class="baz-mini-btn" title="ری‌استارت سیستم" style="color: #fca5a5;">
-              <i class="ti ti-reload"></i>
-            </button>
-          </form>
-
-          <a href="{% url 'edge_device_detail' device.id %}" class="baz-mini-btn" title="جزئیات و تاریخچه بازی‌ها">
-            <i class="ti ti-eye"></i>
-          </a>
+          <button type="button" class="gn-btn sm" style="font-size: 11.5px; padding: 6px 10px;" title="شروع دستی بازی برای مشتری" onclick="openStartSession('{{ device.id }}', '{{ device.name }}')">
+            <i class="ti ti-player-play"></i> شروع
+          </button>
         </div>
+      {% endif %}
+
+      <!-- Sub-footer: Restart + Detail View -->
+      <div class="d-flex justify-content-between align-items-center mt-2 pt-2" style="border-top: 1px solid rgba(255,255,255,0.05); font-size: 11px;">
+        <form method="post" action="{% url 'edge_device_action' device.id %}" class="gn-inline-form" onsubmit="return confirm('آیا از ری‌استارت سیستم {{ device.name }} مطمئنید؟')">
+          {% csrf_token %}
+          <input type="hidden" name="next" value="edge_devices">
+          <input type="hidden" name="action" value="restart">
+          <button type="submit" class="baz-mini-btn" title="ری‌استارت سیستم" style="color: #fca5a5; border-color: rgba(252, 165, 165, 0.2);">
+            <i class="ti ti-reload"></i> ری‌استارت
+          </button>
+        </form>
+
+        <a href="{% url 'edge_device_detail' device.id %}" class="baz-mini-btn" title="سوابق و جزئیات">
+          <i class="ti ti-history"></i> سوابق
+        </a>
       </div>
 
     </div>

@@ -16,15 +16,21 @@
       <!-- Center Status & Gamer Info -->
       <div class="baz-card-center">
         {% if device.active_session %}
-          <div class="baz-status-big green">فعال</div>
+          <div class="baz-status-big green">در حال بازی</div>
           <div class="baz-gamer-name">{{ device.active_session.customer.full_name }}</div>
           {% if device.active_session.customer.username %}
             <div class="baz-gamer-user">@{{ device.active_session.customer.username }}</div>
           {% endif %}
-          <div class="baz-timer-badge">
-            <i class="ti ti-clock"></i> {{ device.elapsed_seconds|duration_hms }}
+          <div class="pro-app-badge my-1" style="font-size: 10.5px; padding: 2px 7px;">
+            <i class="ti ti-device-gamepad-2"></i> {{ device.active_app }}
           </div>
-          <div class="baz-cost-label">{{ device.current_cost|toman }} تومان</div>
+          <div class="d-flex gap-2 justify-content-center my-1" style="font-size: 11px;">
+            <span class="num text-info" title="زمان سپری‌شده">⏱️ {{ device.elapsed_seconds|duration_hms }}</span>
+            <span class="num text-warning" title="زمان باقی‌مانده">⏳ {{ device.remaining_seconds|duration_hms }}</span>
+          </div>
+          <div class="baz-cost-label num" style="font-size: 11.5px;">
+            مانده: <strong class="{% if device.is_low_balance %}text-danger{% else %}text-success{% endif %}">{{ device.remaining_money|toman }} ت</strong>
+          </div>
         {% elif device.status == 'IDLE' %}
           <div class="baz-status-big gray">آزاد</div>
           <span class="text-muted" style="font-size: 11px; margin-top: 4px;">آماده شروع</span>
