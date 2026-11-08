@@ -356,9 +356,13 @@ def create_client_code(request):
 @login_required
 def edges(request):
     require_cloud()
-    salon_server = EdgeNode.objects.exclude(status=EdgeStatus.REVOKED).first()
+    salon_server = (
+        EdgeNode.objects.exclude(status=EdgeStatus.REVOKED)
+        .order_by("-last_heartbeat_at")
+        .first()
+    )
     devices = (
-        ClientDevice.objects.filter(is_active=True).order_by("name")
+        ClientDevice.objects.filter(edge_id=salon_server.id, is_active=True).order_by("name")
         if salon_server
         else []
     )

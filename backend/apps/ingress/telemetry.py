@@ -21,12 +21,19 @@ def apply_device_telemetry(edge: EdgeNode, devices: list[dict], *, now: datetime
         except (ValueError, TypeError):
             continue
         present.append(device_id)
-        updated += ClientDevice.objects.filter(id=device_id, edge_id=edge.id).update(
-            name=str(item.get("name", ""))[:80] or "unnamed",
-            status=item.get("status", ClientStatus.OFFLINE),
-            last_heartbeat_at=now,
-            application_version=str(item.get("application_version", ""))[:40],
+        ClientDevice.objects.update_or_create(
+            id=device_id,
+            defaults={
+                "edge_id": edge.id,
+                "name": str(item.get("name", ""))[:80] or "unnamed",
+                "status": item.get("status", ClientStatus.OFFLINE),
+                "last_heartbeat_at": now,
+                "application_version": str(item.get("application_version", ""))[:40],
+                "is_replica": True,
+                "is_active": True,
+            },
         )
+        updated += 1
     ClientDevice.objects.filter(edge_id=edge.id, is_replica=True).exclude(
         id__in=present
     ).exclude(status=ClientStatus.OFFLINE).update(status=ClientStatus.OFFLINE)

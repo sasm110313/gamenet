@@ -84,8 +84,7 @@
           <tr>
             <th>نام سیستم</th>
             <th>وضعیت</th>
-            <th>نشست فعلی</th>
-            <th>آخرین ضربان</th>
+            <th>نشست فعلی گیمر</th>
             <th class="text-end">عملیات</th>
           </tr>
         </thead>
@@ -108,10 +107,9 @@
                     <i class="ti ti-user"></i> {{ device.active_session.customer.full_name }}
                   </span>
                 {% else %}
-                  <span class="gn-muted" style="font-size: 12px;">—</span>
+                  <span class="gn-muted" style="font-size: 12px;">بدون گیمر</span>
                 {% endif %}
               </td>
-              <td class="gn-muted num" style="font-size: 12px;">{{ device.last_heartbeat_at|reltime }}</td>
               <td class="text-end">
                 <form method="post" action="{% url 'cloud_device_action' device.id %}" class="gn-inline-form">
                   {% csrf_token %}
