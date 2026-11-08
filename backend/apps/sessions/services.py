@@ -175,6 +175,8 @@ def start_session(
 
     from apps.devices.services import set_status
 
+    wallet_balance = wallet.balance if wallet else 0
+
     set_status(device, ClientStatus.STARTING, force=True, reason="session started")
     queue_device_command(
         device,
@@ -182,8 +184,13 @@ def start_session(
         {
             "session_id": str(session.id),
             "customer_id": str(customer.id),
+            "customer_name": customer.full_name,
+            "username": customer.username or customer.phone,
+            "wallet_balance": wallet_balance,
+            "credit_limit": customer.credit_limit,
             "hourly_rate": hourly_rate,
             "rate_name": tariff_name,
+            "started_at": session.started_at.isoformat(),
         },
         actor=actor,
     )

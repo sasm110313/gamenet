@@ -188,22 +188,6 @@ class ClientUserLoginView(APIView):
         if customer is None or not customer.check_password(password):
             raise ApiError("invalid_credentials", "نام کاربری یا رمز عبور اشتباه است.", status.HTTP_401_UNAUTHORIZED)
 
-        # If internet is connected, check with Cloud to ensure latest remote deposits/commands are synced first
-        try:
-            from apps.synchronization.cloud_client import CloudClient
-            from apps.synchronization.edge_credentials import load_credentials
-            from apps.synchronization.edge_runtime import pull_and_queue_commands, execute_received_commands
-            creds = load_credentials()
-            if creds:
-                client = CloudClient(creds, timeout=1.5)
-                pull_and_queue_commands(client)
-                execute_received_commands()
-                # Refresh customer and wallet from DB after applying any cloud updates
-                customer.refresh_from_db()
-        except Exception:
-            # If offline, use latest authoritative local state without blocking
-            pass
-
         try:
             session = start_session(customer=customer, device=device)
         except SessionError as exc:

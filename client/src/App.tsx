@@ -541,6 +541,7 @@ function UnlockedScreen({
   const hourlyRate = session?.hourlyRate || 40000;
   const currentCost = Math.ceil((elapsedSec * hourlyRate) / 3600);
   const remainingWallet = session ? Math.max(0, session.walletBalance - currentCost) : 0;
+  const totalAvailable = session ? remainingWallet + (session.creditLimit || 0) : 0;
 
   const handleLaunchGame = async (game: GameItem) => {
     setLaunchingId(game.id);
@@ -588,10 +589,10 @@ function UnlockedScreen({
         </div>
 
         {/* Low balance warning */}
-        {remainingWallet <= 5000 && (
+        {session && totalAvailable <= 5000 && (
           <div className="mt-4 rounded-xl border border-amber/40 bg-amber/10 p-3 text-xs text-amber flex items-center gap-2">
             <span>⚠️</span>
-            <span>اعتبار شما رو به پایان است ({fa(remainingWallet.toLocaleString())} تومان). جهت تمدید به مسئول صندوق مراجعه فرمایید.</span>
+            <span>اعتبار شما رو به پایان است ({fa(Math.max(0, totalAvailable).toLocaleString())} تومان). جهت تمدید به مسئول صندوق مراجعه فرمایید.</span>
           </div>
         )}
 

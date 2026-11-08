@@ -258,18 +258,23 @@ class AppController {
         break;
       case "client.unlock": {
         const payload = (command.payload || {}) as Record<string, unknown>;
-        const userSession: UserSessionInfo | null = payload.session_id
-          ? {
-              sessionId: String(payload.session_id || ""),
-              customerName: String(payload.customer_name || "کاربر"),
-              username: String(payload.username || ""),
-              walletBalance: Number(payload.wallet_balance || 0),
-              creditLimit: Number(payload.credit_limit || 0),
-              hourlyRate: Number(payload.hourly_rate || 0),
-              tariffName: String(payload.rate_name || payload.tariff_name || "تعرفه بازی"),
-              startedAt: new Date().toISOString(),
-            }
-          : null;
+        const prevSession = this.state.userSession;
+        const rawBalance = payload.wallet_balance;
+        const balance =
+          rawBalance !== undefined && rawBalance !== null && !isNaN(Number(rawBalance))
+            ? Number(rawBalance)
+            : (prevSession?.walletBalance ?? 0);
+
+        const userSession: UserSessionInfo = {
+          sessionId: String(payload.session_id || (prevSession?.sessionId ?? "")),
+          customerName: String(payload.customer_name || (prevSession?.customerName ?? "گیمر عزیز")),
+          username: String(payload.username || (prevSession?.username ?? "")),
+          walletBalance: balance,
+          creditLimit: Number(payload.credit_limit ?? prevSession?.creditLimit ?? 0),
+          hourlyRate: Number(payload.hourly_rate ?? prevSession?.hourlyRate ?? 0),
+          tariffName: String(payload.rate_name || payload.tariff_name || prevSession?.tariffName || "تعرفه بازی"),
+          startedAt: String(payload.started_at || prevSession?.startedAt || new Date().toISOString()),
+        };
         this.update({ locked: false, userSession });
         this.connection?.notifyState();
         ack = { status: "ok", state: "ONLINE", result: { locked: false, source: "hub" } };
