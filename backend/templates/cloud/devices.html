@@ -174,20 +174,3 @@
   </table>
 </div>
 {% endblock %}
-        <option value="ACTIVE" {% if status_filter == 'ACTIVE' %}selected{% endif %}>در حال بازی (ACTIVE)</option>
-        <option value="OFFLINE" {% if status_filter == 'OFFLINE' %}selected{% endif %}>آفلاین (OFFLINE)</option>
-      </select>
-
-      <input class="gn-input" name="q" value="{{ q }}" placeholder="جستجو بر اساس نام، IP…" style="min-width: 200px">
-      <button class="gn-btn" type="submit"><i class="ti ti-search"></i></button>
-      {% if q or selected_edge or status_filter %}
-        <a href="{% url 'cloud_devices' %}" class="gn-btn" title="حذف فیلترها"><i class="ti ti-x"></i></a>
-      {% endif %}
-    </form>
-  </div>
-
-  <div hx-get="{% url 'cloud_device_grid' %}?edge={{ selected_edge|default:'' }}&q={{ q|default:'' }}&status={{ status_filter|default:'' }}" hx-trigger="every 3s" hx-swap="innerHTML">
-    {% include "cloud/_device_grid.html" %}
-  </div>
-</div>
-{% endblock %}

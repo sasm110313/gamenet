@@ -128,19 +128,3 @@
   </div>
 </div>
 {% endblock %}
-                  <input form="cloud-group-{{ group.id }}" type="checkbox" name="is_active" value="1" {% if group.is_active %}checked{% endif %}> فعال
-                </label>
-              </td>
-              <td class="mono gn-muted" style="font-size: 10.5px">{{ group.edge_id|shortid }}</td>
-              <td class="num gn-muted">{{ group.revision }}</td>
-              <td class="text-end"><button class="gn-btn sm" form="cloud-group-{{ group.id }}" type="submit" title="ارسال به‌روزرسانی"><i class="ti ti-cloud-upload"></i></button></td>
-            </tr>
-          {% empty %}
-            <tr><td colspan="6"><div class="gn-empty">گروهی همگام نشده است.</div></td></tr>
-          {% endfor %}
-        </tbody>
-      </table>
-    </div>
-  </div>
-</div>
-{% endblock %}
