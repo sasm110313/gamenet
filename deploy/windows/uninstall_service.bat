@@ -29,5 +29,9 @@ schtasks /delete /tn "GameNetSalonServer" /f >nul 2>&1
 netsh advfirewall firewall delete rule name="GameNet Salon Server HTTPS" >nul 2>&1
 netsh advfirewall firewall delete rule name="GameNet Salon Server Discovery" >nul 2>&1
 
-echo سرویس و قوانین فایروال با موفقیت حذف شدند.
+powershell -NoProfile -Command ^
+    "$desk = [Environment]::GetFolderPath('Desktop'); " ^
+    "Remove-Item \"$desk\مدیریت گیم‌نت (GameNet Server).lnk\" -ErrorAction SilentlyContinue" >nul 2>&1
+
+echo سرویس، قوانین فایروال و میانبر دسکتاپ با موفقیت حذف شدند.
 pause

@@ -14,6 +14,19 @@ class DevicesConfig(AppConfig):
     def ready(self):
         role = os.environ.get("GAMENET_ROLE", "edge")
         if role == "edge":
+            import sys
+            cli_commands_to_skip = {
+                "migrate",
+                "makemigrations",
+                "collectstatic",
+                "createsuperuser",
+                "shell",
+                "test",
+                "edge_register",
+                "bootstrap_edge",
+            }
+            if any(cmd in sys.argv for cmd in cli_commands_to_skip):
+                return
             try:
                 from apps.devices.discovery import start_discovery_service
                 start_discovery_service()

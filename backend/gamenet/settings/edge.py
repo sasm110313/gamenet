@@ -15,3 +15,13 @@ if CHANNEL_LAYER == "redis":
     }
 else:
     CHANNEL_LAYERS = {"default": {"BACKEND": "channels.layers.InMemoryChannelLayer"}}
+
+# Zero-setup SQLite default for Windows edge if no DATABASE_URL is explicitly set
+if "DATABASE_URL" not in os.environ:
+    sqlite_path = BASE_DIR / "data" / "gamenet_edge.sqlite3"
+    sqlite_path.parent.mkdir(parents=True, exist_ok=True)
+    DATABASES["default"] = {
+        "ENGINE": "django.db.backends.sqlite3",
+        "NAME": str(sqlite_path),
+        "CONN_MAX_AGE": 60,
+    }

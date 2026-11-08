@@ -108,9 +108,10 @@ DATABASES = {
     )
 }
 DATABASES["default"].setdefault("CONN_MAX_AGE", 60)
-DATABASES["default"].setdefault(
-    "OPTIONS", {"connect_timeout": 5, "application_name": f"gamenet-{GAMENET_ROLE}"}
-)
+if "postgresql" in DATABASES["default"].get("ENGINE", ""):
+    DATABASES["default"].setdefault(
+        "OPTIONS", {"connect_timeout": 5, "application_name": f"gamenet-{GAMENET_ROLE}"}
+    )
 
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 AUTH_USER_MODEL = "accounts.User"
@@ -189,8 +190,8 @@ EDGE_CREDENTIALS_FILE = env(
 )
 if not Path(EDGE_CREDENTIALS_FILE).is_absolute():
     EDGE_CREDENTIALS_FILE = str(ROOT_DIR / EDGE_CREDENTIALS_FILE)
-CLOUD_BASE_URL = env("CLOUD_BASE_URL", default="").rstrip("/")
-CLOUD_WS_URL = env("CLOUD_WS_URL", default="").rstrip("/")
+CLOUD_BASE_URL = env("CLOUD_BASE_URL", default="https://gamenet.hammasjedy.ir").rstrip("/")
+CLOUD_WS_URL = env("CLOUD_WS_URL", default="wss://gamenet.hammasjedy.ir/ws/edge/").rstrip("/")
 CLOUD_CA_BUNDLE = env("CLOUD_CA_BUNDLE", default="")
 if CLOUD_CA_BUNDLE and not Path(CLOUD_CA_BUNDLE).is_absolute():
     CLOUD_CA_BUNDLE = str(ROOT_DIR / CLOUD_CA_BUNDLE)
