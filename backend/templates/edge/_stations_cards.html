@@ -1,0 +1,162 @@
+{% load gn %}
+
+<div class="baz-station-grid" id="stations-grid">
+  {% for device in devices %}
+    <div class="baz-station-card {% if device.active_session or device.status == 'ACTIVE' %}is-active{% elif device.status == 'LOCKED' %}is-locked{% elif device.status == 'OFFLINE' %}is-offline{% else %}is-idle{% endif %}" id="card-{{ device.id }}">
+
+      <!-- Card Top: Station Badge, Live Status Dot, and Settings Icon -->
+      <div class="baz-card-top">
+        <div class="d-flex align-items-center gap-2">
+          <span class="baz-station-dot {% if device.active_session or device.status == 'ACTIVE' %}green{% elif device.status == 'LOCKED' %}amber{% elif device.status == 'OFFLINE' %}gray{% else %}green{% endif %}"></span>
+          <div>
+            <div class="baz-station-num-big">{{ device.name }}</div>
+            <div class="baz-station-sub-type">
+              {% if device.active_session or device.status == 'ACTIVE' %}
+                <span class="text-success font-weight-bold">در حال بازی</span>
+              {% elif device.status == 'LOCKED' %}
+                <span class="text-warning">قفل / آماده ورود</span>
+              {% elif device.status == 'IDLE' %}
+                <span class="text-info">آزاد</span>
+              {% else %}
+                <span class="text-muted">آفلاین</span>
+              {% endif %}
+            </div>
+          </div>
+        </div>
+
+        <div class="d-flex align-items-center gap-1">
+          <button type="button" class="baz-mini-btn" title="تنظیمات این استیشن" onclick="openStationSettings('{{ device.id }}', '{{ device.name }}', '{{ device.metadata.default_tariff_id|default:'' }}', '{{ device.is_active|yesno:'1,0' }}')">
+            <i class="ti ti-settings"></i>
+          </button>
+        </div>
+      </div>
+
+      <!-- Card Center: Active Gamer Info OR Standby Status -->
+      <div class="baz-card-center">
+        {% if device.active_session %}
+          <div class="baz-gamer-name" style="font-size: 15px;">
+            <i class="ti ti-user"></i> {{ device.active_session.customer.full_name }}
+          </div>
+          {% if device.active_session.customer.username %}
+            <div class="baz-gamer-user">@{{ device.active_session.customer.username }}</div>
+          {% endif %}
+
+          <div class="baz-timer-badge" data-started="{{ device.active_session.started_at|date:'U' }}">
+            <i class="ti ti-clock"></i> {{ device.elapsed_seconds|duration_hms }}
+          </div>
+
+          <div class="baz-cost-label mt-1">
+            هزینه: <strong class="num text-warning font-weight-bold" style="font-size: 13px;">{{ device.current_cost|toman }} تومان</strong>
+          </div>
+
+          <div class="mt-1" style="font-size: 11.5px;">
+            موجودی:
+            <span class="num font-weight-bold {% if device.wallet_balance > 20000 %}text-success{% else %}text-danger{% endif %}">
+              {{ device.wallet_balance|toman }} تومان
+            </span>
+          </div>
+
+          <div class="text-muted mt-1" style="font-size: 11px;">
+            شروع: {{ device.started_at_str }} · {{ device.active_session.hourly_rate|toman }} ت/ساعت
+          </div>
+
+        {% elif device.status == 'LOCKED' %}
+          <div class="py-2 text-center">
+            <i class="ti ti-lock text-warning" style="font-size: 32px; opacity: 0.85;"></i>
+            <div class="mt-1 font-weight-bold text-light" style="font-size: 13px;">آماده ورود گیمر</div>
+            <div class="text-muted" style="font-size: 11px;">کلاینت قفل است</div>
+          </div>
+        {% elif device.status == 'IDLE' %}
+          <div class="py-2 text-center">
+            <i class="ti ti-lock-open text-success" style="font-size: 32px; opacity: 0.85;"></i>
+            <div class="mt-1 font-weight-bold text-success" style="font-size: 13px;">سیستم آزاد</div>
+            <div class="text-muted" style="font-size: 11px;">قفل دستی باز است</div>
+          </div>
+        {% else %}
+          <div class="py-2 text-center">
+            <i class="ti ti-power text-muted" style="font-size: 32px; opacity: 0.5;"></i>
+            <div class="mt-1 text-muted font-weight-bold" style="font-size: 13px;">سیستم خاموش است</div>
+          </div>
+        {% endif %}
+      </div>
+
+      <!-- Card Bottom: Quick Actions -->
+      <div class="baz-card-bottom flex-column gap-2 mt-2 pt-2" style="border-top: 1px solid rgba(255,255,255,0.06);">
+        {% if device.active_session %}
+          <!-- Active Session Actions -->
+          <div class="d-flex gap-1 w-100">
+            <form method="post" action="{% url 'edge_session_stop' device.active_session.id %}" class="flex-grow-1" onsubmit="return confirm('آیا از پایان بازی و قفل کردن {{ device.name }} مطمئنید؟')">
+              {% csrf_token %}
+              <input type="hidden" name="next" value="edge_devices">
+              <button type="submit" class="gn-btn sm danger w-100 justify-content-center" style="font-size: 11.5px; padding: 4px 6px;">
+                <i class="ti ti-player-stop"></i> پایان نشست
+              </button>
+            </form>
+
+            <button type="button" class="gn-btn sm" style="font-size: 11.5px; padding: 4px 8px; color: #38bdf8; border-color: rgba(56, 189, 248, 0.3);" title="شارژ سریع کیف پول گیمر" onclick="openQuickDeposit('{{ device.active_session.customer.id }}', '{{ device.active_session.customer.full_name|escapejs }}', '{{ device.wallet_balance }}')">
+              <i class="ti ti-plus"></i> شارژ
+            </button>
+          </div>
+        {% else %}
+          <!-- Inactive / Standby Actions -->
+          <div class="d-flex gap-1 w-100">
+            {% if device.status == 'LOCKED' or device.status == 'OFFLINE' %}
+              <form method="post" action="{% url 'edge_device_action' device.id %}" class="flex-grow-1">
+                {% csrf_token %}
+                <input type="hidden" name="next" value="edge_devices">
+                <input type="hidden" name="action" value="unlock">
+                <button type="submit" class="gn-btn sm success w-100 justify-content-center" style="font-size: 11.5px; padding: 4px 6px;">
+                  <i class="ti ti-lock-open"></i> باز کردن قفل
+                </button>
+              </form>
+            {% else %}
+              <form method="post" action="{% url 'edge_device_action' device.id %}" class="flex-grow-1">
+                {% csrf_token %}
+                <input type="hidden" name="next" value="edge_devices">
+                <input type="hidden" name="action" value="lock">
+                <button type="submit" class="gn-btn sm warning w-100 justify-content-center" style="font-size: 11.5px; padding: 4px 6px;">
+                  <i class="ti ti-lock"></i> قفل کردن
+                </button>
+              </form>
+            {% endif %}
+
+            <button type="button" class="gn-btn sm" style="font-size: 11.5px; padding: 4px 8px;" title="شروع نشست دستی برای مشتری" onclick="openStartSession('{{ device.id }}', '{{ device.name }}')">
+              <i class="ti ti-play"></i> شروع
+            </button>
+          </div>
+        {% endif %}
+
+        <!-- Secondary Utility Row: Ping, Restart, Detail link -->
+        <div class="d-flex justify-content-between align-items-center w-100" style="font-size: 11px;">
+          <form method="post" action="{% url 'edge_device_action' device.id %}" class="gn-inline-form">
+            {% csrf_token %}
+            <input type="hidden" name="next" value="edge_devices">
+            <input type="hidden" name="action" value="ping">
+            <button type="submit" class="baz-mini-btn" title="تست اتصال (پینگ)">
+              <i class="ti ti-activity"></i>
+            </button>
+          </form>
+
+          <form method="post" action="{% url 'edge_device_action' device.id %}" class="gn-inline-form" onsubmit="return confirm('آیا از ری‌استارت سیستم {{ device.name }} مطمئنید؟')">
+            {% csrf_token %}
+            <input type="hidden" name="next" value="edge_devices">
+            <input type="hidden" name="action" value="restart">
+            <button type="submit" class="baz-mini-btn" title="ری‌استارت سیستم" style="color: #fca5a5;">
+              <i class="ti ti-reload"></i>
+            </button>
+          </form>
+
+          <a href="{% url 'edge_device_detail' device.id %}" class="baz-mini-btn" title="جزئیات و تاریخچه بازی‌ها">
+            <i class="ti ti-eye"></i>
+          </a>
+        </div>
+      </div>
+
+    </div>
+  {% empty %}
+    <div class="gn-empty" style="grid-column: 1 / -1;">
+      <i class="ti ti-device-desktop-off"></i>
+      دستگاهی یافت نشد.
+    </div>
+  {% endfor %}
+</div>

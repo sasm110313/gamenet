@@ -76,7 +76,7 @@ def _enrich_devices(device_list, now):
     active_sessions = {
         s.device_id: s
         for s in GamingSession.objects.filter(status=SessionStatus.ACTIVE).select_related(
-            "customer", "tariff", "customer_rate"
+            "customer", "customer__wallet", "tariff", "customer_rate"
         )
     }
     for d in device_list:
@@ -84,9 +84,17 @@ def _enrich_devices(device_list, now):
         if d.active_session:
             d.elapsed_seconds = max(0, int((now - d.active_session.started_at).total_seconds()))
             d.current_cost = int((d.elapsed_seconds / 3600) * d.active_session.hourly_rate)
+            cust = d.active_session.customer
+            if hasattr(cust, "wallet") and cust.wallet:
+                d.wallet_balance = cust.wallet.balance
+            else:
+                d.wallet_balance = 0
+            d.started_at_str = d.active_session.started_at.strftime("%H:%M")
         else:
             d.elapsed_seconds = 0
             d.current_cost = 0
+            d.wallet_balance = 0
+            d.started_at_str = ""
     device_list.sort(key=_station_sort_key)
     return device_list
 
@@ -214,28 +222,129 @@ def device_grid(request):
 @login_required
 def devices(request):
     ctx = _common()
+    now = timezone.now()
+    qs = ClientDevice.objects.filter(is_active=True)
     q = request.GET.get("q", "").strip()
-    qs = ClientDevice.objects.all().order_by("name")
     if q:
-        qs = qs.filter(Q(name__icontains=q) | Q(hostname__icontains=q))
-    ctx.update({"devices": qs, "q": q, "codes": RegistrationCode.objects.all()[:10]})
+        qs = qs.filter(Q(name__icontains=q))
+
+    device_list = list(qs)
+    device_list = _enrich_devices(device_list, now)
+
+    total_devices = max(10, len(device_list))
+    active_count = sum(1 for d in device_list if d.status == ClientStatus.ACTIVE or d.active_session)
+    free_count = sum(1 for d in device_list if d.status == ClientStatus.IDLE and not d.active_session)
+    locked_count = sum(1 for d in device_list if d.status == ClientStatus.LOCKED and not d.active_session)
+    offline_count = sum(1 for d in device_list if d.status == ClientStatus.OFFLINE)
+
+    from apps.pricing.models import Tariff
+    tariffs = list(Tariff.objects.filter(is_active=True).order_by("name"))
+    customers = list(Customer.objects.filter(is_active=True).select_related("wallet").order_by("full_name")[:100])
+
+    ctx.update(
+        {
+            "devices": device_list,
+            "total_devices": total_devices,
+            "active_count": active_count,
+            "free_count": free_count,
+            "locked_count": locked_count,
+            "offline_count": offline_count,
+            "tariffs": tariffs,
+            "customers": customers,
+            "now": now,
+            "q": q,
+        }
+    )
     return render(request, "edge/devices.html", ctx)
+
+
+@login_required
+def devices_stations_partial(request):
+    now = timezone.now()
+    qs = ClientDevice.objects.filter(is_active=True)
+    q = request.GET.get("q", "").strip()
+    if q:
+        qs = qs.filter(Q(name__icontains=q))
+
+    device_list = list(qs)
+    device_list = _enrich_devices(device_list, now)
+
+    from apps.pricing.models import Tariff
+    tariffs = list(Tariff.objects.filter(is_active=True).order_by("name"))
+    customers = list(Customer.objects.filter(is_active=True).select_related("wallet").order_by("full_name")[:100])
+
+    return render(
+        request,
+        "edge/_stations_cards.html",
+        {
+            "devices": device_list,
+            "tariffs": tariffs,
+            "customers": customers,
+            "now": now,
+        },
+    )
 
 
 @login_required
 def device_detail(request, device_id):
     ctx = _common()
+    now = timezone.now()
     device = get_object_or_404(ClientDevice, id=device_id)
+    enriched = _enrich_devices([device], now)[0]
+
+    from apps.pricing.models import Tariff
+    tariffs = list(Tariff.objects.filter(is_active=True).order_by("name"))
+    customers = list(Customer.objects.filter(is_active=True).select_related("wallet").order_by("full_name")[:100])
+
+    recent_sessions = list(
+        GamingSession.objects.filter(device=device)
+        .select_related("customer", "tariff")
+        .order_by("-started_at")[:15]
+    )
+
     ctx.update(
         {
-            "device": device,
-            "commands": device.commands.all()[:20],
-            "outbox_events": OutboxEvent.objects.filter(
-                aggregate_type="device", aggregate_id=str(device.id)
-            ).order_by("-local_sequence")[:20],
+            "device": enriched,
+            "tariffs": tariffs,
+            "customers": customers,
+            "recent_sessions": recent_sessions,
+            "now": now,
         }
     )
     return render(request, "edge/device_detail.html", ctx)
+
+
+@login_required
+@require_POST
+def device_update(request, device_id):
+    device = get_object_or_404(ClientDevice, id=device_id)
+    name = request.POST.get("name", "").strip()
+    if name:
+        device.name = name
+
+    tariff_id = request.POST.get("default_tariff_id", "").strip()
+    meta = dict(device.metadata or {})
+    if tariff_id:
+        meta["default_tariff_id"] = tariff_id
+    elif "default_tariff_id" in meta:
+        meta.pop("default_tariff_id")
+    device.metadata = meta
+
+    if "is_active" in request.POST:
+        device.is_active = request.POST.get("is_active") == "1"
+
+    device.save(update_fields=["name", "metadata", "is_active", "updated_at"])
+    AuditLog.objects.create(
+        actor=request.user,
+        actor_label=request.user.label,
+        action="device.updated",
+        object_type="device",
+        object_id=str(device.id),
+        metadata={"name": device.name, "metadata": device.metadata},
+        ip_address=request.META.get("REMOTE_ADDR"),
+    )
+    messages.success(request, f"تنظیمات ایستگاه «{device.name}» با موفقیت ذخیره شد.")
+    return safe_redirect_next(request, "edge_devices")
 
 
 @login_required

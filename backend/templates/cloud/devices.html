@@ -108,10 +108,8 @@
       <tr>
         <th>نام سیستم</th>
         <th>وضعیت</th>
-        <th>نشست فعلی</th>
-        <th>نسخه</th>
-        <th>آخرین ضربان</th>
-        <th class="text-end">کنترل از راه دور</th>
+        <th>نشست فعلی گیمر</th>
+        <th class="text-end">عملیات سریع</th>
       </tr>
     </thead>
     <tbody>
@@ -121,7 +119,6 @@
             <a href="{% url 'cloud_device_detail' device.id %}" style="color: var(--gn-text); font-weight: 600; text-decoration: none">
               {{ device.name }}
             </a>
-            <div class="gn-muted mono" style="font-size: 11px">{{ device.ip_address|default:"—" }}</div>
           </td>
           <td>
             <span class="gn-status {{ device.status|status_tone }}">
@@ -135,11 +132,9 @@
               </span>
               <span class="gn-muted num ms-1" style="font-size: 11px">{{ device.active_session.started_at|reltime }}</span>
             {% else %}
-              <span class="gn-muted" style="font-size: 12px">—</span>
+              <span class="gn-muted" style="font-size: 12px">بدون گیمر</span>
             {% endif %}
           </td>
-          <td class="gn-muted num" style="font-size: 12px">{{ device.application_version|default:"—" }}</td>
-          <td class="gn-muted num" style="font-size: 12px">{{ device.last_heartbeat_at|reltime }}</td>
           <td class="text-end">
             <div class="d-flex gap-1 justify-content-end align-items-center">
               {% if device.active_session %}

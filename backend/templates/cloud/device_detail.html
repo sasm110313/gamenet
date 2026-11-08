@@ -15,9 +15,9 @@
 
 {% block content %}
 <div class="gn-grid cols-3 mb-3">
-  <!-- Card 1: Technical & State Details -->
+  <!-- Card 1: State Details -->
   <div class="gn-card">
-    <h6>وضعیت و مشخصات سیستم</h6>
+    <h6>وضعیت ایستگاه</h6>
     <div class="d-flex align-items-center gap-2 mb-2">
       <span class="gn-status {{ device.status|status_tone }}" style="font-size: 13px">
         <span class="dot"></span>{{ device.status|status_fa }}
@@ -26,14 +26,10 @@
         <span class="gn-status st-offline ms-1">غیرفعال‌شده</span>
       {% endif %}
     </div>
-    <div class="d-flex flex-column gap-1" style="font-size: 12.5px">
-      <div class="d-flex justify-content-between"><span class="gn-muted">نام میزبان</span><span>{{ device.hostname|default:"—" }}</span></div>
-      <div class="d-flex justify-content-between"><span class="gn-muted">آدرس IP</span><span class="num">{{ device.ip_address|default:"—" }}</span></div>
-      <div class="d-flex justify-content-between"><span class="gn-muted">سیستم‌عامل</span><span>{{ device.operating_system|default:"—" }}</span></div>
-      <div class="d-flex justify-content-between"><span class="gn-muted">نسخه نرم‌افزار کلاینت</span><span class="num">{{ device.application_version|default:"—" }}</span></div>
-      <div class="d-flex justify-content-between"><span class="gn-muted">آخرین ارتباط</span><span class="num">{{ device.last_heartbeat_at|reltime }}</span></div>
-      <div class="d-flex justify-content-between"><span class="gn-muted">تاریخ ثبت</span><span class="num">{{ device.registered_at|date:"Y-m-d H:i" }}</span></div>
+    <div class="d-flex flex-column gap-2" style="font-size: 13px">
+      <div class="d-flex justify-content-between"><span class="gn-muted">نام استیشن</span><strong class="text-light">{{ device.name }}</strong></div>
       <div class="d-flex justify-content-between"><span class="gn-muted">سرور سالن</span><span>{{ edge.name|default:"سرور سالن اصلی" }}</span></div>
+      <div class="d-flex justify-content-between"><span class="gn-muted">وضعیت</span><span>{% if device.is_active %}<span class="text-success">فعال و آماده</span>{% else %}<span class="text-danger">غیرفعال</span>{% endif %}</span></div>
     </div>
   </div>
 
@@ -112,38 +108,4 @@
   </div>
 </div>
 
-<!-- Commands history table -->
-<div class="gn-card">
-  <h6>تاریخچه دستورهای از راه دور صادرشده برای این دستگاه</h6>
-  <table class="gn-table">
-    <thead>
-      <tr>
-        <th>دستور</th>
-        <th>وضعیت</th>
-        <th>زمان صدور</th>
-        <th>زمان تایید</th>
-        <th>نتیجه</th>
-        <th>شناسه</th>
-      </tr>
-    </thead>
-    <tbody>
-      {% for cmd in commands %}
-        <tr>
-          <td><strong>{{ cmd.command_type }}</strong></td>
-          <td><span class="gn-status {{ cmd.status|status_tone }}"><span class="dot"></span>{{ cmd.status|status_fa }}</span></td>
-          <td class="num gn-muted">{{ cmd.issued_at|date:"Y-m-d H:i:s" }}</td>
-          <td class="num gn-muted">{{ cmd.acknowledged_at|date:"H:i:s"|default:"—" }}</td>
-          <td class="gn-muted" style="font-size: 12px">{{ cmd.result|default:cmd.error|default:"—" }}</td>
-          <td class="mono gn-muted" style="font-size: 11px">{{ cmd.id|shortid }}</td>
-        </tr>
-      {% empty %}
-        <tr>
-          <td colspan="6">
-            <div class="gn-empty">هنوز دستوری برای این دستگاه صادر نشده است.</div>
-          </td>
-        </tr>
-      {% endfor %}
-    </tbody>
-  </table>
-</div>
 {% endblock %}

@@ -9,6 +9,7 @@ from django.http import HttpResponseBadRequest
 from django.shortcuts import get_object_or_404, redirect, render
 from django.views.decorators.http import require_POST
 
+from apps.core.redirects import safe_redirect_next
 from apps.audit.models import AuditLog
 from apps.clients.models import ClientDevice, ClientStatus
 from apps.core.dashboard import edge_common
@@ -333,7 +334,7 @@ def customer_deposit(request, customer_id):
         return redirect("edge_customer_detail", customer_id=customer.id)
     _audit(request, "wallet.deposit", "ledger_entry", entry.id, {"amount": entry.amount})
     messages.success(request, f"{entry.amount:,} تومان به کیف پول شارژ شد.")
-    return redirect("edge_customer_detail", customer_id=customer.id)
+    return safe_redirect_next(request, "edge_customer_detail", customer_id=customer.id)
 
 
 @login_required
