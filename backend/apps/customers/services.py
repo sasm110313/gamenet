@@ -139,6 +139,9 @@ def create_customer(
                 edge_id=identity.edge_id, phone=phone
             ).first()
             if existing is not None:
+                if customer_id is not None and str(existing.id) == str(customer_id):
+                    Wallet.objects.get_or_create(customer=existing, defaults={"balance": 0})
+                    return existing
                 raise CustomerError(
                     "مشتری دیگری با این شماره تماس ثبت شده است."
                 ) from exc

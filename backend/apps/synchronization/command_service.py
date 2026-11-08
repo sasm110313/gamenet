@@ -441,8 +441,6 @@ def _dispatch(command_type: str, payload: dict, *, origin: str) -> tuple[dict[st
             else None
         )
         if existing is None:
-            if base != 0:
-                raise ValueError("customer does not exist on this edge")
             customer = create_customer(
                 customer_id=customer_id,
                 full_name=_require(payload, "full_name"),
@@ -457,9 +455,6 @@ def _dispatch(command_type: str, payload: dict, *, origin: str) -> tuple[dict[st
 
         if existing.edge_id != identity.edge_id:
             raise ValueError("customer belongs to another edge")
-        if base == 0:
-            return {**_customer_result(existing), "created": False}, "succeeded"
-        _check_revision(existing, base)
         customer = update_customer(
             existing,
             full_name=_require(payload, "full_name"),
@@ -471,7 +466,6 @@ def _dispatch(command_type: str, payload: dict, *, origin: str) -> tuple[dict[st
             credit_limit=credit_limit,
             notes=payload.get("notes", ""),
             is_active=bool(payload.get("is_active", True)),
-            expected_revision=base,
         )
         return {**_customer_result(customer), "created": False}, "succeeded"
 
