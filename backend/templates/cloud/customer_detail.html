@@ -15,6 +15,9 @@
     </div>
   </div>
 </div>
+
+{% include "cloud/partials/rahro_customer_card.html" %}
+
 <div class="gn-grid cols-3 mb-3">
   <div class="gn-card">
     <h6>کیف پول</h6>
@@ -28,7 +31,7 @@
     <h6>مشخصات</h6>
     <div class="d-flex flex-column gap-1" style="font-size: 12.5px">
       <div class="d-flex justify-content-between"><span class="gn-muted">شماره تماس</span><span class="num">{{ customer.phone|default:"—" }}</span></div>
-      <div class="d-flex justify-content-between"><span class="gn-muted">نام کاربری</span><span class="num">@{{ customer.username|default:"—" }}</span></div>
+      <div class="d-flex justify-content-between"><span class="gn-muted">کد ۴ تا ۶ رقمی ورود کلاینت</span><span class="num font-bold text-warning">{% if customer.username %}@{{ customer.username }}{% else %}—{% endif %}</span></div>
       <div class="d-flex justify-content-between"><span class="gn-muted">گروه کاربری</span><span>{{ customer.group.name|default:"پیش‌فرض" }}</span></div>
       <div class="d-flex justify-content-between"><span class="gn-muted">تعرفه</span><span>{% if customer.group.tariff %}{{ customer.group.tariff.hourly_rate|toman }} تومان/ساعت{% else %}پیش‌فرض{% endif %}</span></div>
       <div class="d-flex justify-content-between"><span class="gn-muted">وضعیت</span><span>{{ customer.is_active|yesno:"فعال،غیرفعال" }}</span></div>

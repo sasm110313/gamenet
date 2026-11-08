@@ -510,6 +510,9 @@ def customer_rahro_discount(request, customer_id):
     except Exception as exc:
         messages.error(request, str(exc))
 
+    referer = request.META.get("HTTP_REFERER")
+    if referer and ("customers/" in referer or "manage/customers/" in referer):
+        return redirect(referer)
     return redirect("cloud_manage_customer", customer_id=customer.id)
 
 

@@ -45,9 +45,30 @@ def customer_detail(request, customer_id):
     customer = get_object_or_404(
         Customer.objects.select_related("group__tariff", "wallet"), id=customer_id
     )
+    active_sessions = customer.sessions.filter(status=SessionStatus.ACTIVE).select_related("device")
+
+    rahro_status = None
+    try:
+        import requests
+        from django.conf import settings
+        rahro_url = getattr(settings, "RAHRO_API_URL", "http://127.0.0.1:8000/rahro/api/gamenet/")
+        shared_secret = getattr(settings, "RAHRO_GAMENET_SHARED_SECRET", "rahro_gamenet_secret_2026")
+        r = requests.get(
+            f"{rahro_url.rstrip('/')}/status/",
+            params={"phone": customer.phone, "username": customer.username},
+            headers={"X-Internal-Secret": shared_secret},
+            timeout=1.5,
+        )
+        if r.status_code == 200:
+            rahro_status = r.json()
+    except Exception:
+        pass
+
     ctx.update(
         {
             "customer": customer,
+            "active_sessions": active_sessions,
+            "rahro_status": rahro_status,
             "entries": customer.ledger_entries.select_related("session").order_by("-created_at")[:100],
             "sessions": customer.sessions.select_related("device").order_by("-started_at")[:30],
         }

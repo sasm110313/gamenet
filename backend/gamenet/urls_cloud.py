@@ -14,6 +14,11 @@ urlpatterns = [
     path("customers/create", management.customer_create, name="cloud_customer_create"),
     path("customers/create/", management.customer_create),
     path("customers/<uuid:customer_id>/", reports.customer_detail, name="cloud_customer_detail"),
+    path(
+        "customers/<uuid:customer_id>/rahro-discount",
+        management.customer_rahro_discount,
+        name="cloud_customer_rahro_discount",
+    ),
     path("sessions/", reports.sessions, name="cloud_sessions"),
     path("ledger/", reports.ledger, name="cloud_ledger"),
     path("pricing/", reports.pricing, name="cloud_pricing"),
