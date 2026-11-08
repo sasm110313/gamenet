@@ -444,13 +444,13 @@ function LockedScreen({
             </div>
 
             <div className="mt-6 space-y-4">
-              <Field id="login-username" label="نام کاربری یا شماره همراه">
+              <Field id="login-username" label="کد ۴ تا ۶ رقمی ورود یا شماره همراه">
                 <input
                   id="login-username"
-                  className="field text-sm"
+                  className="field text-sm font-mono tracking-wider"
                   dir="ltr"
                   autoComplete="username"
-                  placeholder="ali یا 0912..."
+                  placeholder="مثلاً ۱۲۳۴۵ یا 0912..."
                   value={username}
                   onChange={(e) => setUsername(e.target.value)}
                   disabled={!ready || submitting}
@@ -458,7 +458,7 @@ function LockedScreen({
                 />
               </Field>
 
-              <Field id="login-password" label="رمز عبور">
+              <Field id="login-password" label="رمز عبور (یا تکرار کد عددی)">
                 <input
                   id="login-password"
                   type="password"

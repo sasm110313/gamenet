@@ -161,17 +161,24 @@ class DeviceCommandAckView(APIView):
 
 
 class ClientUserLoginView(APIView):
-    """Allows a customer/gamer to log in directly from the client machine with username/password."""
+    """Allows a customer/gamer to log in directly from the client machine with 4-6 digit code, username, or phone."""
 
     def post(self, request):
         require_edge()
         device = device_or_401(request)
         data = request.data or {}
-        identifier = str(data.get("username", "")).strip()
-        password = str(data.get("password", "")).strip()
+        raw_identifier = str(data.get("username", "")).strip()
+        raw_password = str(data.get("password", "")).strip()
 
-        if not identifier or not password:
-            raise ApiError("invalid_credentials", "نام کاربری و رمز عبور الزامی است.", status.HTTP_400_BAD_REQUEST)
+        if not raw_identifier:
+            raise ApiError("invalid_credentials", "کد ورود ۴ تا ۶ رقمی یا شماره همراه الزامی است.", status.HTTP_400_BAD_REQUEST)
+
+        # تبدیل ارقام فارسی و عربی به ارقام استاندارد انگلیسی
+        persian_arabic = "۰۱۲۳۴۵۶۷۸۹٠١٢٣٤٥٦٧٨٩"
+        english = "01234567890123456789"
+        trans = str.maketrans(persian_arabic, english)
+        clean_identifier = raw_identifier.translate(trans).strip()
+        clean_password = raw_password.translate(trans).strip()
 
         identity = ensure_identity()
         from django.db.models import Q
@@ -181,12 +188,38 @@ class ClientUserLoginView(APIView):
 
         customer = (
             Customer.objects.filter(edge_id=identity.edge_id, is_active=True)
-            .filter(Q(username__iexact=identifier) | Q(phone=identifier))
+            .filter(
+                Q(username__iexact=clean_identifier)
+                | Q(username__iexact=raw_identifier)
+                | Q(phone=clean_identifier)
+                | Q(phone=raw_identifier)
+            )
             .first()
         )
 
-        if customer is None or not customer.check_password(password):
-            raise ApiError("invalid_credentials", "نام کاربری یا رمز عبور اشتباه است.", status.HTTP_401_UNAUTHORIZED)
+        if customer is None:
+            raise ApiError("invalid_credentials", "کاربری با این مشخصات یافت نشد یا حساب غیرفعال است.", status.HTTP_401_UNAUTHORIZED)
+
+        # اعتبارسنجی رمز عبور:
+        # ۱. اگر پسورد هش تنظیم شده باشد: بررسی پسورد یا انطباق با کد ۴-۶ رقمی/شماره تماس
+        # ۲. اگر پسورد هش تنظیم نشده باشد: پذیرش ورود با همان کد ۴-۶ رقمی یا شماره
+        valid_password = False
+        if customer.password_hash:
+            if clean_password and (
+                customer.check_password(raw_password)
+                or customer.check_password(clean_password)
+                or clean_password == customer.username
+                or clean_password == customer.phone
+                or raw_password == customer.username
+            ):
+                valid_password = True
+        else:
+            # بدون نیاز به رمز پیچیده؛ ورود با کد ۴-۶ رقمی
+            if not clean_password or clean_password == customer.username or clean_password == customer.phone:
+                valid_password = True
+
+        if not valid_password:
+            raise ApiError("invalid_credentials", "کد ورود یا رمز عبور اشتباه است.", status.HTTP_401_UNAUTHORIZED)
 
         try:
             session = start_session(customer=customer, device=device)

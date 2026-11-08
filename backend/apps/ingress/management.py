@@ -302,6 +302,12 @@ def customer_create(request):
             initial_deposit = _int(request.POST.get("initial_deposit", 0), "شارژ اولیه")
             notes = (request.POST.get("notes") or "").strip()
 
+            # نرمال‌سازی ارقام فارسی/عربی کد ورود به انگلیسی
+            persian_arabic = "۰۱۲۳۴۵۶۷۸۹٠١٢٣٤٥٦٧٨٩"
+            english = "01234567890123456789"
+            if username:
+                username = username.translate(str.maketrans(persian_arabic, english)).strip()
+
             if not full_name:
                 raise ValueError("وارد کردن نام و نام خانوادگی الزامی است.")
 
@@ -347,6 +353,22 @@ def customer_create(request):
                 cloud_cust.set_password(password)
                 cloud_cust.save(update_fields=["password_hash"])
             wallet, _ = Wallet.objects.get_or_create(customer=cloud_cust, defaults={"balance": 0})
+
+            # اگر این کاربر در رهرو هم عضو باشد، کد ۴ تا ۶ رقمی در رهرو هم هماهنگ می‌شود
+            if username:
+                try:
+                    import requests
+                    from django.conf import settings
+                    rahro_url = getattr(settings, "RAHRO_API_URL", "http://127.0.0.1:8000/rahro/api/gamenet/")
+                    shared_secret = getattr(settings, "RAHRO_GAMENET_SHARED_SECRET", "rahro_gamenet_secret_2026")
+                    requests.post(
+                        f"{rahro_url.rstrip('/')}/set-login-code/",
+                        json={"phone": phone, "username": username, "login_code": username},
+                        headers={"X-Internal-Secret": shared_secret, "Content-Type": "application/json"},
+                        timeout=1.5,
+                    )
+                except Exception:
+                    pass
 
             if initial_deposit > 0:
                 _issue(
@@ -536,6 +558,31 @@ def customer_update(request, customer_id):
         )
         if group_id and group is None:
             raise ValueError("گروه انتخاب‌شده معتبر نیست.")
+
+        full_name = (request.POST.get("full_name") or "").strip()
+        phone = (request.POST.get("phone") or "").strip()
+        username = (request.POST.get("username") or "").strip()
+        password = (request.POST.get("password") or "").strip()
+
+        # تبدیل ارقام فارسی و عربی به ارقام انگلیسی
+        persian_arabic = "۰۱۲۳۴۵۶۷۸۹٠١٢٣٤٥٦٧٨٩"
+        english = "01234567890123456789"
+        if username:
+            username = username.translate(str.maketrans(persian_arabic, english)).strip()
+
+        # به‌روزرسانی کلود رپلیکا
+        customer.full_name = full_name or customer.full_name
+        customer.phone = phone
+        if username:
+            customer.username = username
+        customer.group = group
+        customer.credit_limit = _int(request.POST.get("credit_limit"), "سقف اعتبار")
+        customer.notes = (request.POST.get("notes") or "").strip()
+        customer.is_active = request.POST.get("is_active") == "1"
+        if password:
+            customer.set_password(password)
+        customer.save()
+
         _issue(
             request,
             edge,
@@ -545,15 +592,35 @@ def customer_update(request, customer_id):
                 "base_revision": _int(
                     request.POST.get("base_revision", customer.revision), "نسخه"
                 ),
-                "full_name": (request.POST.get("full_name") or "").strip(),
-                "phone": (request.POST.get("phone") or "").strip(),
+                "full_name": customer.full_name,
+                "phone": customer.phone,
+                "username": customer.username,
+                "password": password,
                 "group_id": str(group.id) if group else None,
-                "credit_limit": _int(request.POST.get("credit_limit"), "سقف اعتبار"),
-                "notes": (request.POST.get("notes") or "").strip(),
-                "is_active": request.POST.get("is_active") == "1",
+                "credit_limit": customer.credit_limit,
+                "notes": customer.notes,
+                "is_active": customer.is_active,
             },
             action="remote.customer.updated",
         )
+
+        # اگر کاربر در رهرو باشد، کد ورود گیم‌نت را در رهرو هم هماهنگ کن
+        if username:
+            try:
+                import requests
+                from django.conf import settings
+                rahro_url = getattr(settings, "RAHRO_API_URL", "http://127.0.0.1:8000/rahro/api/gamenet/")
+                shared_secret = getattr(settings, "RAHRO_GAMENET_SHARED_SECRET", "rahro_gamenet_secret_2026")
+                requests.post(
+                    f"{rahro_url.rstrip('/')}/set-login-code/",
+                    json={"phone": customer.phone, "username": customer.username, "login_code": username},
+                    headers={"X-Internal-Secret": shared_secret, "Content-Type": "application/json"},
+                    timeout=1.5,
+                )
+            except Exception:
+                pass
+
+        messages.success(request, f"مشخصات «{customer.full_name}» با موفقیت ذخیره و با سرور سالن همگام شد.")
     except ValueError as exc:
         messages.error(request, str(exc))
     return redirect("cloud_manage_customer", customer_id=customer.id)

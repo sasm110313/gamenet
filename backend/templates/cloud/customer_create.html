@@ -46,16 +46,16 @@
 
           <!-- Username for Client -->
           <div class="col-md-6">
-            <label class="gn-label fw-bold">نام کاربری (جهت ورود در سیستم بازیکن)</label>
-            <input class="gn-input num" name="username" placeholder="مثلاً: ali" dir="ltr">
-            <span class="gn-muted d-block mt-1" style="font-size: 11.5px;">گیمر با این شناسه می‌تواند در صفحه قفل کامپیوتر لاگین کند.</span>
+            <label class="gn-label fw-bold">کد ۴ تا ۶ رقمی ورود کلاینت (نام کاربری)</label>
+            <input class="gn-input num" name="username" placeholder="مثلاً: ۱۲۳۴۵" maxlength="6" minlength="4" pattern="[0-9]{4,6}" inputmode="numeric" dir="ltr">
+            <span class="gn-muted d-block mt-1" style="font-size: 11.5px;">شناسه ورود اختصاصی گیمر پشت سیستم‌های بازی (برای اعضای رهرو و افراد عادی).</span>
           </div>
 
           <!-- Password for Client -->
           <div class="col-md-6">
-            <label class="gn-label fw-bold">رمز عبور (جهت ورود در سیستم بازیکن)</label>
-            <input class="gn-input num" type="password" name="password" placeholder="••••" dir="ltr">
-            <span class="gn-muted d-block mt-1" style="font-size: 11.5px;">رمز ورود گیمر در صفحه قفل کامپیوتر</span>
+            <label class="gn-label fw-bold">رمز عبور کلاینت (اختیاری)</label>
+            <input class="gn-input num" type="password" name="password" placeholder="اختیاری - در صورت خالی بودن ورود با کد انجام می‌شود" dir="ltr">
+            <span class="gn-muted d-block mt-1" style="font-size: 11.5px;">در صورت خالی گذاشتن، گیمر با همان کد عددی وارد می‌شود.</span>
           </div>
 
           <!-- Customer Group -->
