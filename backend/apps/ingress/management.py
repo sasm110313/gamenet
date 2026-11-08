@@ -481,20 +481,31 @@ def customer_detail(request, customer_id):
 def customer_rahro_discount(request, customer_id):
     """
     اعمال مستقیم کوپن و تخفیف برای افراد رهرو توسط ادمین در پنل گیم‌نت:
-    اگر سهمیه ماهانه رایگان داشته باشند کسر می‌شود، در غیر این‌صورت امتیاز کسر می‌گردد.
+    - در صورت وجود سهمیه ماهانه ۵۰٪، بدون کسر امتیاز از سهمیه کسر می‌شود.
+    - در غیر این صورت متناسب با درصد، امتیاز رهرو کسر می‌گردد.
+    - قابلیت تسویه فوری نصف قیمت و ثبت پرداخت نقدی برای نشست‌های در حال اجرا یا ثبت باجه.
     """
     require_cloud()
     customer = get_object_or_404(Customer, id=customer_id)
     try:
-        discount_percent = int(request.POST.get("discount_percent", 50))
-        session_id = request.POST.get("session_id")
-
+        from datetime import timedelta
+        from django.utils import timezone
         import requests
         from django.conf import settings
+        from apps.core.money import session_cost
+        from apps.ledger.models import LedgerEntry, LedgerEntryType
+        from apps.wallets.models import Wallet
+
+        discount_percent = int(request.POST.get("discount_percent", 50))
+        action_type = (request.POST.get("action_type") or "").strip()
+        duration_minutes = int(request.POST.get("duration_minutes") or 45)
+        session_id = request.POST.get("session_id")
+
         rahro_url = getattr(settings, "RAHRO_API_URL", "http://127.0.0.1:8000/rahro/api/gamenet/")
         shared_secret = getattr(settings, "RAHRO_GAMENET_SHARED_SECRET", "rahro_gamenet_secret_2026")
-
         actor_name = request.user.get_full_name() or request.user.username or "مدیر گیم‌نت"
+
+        # ۱. کسر هوشمند سهمیه ماهانه یا امتیاز در سامانه رهرو
         resp = requests.post(
             f"{rahro_url.rstrip('/')}/apply-discount/",
             json={
@@ -505,7 +516,7 @@ def customer_rahro_discount(request, customer_id):
                 "actor_name": actor_name,
             },
             headers={"X-Internal-Secret": shared_secret, "Content-Type": "application/json"},
-            timeout=3.0,
+            timeout=3.5,
         )
         data = {}
         try:
@@ -517,20 +528,226 @@ def customer_rahro_discount(request, customer_id):
             err_msg = data.get("error") or data.get("message") or f"خطا در ارتباط با سامانه رهرو (کد وضعیت: {resp.status_code})"
             raise ValueError(err_msg)
 
-        # اعمال تخفیف روی نشست فعال در صورت وجود
+        now = timezone.now()
+        voucher_code = data.get("voucher_code", "")
+
+        # بررسی وجود نشست فعال
         active_session = None
         if session_id:
             active_session = customer.sessions.filter(id=session_id, status=SessionStatus.ACTIVE).first()
         if not active_session:
             active_session = customer.sessions.filter(status=SessionStatus.ACTIVE).first()
 
-        if active_session:
+        # ۲. حالت الف: پایان نشست فعال و ثبت پرداخت نقدی نصف قیمت
+        if (action_type == "settle_active" or (active_session and not action_type)) and active_session:
+            elapsed = max(60, int((now - active_session.started_at).total_seconds()))
+            dur_mins = max(1, elapsed // 60)
+            rate = active_session.hourly_rate or 40000
+            base_cost = session_cost(rate, elapsed)
+            discount_amount = ((base_cost * discount_percent) + 50) // 100
+            final_cost = max(0, base_cost - discount_amount)
+
+            # خاتمه نشست فعال در کلود
+            active_session.status = SessionStatus.COMPLETED
+            active_session.ended_at = now
+            active_session.elapsed_seconds = elapsed
+            active_session.cost = final_cost
+            active_session.discount_percent = discount_percent
+            active_session.discount_amount = discount_amount
+            active_session.discount_source = data.get("source", "RAHRO")
+            active_session.end_reason = f"پایان نشست و پرداخت نقدی نصف قیمت ({final_cost:,} تومان)"
+            active_session.save(
+                update_fields=[
+                    "status", "ended_at", "elapsed_seconds", "cost",
+                    "discount_percent", "discount_amount", "discount_source",
+                    "end_reason", "updated_at",
+                ]
+            )
+
+            # ثبت تراکنش‌های دوبل حسابداری (شارژ هزینه نشست + دریافت پرداخت نقدی)
+            wallet, _ = Wallet.objects.get_or_create(customer=customer, defaults={"balance": 0})
+            if final_cost > 0:
+                wallet.balance -= final_cost
+                LedgerEntry.objects.create(
+                    customer=customer,
+                    edge_id=active_session.edge_id,
+                    session=active_session,
+                    entry_type=LedgerEntryType.SESSION_CHARGE,
+                    amount=-final_cost,
+                    balance_after=wallet.balance,
+                    note=f"شارژ نشست ایستگاه {active_session.device.name if active_session.device else ''} ({dur_mins} دقیقه با تخفیف {discount_percent}٪)",
+                    is_replica=True,
+                )
+
+                wallet.balance += final_cost
+                LedgerEntry.objects.create(
+                    customer=customer,
+                    edge_id=active_session.edge_id,
+                    session=active_session,
+                    entry_type=LedgerEntryType.DEPOSIT,
+                    amount=final_cost,
+                    balance_after=wallet.balance,
+                    note=f"پرداخت نقدی/پوز باجه (نصف قیمت: {final_cost:,} تومان) بابت {voucher_code or 'تخفیف رهرو'}",
+                    is_replica=True,
+                )
+                wallet.save(update_fields=["balance"])
+
+            # صدور فرمان توقف به سرور سالن (لبه)
+            edge = _edge(active_session.edge_id)
+            if edge:
+                try:
+                    _issue(
+                        request,
+                        edge,
+                        "session.stop",
+                        {
+                            "session_id": str(active_session.id),
+                            "reason": f"پایان نشست با تخفیف {discount_percent}٪ و تسویه نقدی",
+                            "discount_percent": discount_percent,
+                        },
+                        action="remote.session.stopped_with_rahro_discount",
+                    )
+                except Exception:
+                    pass
+
+            # ثبت در کارنامه رهرو دانش‌آموز
+            try:
+                requests.post(
+                    f"{rahro_url.rstrip('/')}/record-session/",
+                    json={
+                        "session_id": str(active_session.id),
+                        "phone": customer.phone,
+                        "username": customer.username,
+                        "device_name": active_session.device.name if active_session.device else "ایستگاه بازی",
+                        "started_at": active_session.started_at.isoformat(),
+                        "ended_at": now.isoformat(),
+                        "duration_seconds": elapsed,
+                        "hourly_rate": rate,
+                        "base_cost": base_cost,
+                        "discount_percent": discount_percent,
+                        "discount_amount": discount_amount,
+                        "final_cost": final_cost,
+                        "discount_source": f"سهمیه ماهانه / بلیت {voucher_code} (پرداخت‌شده)",
+                    },
+                    headers={"X-Internal-Secret": shared_secret, "Content-Type": "application/json"},
+                    timeout=2.5,
+                )
+            except Exception:
+                pass
+
+            messages.success(
+                request,
+                f"نشست ایستگاه «{active_session.device.name if active_session.device else ''}» متوقف و تسویه شد. "
+                f"مبلغ نصف قیمت ({final_cost:,} تومان) به صورت نقدی در باجه دریافت و ثبت گردید. ({data.get('message', '')})"
+            )
+
+        # ۳. حالت ب: ثبت مستقیم بازی باجه و پرداخت نقدی نصف قیمت (بدون نشست فعال)
+        elif action_type == "record_paid_desk" or (not active_session and action_type != "reserve_coupon"):
+            dur_mins = duration_minutes
+            dur_secs = dur_mins * 60
+            hourly_rate = 40000
+            base_cost = (hourly_rate * dur_mins) // 60
+            discount_amount = ((base_cost * discount_percent) + 50) // 100
+            final_cost = max(0, base_cost - discount_amount)
+
+            edge = EdgeNode.objects.filter(revoked_at__isnull=True).order_by("-last_heartbeat_at").first()
+            edge_id = edge.id if edge else (customer.edge_id or uuid.UUID("01a18e45-00ea-7f5b-8631-0d6406670e55"))
+
+            device = ClientDevice.objects.filter(edge_id=edge_id, is_active=True).first()
+            if not device:
+                device = ClientDevice.objects.filter(is_active=True).first()
+
+            new_sess_id = uuid.uuid4()
+            started_at = now - timedelta(seconds=dur_secs)
+
+            # ایجاد سابقه نشست تکمیل‌شده در گیم‌نت
+            sess = GamingSession.objects.create(
+                id=new_sess_id,
+                edge_id=edge_id,
+                customer=customer,
+                device=device,
+                tariff_name="اعضای رهرو",
+                hourly_rate=hourly_rate,
+                started_at=started_at,
+                ended_at=now,
+                elapsed_seconds=dur_secs,
+                cost=final_cost,
+                discount_percent=discount_percent,
+                discount_amount=discount_amount,
+                discount_source=f"رهرو ({voucher_code or 'کوپن'})",
+                status=SessionStatus.COMPLETED,
+                end_reason=f"ثبت باجه و پرداخت نقدی نصف قیمت ({final_cost:,} تومان)",
+                is_replica=True,
+            )
+
+            wallet, _ = Wallet.objects.get_or_create(customer=customer, defaults={"balance": 0})
+            if final_cost > 0:
+                wallet.balance -= final_cost
+                LedgerEntry.objects.create(
+                    customer=customer,
+                    edge_id=edge_id,
+                    session=sess,
+                    entry_type=LedgerEntryType.SESSION_CHARGE,
+                    amount=-final_cost,
+                    balance_after=wallet.balance,
+                    note=f"شارژ نشست باجه ({dur_mins} دقیقه با تخفیف {discount_percent}٪)",
+                    is_replica=True,
+                )
+
+                wallet.balance += final_cost
+                LedgerEntry.objects.create(
+                    customer=customer,
+                    edge_id=edge_id,
+                    session=sess,
+                    entry_type=LedgerEntryType.DEPOSIT,
+                    amount=final_cost,
+                    balance_after=wallet.balance,
+                    note=f"پرداخت نقدی/پوز باجه (نصف قیمت: {final_cost:,} تومان) بابت {voucher_code or 'تخفیف رهرو'}",
+                    is_replica=True,
+                )
+                wallet.save(update_fields=["balance"])
+
+            # همگام‌سازی با سامانه رهرو
+            try:
+                requests.post(
+                    f"{rahro_url.rstrip('/')}/record-session/",
+                    json={
+                        "session_id": str(new_sess_id),
+                        "phone": customer.phone,
+                        "username": customer.username,
+                        "device_name": "باجه گیم‌نت مسجد",
+                        "started_at": started_at.isoformat(),
+                        "ended_at": now.isoformat(),
+                        "duration_seconds": dur_secs,
+                        "hourly_rate": hourly_rate,
+                        "base_cost": base_cost,
+                        "discount_percent": discount_percent,
+                        "discount_amount": discount_amount,
+                        "final_cost": final_cost,
+                        "discount_source": f"سهمیه ماهانه / بلیت {voucher_code} (پرداخت‌شده)",
+                    },
+                    headers={"X-Internal-Secret": shared_secret, "Content-Type": "application/json"},
+                    timeout=2.5,
+                )
+            except Exception:
+                pass
+
+            messages.success(
+                request,
+                f"بازی {dur_mins} دقیقه‌ای با تخفیف {discount_percent}٪ و پرداخت نقدی {final_cost:,} تومان (نصف قیمت) "
+                f"با موفقیت ثبت و تسویه شد. ({data.get('message', '')})"
+            )
+
+        # ۴. حالت ج: صرفاً اعمال تخفیف روی نشست فعال در حال اجرا
+        elif action_type == "apply_active" and active_session:
             active_session.discount_percent = discount_percent
             active_session.discount_source = data.get("source", "RAHRO")
             active_session.save(update_fields=["discount_percent", "discount_source", "updated_at"])
             messages.success(request, f"تخفیف {discount_percent}٪ با موفقیت روی نشست جاری {customer.full_name} ثبت شد. ({data.get('message')})")
+
+        # ۵. حالت د: صدور کوپن رزرو برای بازی‌های بعدی
         else:
-            messages.success(request, f"تخفیف {discount_percent}٪ برای {customer.full_name} در رهرو ثبت و کوپن صادر شد: {data.get('message')}")
+            messages.success(request, f"کوپن تخفیف {discount_percent}٪ برای {customer.full_name} در رهرو صادر شد: {data.get('message')}")
 
     except Exception as exc:
         messages.error(request, str(exc))
@@ -715,10 +932,11 @@ def customer_rate_deactivate(request, customer_id, rate_id):
 
 
 @login_required
-@require_POST
 def wallet(request, customer_id):
     require_cloud()
     customer = get_object_or_404(Customer, id=customer_id)
+    if request.method != "POST":
+        return redirect("cloud_manage_customer", customer_id=customer.id)
     edge = _edge(customer.edge_id)
     try:
         if edge is None:

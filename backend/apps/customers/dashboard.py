@@ -221,14 +221,17 @@ def customer_rahro_discount(request, customer_id):
                 "actor_name": actor_name,
             },
             headers={"X-Internal-Secret": shared_secret, "Content-Type": "application/json"},
-            timeout=3.0,
+            timeout=3.5,
         )
-        if resp.status_code != 200:
-            raise ValueError("عدم پاسخ سرور سامانه رهرو.")
+        data = {}
+        try:
+            data = resp.json()
+        except Exception:
+            pass
 
-        data = resp.json()
-        if not data.get("success"):
-            raise ValueError(data.get("error", "خطا در اعمال تخفیف از سامانه رهرو."))
+        if resp.status_code != 200 or not data.get("success"):
+            err_msg = data.get("error") or data.get("message") or f"خطا در ارتباط با سامانه رهرو (کد وضعیت: {resp.status_code})"
+            raise ValueError(err_msg)
 
         active_session = None
         if session_id:

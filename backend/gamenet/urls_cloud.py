@@ -105,4 +105,5 @@ urlpatterns = [
     path("api/v1/edge/config", api.EdgeConfigView.as_view(), name="api_edge_config"),
     # integration API (Rahro <-> GameNet)
     path("api/v1/integration/sync-customer/", api.RahroCustomerSyncView.as_view(), name="api_rahro_customer_sync"),
+    path("api/v1/integration/record-paid-session/", api.RahroRecordPaidSessionView.as_view(), name="api_rahro_record_paid_session"),
 ] + base_patterns()

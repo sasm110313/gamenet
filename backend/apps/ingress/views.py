@@ -427,3 +427,162 @@ class RahroCustomerSyncView(APIView):
             "group": rahro_group.name,
             "hourly_rate": rahro_tariff.hourly_rate,
         })
+
+
+class RahroRecordPaidSessionView(APIView):
+    """
+    ثبت نشست پرداخت‌شده با تخفیف ۵۰٪ (یا هر درصدی) رهرو و ثبت پرداخت نقدی در کیف پول گیم‌نت:
+    - ایجاد سابقه نشست تکمیل‌شده (COMPLETED) با نصف قیمت
+    - ثبت شارژ نشست (-۱۵,۰۰۰ تومان)
+    - ثبت واریز نقدی مشتری در باجه (+۱۵,۰۰۰ تومان)
+    """
+    authentication_classes = []
+    permission_classes = []
+
+    def post(self, request):
+        secret = getattr(settings, "RAHRO_GAMENET_SHARED_SECRET", "rahro_gamenet_secret_2026")
+        token = request.headers.get("X-Internal-Secret") or request.data.get("secret")
+        if token != secret:
+            return Response({"error": "Forbidden (invalid secret)"}, status=status.HTTP_403_FORBIDDEN)
+
+        data = request.data
+        username = (data.get("username") or "").strip()
+        phone = (data.get("phone") or "").strip()
+        if not phone and not username:
+            return Response({"error": "phone or username required"}, status=status.HTTP_400_BAD_REQUEST)
+
+        import uuid
+        from datetime import timedelta
+        from django.utils import timezone
+        from apps.customers.models import Customer
+        from apps.customer_groups.models import CustomerGroup
+        from apps.pricing.models import Tariff
+        from apps.sessions.models import GamingSession, SessionStatus
+        from apps.ledger.models import LedgerEntry, LedgerEntryType
+        from apps.wallets.models import Wallet
+        from apps.clients.models import ClientDevice
+        from apps.synchronization.models import EdgeNode
+
+        # ۱. جستجوی مشتری در گیم‌نت
+        customer = None
+        if phone:
+            customer = Customer.objects.filter(phone=phone).first()
+        if not customer and username:
+            customer = Customer.objects.filter(username__iexact=username).first()
+
+        # پیدا کردن سرور لبه فعال
+        edge = EdgeNode.objects.filter(revoked_at__isnull=True).order_by("-last_heartbeat_at").first()
+        edge_id = edge.id if edge else uuid.UUID("01a18e45-00ea-7f5b-8631-0d6406670e55")
+
+        if not customer:
+            rahro_group = CustomerGroup.objects.filter(name="اعضای رهرو").first()
+            customer = Customer.objects.create(
+                id=uuid.uuid4(),
+                edge_id=edge_id,
+                full_name=data.get("full_name") or username or phone,
+                username=username,
+                phone=phone,
+                group=rahro_group,
+                is_active=True,
+                is_replica=True,
+            )
+
+        wallet, _ = Wallet.objects.get_or_create(customer=customer, defaults={"balance": 0})
+
+        # ۲. پردازش اطلاعات مالی و زمانی نشست
+        raw_sess_id = data.get("session_id")
+        try:
+            session_id = uuid.UUID(str(raw_sess_id)) if raw_sess_id else uuid.uuid4()
+        except Exception:
+            session_id = uuid.uuid4()
+
+        duration_minutes = int(data.get("duration_minutes") or 45)
+        duration_seconds = int(data.get("duration_seconds") or (duration_minutes * 60))
+        hourly_rate = int(data.get("hourly_rate") or 40000)
+        base_cost = int(data.get("base_cost") or ((hourly_rate * duration_minutes) // 60))
+        discount_percent = int(data.get("discount_percent") or 50)
+        discount_amount = int(data.get("discount_amount") or (((base_cost * discount_percent) + 50) // 100))
+        final_cost = int(data.get("final_cost") or max(0, base_cost - discount_amount))
+        voucher_code = (data.get("voucher_code") or "").strip()
+        device_name = (data.get("device_name") or "PC-01").strip()
+        note = (data.get("note") or f"ثبت باجه و پرداخت نقدی نصف قیمت ({final_cost:,} تومان)").strip()
+
+        # پیدا کردن دستگاه معتبر در سالن برای انتساب نشست
+        device = None
+        if device_name:
+            device = ClientDevice.objects.filter(name__iexact=device_name).first()
+        if not device:
+            device = ClientDevice.objects.filter(edge_id=edge_id, is_active=True).first()
+        if not device:
+            device = ClientDevice.objects.filter(is_active=True).first()
+
+        now = timezone.now()
+        started_at = now - timedelta(seconds=duration_seconds)
+
+        # ۳. ثبت یا به‌روزرسانی نشست تکمیل‌شده در گیم‌نت
+        session, created = GamingSession.objects.update_or_create(
+            id=session_id,
+            defaults={
+                "edge_id": edge_id,
+                "customer": customer,
+                "device": device,
+                "tariff_name": "اعضای رهرو",
+                "hourly_rate": hourly_rate,
+                "started_at": started_at,
+                "ended_at": now,
+                "elapsed_seconds": duration_seconds,
+                "cost": final_cost,
+                "discount_percent": discount_percent,
+                "discount_amount": discount_amount,
+                "discount_source": f"رهرو ({voucher_code or 'کوپن'})",
+                "status": SessionStatus.COMPLETED,
+                "end_reason": note[:120],
+                "is_replica": True,
+            }
+        )
+
+        # ۴. ثبت تراکنش‌های مالی دوبل (شارژ نشست + پرداخت نقدی هم‌ارز)
+        charge_note = f"شارژ نشست باجه ({duration_minutes} دقیقه با تخفیف {discount_percent}٪)"
+        payment_note = f"پرداخت نقدی/پوز باجه (نصف قیمت: {final_cost:,} تومان) بابت {voucher_code or 'تخفیف رهرو'}"
+
+        if final_cost > 0:
+            charge_entry = LedgerEntry.objects.filter(session=session, entry_type=LedgerEntryType.SESSION_CHARGE).first()
+            if not charge_entry:
+                wallet.balance -= final_cost
+                wallet.save(update_fields=["balance"])
+                LedgerEntry.objects.create(
+                    customer=customer,
+                    edge_id=edge_id,
+                    session=session,
+                    entry_type=LedgerEntryType.SESSION_CHARGE,
+                    amount=-final_cost,
+                    balance_after=wallet.balance,
+                    note=charge_note,
+                    is_replica=True,
+                )
+
+            deposit_entry = LedgerEntry.objects.filter(session=session, entry_type=LedgerEntryType.DEPOSIT).first()
+            if not deposit_entry:
+                wallet.balance += final_cost
+                wallet.save(update_fields=["balance"])
+                LedgerEntry.objects.create(
+                    customer=customer,
+                    edge_id=edge_id,
+                    session=session,
+                    entry_type=LedgerEntryType.DEPOSIT,
+                    amount=final_cost,
+                    balance_after=wallet.balance,
+                    note=payment_note,
+                    is_replica=True,
+                )
+
+        return Response({
+            "success": True,
+            "session_id": str(session.id),
+            "customer_id": str(customer.id),
+            "final_cost": final_cost,
+            "discount_percent": discount_percent,
+            "wallet_balance": wallet.balance,
+            "message": f"نشست {duration_minutes} دقیقه‌ای با تخفیف {discount_percent}٪ و پرداخت {final_cost:,} تومان ثبت و تسویه شد.",
+        })
+
