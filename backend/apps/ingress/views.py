@@ -248,6 +248,8 @@ class RahroCustomerSyncView(APIView):
         full_name = (data.get("full_name") or "").strip() or username
         password_hash = data.get("password_hash") or ""
         is_active = bool(data.get("is_active", True))
+        action = data.get("action", "sync")
+        is_deleted = bool(data.get("is_deleted", False))
 
         if not phone and not username:
             return Response({"error": "phone or username required"}, status=status.HTTP_400_BAD_REQUEST)
@@ -263,6 +265,74 @@ class RahroCustomerSyncView(APIView):
         # پیدا کردن سرور لبه (سالن اصلی)
         edge = EdgeNode.objects.filter(revoked_at__isnull=True).order_by("-last_heartbeat_at").first()
         edge_id = edge.id if edge else uuid.UUID("01a18e45-00ea-7f5b-8631-0d6406670e55")
+
+        # در صورتی که کاربر از رهرو حذف یا غیرفعال شده باشد
+        if action == "remove" or is_deleted or not is_active:
+            customer = None
+            if phone:
+                customer = Customer.objects.filter(phone=phone).first()
+            if not customer and username:
+                customer = Customer.objects.filter(username=username).first()
+
+            if customer is None:
+                return Response({"success": True, "message": "کاربر در گیم‌نت یافت نشد."})
+
+            # تضمین وجود تعرفه ۶۰ هزار تومانی عادی
+            normal_tariff, _ = Tariff.objects.get_or_create(
+                name="عادی",
+                edge_id=edge_id,
+                defaults={"hourly_rate": 60000, "is_active": True, "is_replica": False}
+            )
+            normal_group, _ = CustomerGroup.objects.get_or_create(
+                name="عادی",
+                edge_id=edge_id,
+                defaults={"tariff": normal_tariff, "is_active": True, "is_replica": False}
+            )
+
+            customer.group = normal_group
+            customer.notes = "عضویت رهرو لغو/حذف گردید (تعرفه عادی ۶۰,۰۰۰ تومان)"
+            customer.save(update_fields=["group", "notes", "updated_at"])
+
+            # لغو تخفیف‌های رهرو روی نشست فعال
+            from apps.sessions.models import SessionStatus
+            active_session = customer.sessions.filter(status=SessionStatus.ACTIVE).first()
+            if active_session and active_session.discount_source in ["RAHRO", "MONTHLY_QUOTA", "POINTS"]:
+                active_session.discount_percent = 0
+                active_session.discount_source = ""
+                active_session.save(update_fields=["discount_percent", "discount_source", "updated_at"])
+
+            if edge is not None:
+                try:
+                    _issue(
+                        request,
+                        edge,
+                        "catalog.customer.upsert",
+                        {
+                            "customer_id": str(customer.id),
+                            "base_revision": customer.revision,
+                            "full_name": customer.full_name,
+                            "username": customer.username,
+                            "password": "",
+                            "phone": customer.phone,
+                            "group_id": str(normal_group.id),
+                            "credit_limit": customer.credit_limit,
+                            "notes": customer.notes,
+                            "is_active": customer.is_active,
+                        },
+                        action="remote.customer.removed_from_rahro",
+                    )
+                except Exception:
+                    pass
+
+            return Response({
+                "success": True,
+                "action": "removed_from_rahro",
+                "customer_id": str(customer.id),
+                "full_name": customer.full_name,
+                "group": normal_group.name,
+                "hourly_rate": normal_tariff.hourly_rate,
+                "message": "خدمات رهرو لغو شد؛ نرخ ساعتی به ۶۰,۰۰۰ تومان تغییر یافت."
+            })
 
         # تضمین وجود تعرفه ۴۰ هزار تومانی رهرو
         rahro_tariff, _ = Tariff.objects.get_or_create(
