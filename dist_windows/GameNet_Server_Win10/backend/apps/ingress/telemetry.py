@@ -1,0 +1,67 @@
+from __future__ import annotations
+
+import uuid
+from datetime import datetime
+
+from django.utils import timezone
+
+from apps.clients.models import (
+    ClientDevice,
+    ClientStatus,
+    ConnectionStatus,
+    HealthStatus,
+    KioskStatus,
+    OccupancyStatus,
+    PowerStatus,
+)
+from apps.synchronization.models import EdgeNode, EdgeStatus
+
+
+def apply_device_telemetry(edge: EdgeNode, devices: list[dict], *, now: datetime | None = None) -> int:
+    """Presence telemetry is not financial: it is applied with last-writer-wins on
+    liveness fields only. Durable facts still travel through the outbox."""
+    now = now or timezone.now()
+    present: list[uuid.UUID] = []
+    updated = 0
+    for item in devices:
+        try:
+            device_id = uuid.UUID(str(item.get("device_id")))
+        except (ValueError, TypeError):
+            continue
+        present.append(device_id)
+        defaults = {
+            "edge_id": edge.id,
+            "name": str(item.get("name", ""))[:80] or "unnamed",
+            "status": item.get("status", ClientStatus.OFFLINE),
+            "last_heartbeat_at": now,
+            "application_version": str(item.get("application_version", ""))[:40],
+            "is_replica": True,
+            "is_active": True,
+        }
+        if item.get("connection_status") in ConnectionStatus.values:
+            defaults["connection_status"] = item["connection_status"]
+        if item.get("power_status") in PowerStatus.values:
+            defaults["power_status"] = item["power_status"]
+        if item.get("kiosk_status") in KioskStatus.values:
+            defaults["kiosk_status"] = item["kiosk_status"]
+        if item.get("occupancy_status") in OccupancyStatus.values:
+            defaults["occupancy_status"] = item["occupancy_status"]
+        if item.get("health_status") in HealthStatus.values:
+            defaults["health_status"] = item["health_status"]
+        if "health_message" in item:
+            defaults["health_message"] = str(item.get("health_message") or "")[:255]
+        ClientDevice.objects.update_or_create(id=device_id, defaults=defaults)
+        updated += 1
+    ClientDevice.objects.filter(edge_id=edge.id, is_replica=True).exclude(
+        id__in=present
+    ).update(status=ClientStatus.OFFLINE, connection_status=ConnectionStatus.OFFLINE)
+    return updated
+
+
+def mark_edge_seen(edge: EdgeNode, *, online: bool = True, now: datetime | None = None) -> None:
+    now = now or timezone.now()
+    edge.last_seen_at = now
+    edge.last_heartbeat_at = now
+    if online and edge.status != EdgeStatus.REVOKED:
+        edge.status = EdgeStatus.ONLINE
+    edge.save(update_fields=["last_seen_at", "last_heartbeat_at", "status", "updated_at"])

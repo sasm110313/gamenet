@@ -32,30 +32,30 @@ class Command(BaseCommand):
         identity = ensure_identity()
         self.stdout.write(self.style.SUCCESS(f"Edge identity: {identity.edge_id} ({identity.name})"))
 
-        # 2. Ensure superuser exists
+        # 2. Ensure superuser exists (does not overwrite custom admin usernames)
         user = User.objects.filter(username=username).first()
         if user is None:
-            user = User.objects.create_superuser(
-                username=username,
-                password=password,
-                email=email,
-                role="ADMIN",
-            )
-            self.stdout.write(self.style.SUCCESS(f"Created admin user: {username} (pass: {password})"))
+            if User.objects.filter(is_superuser=True).exists():
+                self.stdout.write("Superuser already configured with custom username.")
+            else:
+                user = User.objects.create_superuser(
+                    username=username,
+                    password=password,
+                    email=email,
+                    display_name="مدیر سالن",
+                )
+                self.stdout.write(self.style.SUCCESS(f"Created admin user: {username} (pass: {password})"))
         else:
             self.stdout.write(f"Admin user {username} already exists.")
 
-        # 3. Ensure default tariff exists
+        # 3. Ensure default salon tariffs exist (آزاد 60k, لیگ رهرو 40k, کادر 20k)
         tariff = Tariff.objects.filter(is_active=True).first()
         if tariff is None:
-            tariff = Tariff.objects.create(
-                edge_id=identity.edge_id,
-                name="تعرفه عادی",
-                hourly_rate=40_000,
-                is_active=True,
-                revision=1,
-            )
-            self.stdout.write(self.style.SUCCESS(f"Created default tariff: {tariff.name} (40,000 Tomans/hr)"))
+            from django.core.management import call_command
+
+            call_command("ensure_rahro_pricing")
+            tariff = Tariff.objects.filter(is_active=True).first()
+            self.stdout.write(self.style.SUCCESS(f"Initialized default salon tariffs (active: {tariff.name if tariff else '-'})"))
         else:
             self.stdout.write(f"Active tariff: {tariff.name} ({tariff.hourly_rate:,} Tomans/hr)")
 
@@ -70,7 +70,7 @@ class Command(BaseCommand):
                     "edge_id": identity.edge_id,
                     "hostname": name.lower(),
                     "operating_system": "Windows",
-                    "status": ClientStatus.LOCKED,
+                    "status": ClientStatus.OFFLINE,
                     "is_active": True,
                 },
             )

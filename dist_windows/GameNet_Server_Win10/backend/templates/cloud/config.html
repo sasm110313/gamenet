@@ -1,0 +1,59 @@
+{% extends "base.html" %}
+{% load gn %}
+
+{% block title %}پیکربندی{% endblock %}
+{% block page_title %}پیکربندی{% endblock %}
+{% block page_subtitle %}نسخه‌های تغییرناپذیر که به Edge ها توزیع می‌شوند{% endblock %}
+
+{% block content %}
+<div class="gn-grid cols-2">
+  <div class="gn-card">
+    <h6>انتشار نسخه جدید</h6>
+    <form method="post" class="d-flex flex-column gap-3">
+      {% csrf_token %}
+      <div>
+        <label class="gn-label">ضربان دستگاه (ثانیه)</label>
+        <input class="gn-input num" name="device_heartbeat_seconds" value="{{ active.payload.device_heartbeat_seconds|default:10 }}">
+      </div>
+      <div>
+        <label class="gn-label">آستانه آفلاین (تعداد ضربان از‌دست‌رفته)</label>
+        <input class="gn-input num" name="device_offline_after_missed" value="{{ active.payload.device_offline_after_missed|default:3 }}">
+      </div>
+      <div>
+        <label class="gn-label">نرخ ساعتی پیش‌فرض (تومان)</label>
+        <input class="gn-input num" name="default_hourly_rate" value="{{ active.payload.default_hourly_rate|default:40000 }}">
+      </div>
+      <div>
+        <label class="gn-label">سقف اعتبار پیش‌فرض (تومان)</label>
+        <input class="gn-input num" name="default_credit_limit" value="{{ active.payload.default_credit_limit|default:60000 }}">
+      </div>
+      <div>
+        <label class="gn-label">اعتبار دستور (ثانیه)</label>
+        <input class="gn-input num" name="command_ttl_seconds" value="{{ active.payload.command_ttl_seconds|default:120 }}">
+      </div>
+      <button class="gn-btn primary"><i class="ti ti-rocket"></i> انتشار نسخه</button>
+    </form>
+  </div>
+
+  <div class="gn-card">
+    <h6>نسخه‌ها</h6>
+    <div class="gn-scroll">
+      <table class="gn-table">
+        <thead><tr><th>نسخه</th><th>Hash</th><th>وضعیت</th><th>ساخت</th></tr></thead>
+        <tbody>
+          {% for snap in snapshots %}
+            <tr>
+              <td class="num">v{{ snap.version }}</td>
+              <td class="mono gn-muted">{{ snap.content_hash|slice:":12" }}</td>
+              <td>{% if snap.is_active %}<span class="gn-status st-online"><span class="dot"></span>فعال</span>{% else %}<span class="gn-status st-offline">بازنشسته</span>{% endif %}</td>
+              <td class="num gn-muted">{{ snap.created_at|date:"m-d H:i" }}</td>
+            </tr>
+          {% empty %}
+            <tr><td colspan="4"><div class="gn-empty">نسخه‌ای منتشر نشده است.</div></td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+{% endblock %}

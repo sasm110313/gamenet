@@ -1,0 +1,158 @@
+{% extends "base.html" %}
+{% load gn %}
+
+{% block title %}همگام‌سازی ابر{% endblock %}
+{% block page_title %}همگام‌سازی ابر{% endblock %}
+{% block page_subtitle %}Outbox، وضعیت اتصال و ثبت Edge{% endblock %}
+
+{% block topbar_status %}
+  {% if cloud_online %}
+    <span class="gn-chip ok"><span class="dot"></span>متصل</span>
+  {% else %}
+    <span class="gn-chip warn"><span class="dot"></span>قطع</span>
+  {% endif %}
+{% endblock %}
+
+{% block content %}
+<div class="gn-grid cols-3 mb-3">
+  <div class="gn-card">
+    <h6>هویت Edge</h6>
+    <div class="d-flex flex-column gap-1" style="font-size: 12.5px">
+      <div class="d-flex justify-content-between"><span class="gn-muted">نام</span><span>{{ identity.name }}</span></div>
+      <div class="d-flex justify-content-between"><span class="gn-muted">شناسه</span><span class="mono">{{ identity.edge_id }}</span></div>
+      <div class="d-flex justify-content-between"><span class="gn-muted">آدرس ابر</span><span class="mono">{{ cloud_base|default:"—" }}</span></div>
+      <div class="d-flex justify-content-between"><span class="gn-muted">وضعیت</span>
+        <span class="gn-status {{ identity.status|status_tone }}"><span class="dot"></span>{{ identity.status|status_fa }}</span>
+      </div>
+      <div class="d-flex justify-content-between"><span class="gn-muted">آخرین اتصال</span><span class="num">{{ identity.last_connected_at|reltime }}</span></div>
+      <div class="d-flex justify-content-between"><span class="gn-muted">آخرین همگام‌سازی</span><span class="num">{{ last_sync|reltime }}</span></div>
+      <div class="d-flex justify-content-between"><span class="gn-muted">Watermark</span><span class="num">#{{ identity.last_acked_sequence }}</span></div>
+      <div class="d-flex justify-content-between"><span class="gn-muted">WebSocket زنده</span>
+        {% if ws_connected %}
+          <span class="gn-status st-synced"><span class="dot"></span>متصل (WSS)</span>
+        {% else %}
+          <span class="gn-status st-warn"><span class="dot"></span>قطع</span>
+        {% endif %}
+      </div>
+    </div>
+    <div class="gn-divider"></div>
+    <div class="d-flex gap-2 flex-wrap">
+      <form method="post" action="{% url 'edge_cloud_test_connection' %}" class="flex-grow-1">
+        {% csrf_token %}
+        <button class="gn-btn sm w-100 justify-content-center"><i class="ti ti-plug-connected"></i> تست اتصال اینترنت/ابر</button>
+      </form>
+      <form method="post" action="{% url 'edge_cloud_sync_now' %}" class="flex-grow-1">
+        {% csrf_token %}
+        <button class="gn-btn sm w-100 justify-content-center"><i class="ti ti-refresh"></i> همگام‌سازی فوری</button>
+      </form>
+    </div>
+  </div>
+
+  <div class="gn-card">
+    <h6>ثبت در Cloud</h6>
+    {% if registered %}
+      <p class="gn-muted" style="font-size: 12.5px">این Edge ثبت شده است. برای اتصال مجدد نیازی به کد نیست.</p>
+      <div class="gn-status st-synced mb-2"><span class="dot"></span>Credentials فعال</div>
+      <form method="post" action="{% url 'edge_cloud_reset' %}" onsubmit="return confirm('آیا مایلید اتصال فعلی به سرور آنلاین پاک شود و با کد جدید ثبت کنید؟');">
+        {% csrf_token %}
+        <button class="gn-btn sm w-100 justify-content-center" style="color: var(--gn-danger);"><i class="ti ti-unlink"></i> حذف اتصال و ثبت مجدد با کد جدید</button>
+      </form>
+    {% else %}
+      <p class="gn-muted" style="font-size: 12.5px">
+        کد ثبت Edge را از پنل ابری (<span class="mono" dir="ltr">{{ cloud_base }}/edges/</span>) بگیرید و اینجا وارد کنید. اتصال از سمت سالن به بیرون برقرار می‌شود.
+      </p>
+      <form method="post" action="{% url 'edge_cloud_register' %}" class="d-flex flex-column gap-2">
+        {% csrf_token %}
+        <input class="gn-input gn-code" name="code" placeholder="XXXXXXXX" style="text-align: center" required>
+        <button class="gn-btn primary justify-content-center"><i class="ti ti-cloud-up"></i> ثبت Edge</button>
+      </form>
+    {% endif %}
+  </div>
+
+  <div class="gn-card">
+    <h6>شمارنده رویدادها</h6>
+    <div class="d-flex flex-column gap-2" style="font-size: 13px">
+      <div class="d-flex justify-content-between"><span class="gn-muted">در انتظار</span><span class="num">{{ counts.PENDING }}</span></div>
+      <div class="d-flex justify-content-between"><span class="gn-muted">در حال ارسال</span><span class="num">{{ counts.SYNCING }}</span></div>
+      <div class="d-flex justify-content-between"><span class="gn-muted">همگام</span><span class="num">{{ counts.SYNCED }}</span></div>
+      <div class="d-flex justify-content-between"><span class="gn-muted">ناموفق</span><span class="num" style="color: var(--gn-danger)">{{ counts.FAILED }}</span></div>
+    </div>
+    <div class="gn-divider"></div>
+    <form method="post" action="{% url 'edge_emit_test' %}">
+      {% csrf_token %}
+      <button class="gn-btn w-100 justify-content-center"><i class="ti ti-send"></i> ساخت رویداد آزمایشی</button>
+    </form>
+  </div>
+</div>
+
+<div class="gn-card mb-3">
+  <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-2">
+    <div>
+      <h6 class="mb-0">لاگ زنده ارتباط با سرور آنلاین (Cloud Sync Logs)</h6>
+      <span class="gn-muted mono" style="font-size: 11px;" dir="ltr">{{ sync_log_file }}</span>
+    </div>
+    <a href="{% url 'edge_cloud' %}" class="gn-btn sm"><i class="ti ti-refresh"></i> بروزرسانی لاگ</a>
+  </div>
+  {% if last_sync_error %}
+    <div style="border: 1px solid rgba(239,68,68,.4); background: rgba(239,68,68,.1); border-radius: 8px; padding: 10px 12px; margin-bottom: 10px; font-size: 12.5px;">
+      <strong style="color: var(--gn-danger);">آخرین خطا ({{ last_sync_error.at }} · {{ last_sync_error.stage }}):</strong>
+      <span>{{ last_sync_error.message }}</span>
+    </div>
+  {% endif %}
+  <div class="gn-scroll" style="max-height: 260px;">
+    <table class="gn-table">
+      <thead><tr><th>زمان</th><th>سطح</th><th>بخش</th><th>پیام لاگ</th></tr></thead>
+      <tbody>
+        {% for entry in sync_logs %}
+          <tr>
+            <td class="num gn-muted" style="white-space: nowrap; font-size: 11.5px;">{{ entry.at }}</td>
+            <td>
+              {% if entry.level == 'ERROR' %}
+                <span class="gn-status st-failed"><span class="dot"></span>خطا</span>
+              {% elif entry.level == 'WARNING' %}
+                <span class="gn-status st-warn"><span class="dot"></span>هشدار</span>
+              {% else %}
+                <span class="gn-status st-synced"><span class="dot"></span>عادی</span>
+              {% endif %}
+            </td>
+            <td class="mono gn-muted" style="font-size: 11.5px;">{{ entry.stage }}</td>
+            <td style="font-size: 12px;">{{ entry.message }}</td>
+          </tr>
+        {% empty %}
+          <tr><td colspan="4"><div class="gn-empty"><i class="ti ti-file-text"></i>هنوز لاگی ثبت نشده است.</div></td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<div class="gn-card">
+  <div class="d-flex justify-content-between align-items-center mb-2">
+    <h6 class="mb-0">Outbox</h6>
+    <form method="post" action="{% url 'edge_cloud_retry' %}">
+      {% csrf_token %}
+      <button class="gn-btn sm"><i class="ti ti-refresh"></i> تلاش مجدد ناموفق‌ها</button>
+    </form>
+  </div>
+  <div class="gn-scroll">
+    <table class="gn-table">
+      <thead><tr><th>#</th><th>نوع</th><th>Aggregate</th><th>وضعیت</th><th>تلاش</th><th>آخرین خطا</th><th>زمان</th></tr></thead>
+      <tbody>
+        {% for ev in events %}
+          <tr>
+            <td class="num">{{ ev.local_sequence }}</td>
+            <td>{{ ev.event_type }}</td>
+            <td class="mono gn-muted">{{ ev.aggregate_type }}:{{ ev.aggregate_id|shortid }}</td>
+            <td><span class="gn-status {{ ev.status|status_tone }}"><span class="dot"></span>{{ ev.status|status_fa }}</span></td>
+            <td class="num">{{ ev.attempts }}</td>
+            <td class="gn-muted" style="font-size: 11px">{{ ev.last_error|truncatechars:60|default:"—" }}</td>
+            <td class="num gn-muted">{{ ev.occurred_at|date:"H:i:s" }}</td>
+          </tr>
+        {% empty %}
+          <tr><td colspan="7"><div class="gn-empty"><i class="ti ti-inbox"></i>صف خالی است.</div></td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}

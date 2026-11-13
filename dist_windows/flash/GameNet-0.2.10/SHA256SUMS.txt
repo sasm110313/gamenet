@@ -1,0 +1,12 @@
+6b5f51fa56fedfda50534272034b8744d62324c0a7046f801134061aafa913dd  README.txt
+f903c5659efec389482f09d7aa05e3b8a2eb22b0fb715e63ed9d8cafdab6aa6c  client/GameNet-0.2.10-win10-x64.exe
+cbffbb2a2dea8d18e8f1af1e02fb14b945bcd4caee8fcf5cf7bb7c9edf5305fe  client/GameNet-0.2.10-win7-ia32.exe
+2d1fc46832b1a2bf19ff659712c4a4adc3f8b43dee266472eb4067df6fd6eaea  client/GameNet-Client-Update-0.2.10.exe
+39649b073fbd50c8d8d3f6257ed8d77ecb6765d16c006afcb3b8801076d30ba9  client/app.asar
+9ca079a8ba1b3d2761e3aff259248a43ed89f5c4db59deb94ca6c6d1475debf1  client/latest.json
+745df6f026720739ee61ac5621d20d3cf730ec3ff73fb1a9b18b3c25973fc1b7  cloud/deploy_cloud_update.sh
+804e22d6fdb3a658873f494aa24ea9961bd53918e4f5dc2c02d63b3a2f9010ba  cloud/gamenet-cloud-0.2.10.tar.gz
+83f68b6bf6095bf1a9292a9e47fe3b60de66be03af4ed055be9059e6220b59c2  server-hub/GameNet-Server-0.2.10-Setup.exe
+0a86158315ee88385e87bd8f81dbf60a392ffd7e5e5d66713895f43b01d2d663  server-hub/GameNet-Server-Update-0.2.10.exe
+fe11c226d5c5b9626a1d0302eeafa68334947900980838d3314967e75e6b2eb4  server-hub/GameNet-Server-Update-0.2.10.zip
+47c5425dc8c228d9352dd0f654dd37649ebb065e5372d6a50fe8942317870e34  server-hub/latest.json

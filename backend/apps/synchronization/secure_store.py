@@ -36,8 +36,10 @@ def _dpapi_encrypt(data: bytes) -> bytes:
     crypt32 = ctypes.windll.crypt32
     kernel32 = ctypes.windll.kernel32
     out = DATA_BLOB()
+    # CRYPTPROTECT_LOCAL_MACHINE (0x4) allows both the Windows Service (SYSTEM)
+    # and interactive Admin maintenance commands on the same server PC to decrypt.
     if not crypt32.CryptProtectData(
-        ctypes.byref(blob(data)), None, None, None, None, 0, ctypes.byref(out)
+        ctypes.byref(blob(data)), None, None, None, None, 0x4, ctypes.byref(out)
     ):
         raise OSError("CryptProtectData failed")
     try:

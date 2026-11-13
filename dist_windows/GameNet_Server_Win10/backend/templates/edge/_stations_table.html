@@ -1,0 +1,60 @@
+{% load gn %}
+<div class="gn-table-wrap" tabindex="0" role="region" aria-label="نمای جدولی ایستگاه‌ها">
+  <table class="gn-table gn-stations-table">
+    <thead>
+      <tr>
+        <th>ایستگاه</th>
+        <th>مشتری</th>
+        <th>ارتباط</th>
+        <th class="d-none d-lg-table-cell">پاور</th>
+        <th class="d-none d-lg-table-cell">کیوسک</th>
+        <th>وضعیت</th>
+        <th class="d-none d-xl-table-cell">سلامت</th>
+        <th class="d-none d-md-table-cell">شروع</th>
+        <th>مدت</th>
+        <th class="d-none d-md-table-cell">هزینه</th>
+        <th class="d-none d-xl-table-cell">باقی‌مانده</th>
+        <th class="text-center">اقدام</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for device in devices %}
+        <tr>
+          <td>
+            <a href="{% url 'edge_device_detail' device.id %}" style="font-weight: 800; color: var(--gn-text); text-decoration: none;">{{ device.name }}</a>
+            {% if device.is_offline_but_on %}<i class="ti ti-alert-triangle text-warning" title="روشن ولی آفلاین"></i>{% endif %}
+            {% if device.has_health_error %}<i class="ti ti-bug text-danger" title="{{ device.health_message|default:'خطای سرویس' }}"></i>{% endif %}
+          </td>
+          <td>
+            {% if device.active_session %}
+              <a href="{% url 'edge_customer_detail' device.active_session.customer.id %}#wallet" style="color: var(--gn-text); text-decoration: none;">{{ device.active_session.customer.full_name }}</a>
+            {% else %}
+              <span class="gn-muted">—</span>
+            {% endif %}
+          </td>
+          <td><span class="gn-ortho-pill tone-{{ device.connection_status|conn_tone }}">{{ device.connection_status|conn_fa }}</span></td>
+          <td class="d-none d-lg-table-cell"><span class="gn-ortho-pill tone-{{ device.power_status|power_tone }}">{{ device.power_status|power_fa }}</span></td>
+          <td class="d-none d-lg-table-cell"><span class="gn-ortho-pill tone-{{ device.kiosk_status|kiosk_tone }}">{{ device.kiosk_status|kiosk_fa }}</span></td>
+          <td><span class="gn-ortho-pill tone-{{ device.occupancy_status|occ_tone }}">{{ device.occupancy_status|occ_fa }}</span></td>
+          <td class="d-none d-xl-table-cell"><span class="gn-ortho-pill tone-{{ device.health_status|health_tone }}">{{ device.health_status|health_fa }}</span></td>
+          <td class="d-none d-md-table-cell num">{{ device.active_session.started_at|date:"H:i"|default:"—" }}</td>
+          <td class="num">{% if device.active_session %}{{ device.elapsed_seconds|duration_hms }}{% else %}—{% endif %}</td>
+          <td class="num d-none d-md-table-cell">{% if device.active_session %}{{ device.current_cost|toman }}{% else %}—{% endif %}</td>
+          <td class="num d-none d-xl-table-cell {% if device.is_low_balance %}text-danger fw-bold{% endif %}">{% if device.active_session %}{{ device.remaining_seconds|duration_hms }}{% else %}—{% endif %}</td>
+          <td class="text-center text-nowrap">
+            {% if device.active_session %}
+              <form method="post" action="{% url 'edge_session_stop' device.active_session.id %}" class="gn-inline-form" data-gn-confirm="آیا از پایان نشست {{ device.name }} و قفل سیستم مطمئنید؟">
+                {% csrf_token %}
+                <button type="submit" class="baz-mini-btn" title="پایان نشست و قفل" style="color:#e11d48; border-color:rgba(225,29,72,.35);"><i class="ti ti-player-stop"></i></button>
+              </form>
+            {% endif %}
+            <button type="button" class="baz-mini-btn" title="اسکرین‌شات زنده" data-gn-screenshot="{{ device.id }}" data-device-name="{{ device.name }}"><i class="ti ti-camera"></i></button>
+            <a href="{% url 'edge_device_detail' device.id %}" class="baz-mini-btn" title="جزئیات و تنظیمات"><i class="ti ti-adjustments"></i></a>
+          </td>
+        </tr>
+      {% empty %}
+        <tr><td colspan="12"><div class="gn-empty"><i class="ti ti-device-desktop-off"></i> ایستگاهی با فیلترهای انتخابی یافت نشد.</div></td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>

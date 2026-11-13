@@ -1,0 +1,169 @@
+{% extends "base.html" %}
+{% load gn %}
+
+{% block title %}داشبورد مدیریت{% endblock %}
+{% block page_title %}داشبورد{% endblock %}
+{% block page_subtitle %}نمای زندۀ عملکرد گیم‌سنتر شما{% endblock %}
+
+{% block topbar_status %}
+  {% if salon_server %}
+    <span class="gn-chip {% if salon_server.status == 'ONLINE' %}ok{% else %}warn{% endif %}" title="وضعیت ارتباط سرور سالن با پنل آنلاین">
+      <span class="dot"></span>سرور سالن: {% if salon_server.status == 'ONLINE' %}آنلاین (متصل){% else %}آفلاین{% endif %}
+    </span>
+  {% endif %}
+{% endblock %}
+
+{% block content %}
+<div class="baz-dash">
+
+  <!-- Header & Live Indicators -->
+  <div class="baz-header">
+    <div class="baz-legend flex-wrap">
+      <span class="baz-legend-item">
+        <span class="baz-legend-dot green"></span> آنلاین ({{ online_count }}) · مشغول ({{ active_count }})
+      </span>
+      <span class="baz-legend-item">
+        <span class="baz-legend-dot amber"></span> قفل ({{ locked_count }})
+      </span>
+      <span class="baz-legend-item">
+        <span class="baz-legend-dot gray"></span> آزاد ({{ free_count }}) · آفلاین ({{ offline_count }})
+      </span>
+      {% if error_count %}
+        <span class="gn-ortho-pill tone-bad">خطای سرویس: {{ error_count }}</span>
+      {% endif %}
+    </div>
+
+    <div class="baz-live-pill">
+      <span class="baz-pulse-dot"></span>
+      <span>به‌روزرسانی زنده</span>
+    </div>
+  </div>
+
+  <!-- KPI Cards (Row of 4) -->
+  <div class="baz-kpi-grid">
+    <!-- Active Devices -->
+    <div class="baz-kpi-card baz-kpi-purple">
+      <div class="baz-kpi-info">
+        <span class="baz-kpi-label">وضعیت نشست‌ها و ایستگاه‌ها</span>
+        <span class="baz-kpi-val num">{{ active_count }} مشغول</span>
+        <span class="baz-kpi-sub">{{ online_count }} آنلاین · {{ power_on_count }} روشن · {{ free_count }} آزاد</span>
+      </div>
+      <div class="baz-kpi-icon-box">
+        <i class="ti ti-device-gamepad-2"></i>
+      </div>
+    </div>
+
+    <!-- Today's Revenue -->
+    <div class="baz-kpi-card baz-kpi-amber">
+      <div class="baz-kpi-info">
+        <span class="baz-kpi-label">درآمد امروز</span>
+        <span class="baz-kpi-val num">{{ today_revenue|toman }}</span>
+        <span class="baz-kpi-sub">{{ today_session_revenue|toman }} دستگاه · {{ today_deposit_revenue|toman }} شارژ</span>
+      </div>
+      <div class="baz-kpi-icon-box">
+        <i class="ti ti-coins"></i>
+      </div>
+    </div>
+
+    <!-- Monthly Revenue -->
+    <div class="baz-kpi-card baz-kpi-emerald">
+      <div class="baz-kpi-info">
+        <span class="baz-kpi-label">درآمد ماه</span>
+        <span class="baz-kpi-val num">{{ month_revenue|toman }}</span>
+        <span class="baz-kpi-sub">سود / مجموع این ماه</span>
+      </div>
+      <div class="baz-kpi-icon-box">
+        <i class="ti ti-trending-up"></i>
+      </div>
+    </div>
+
+    <!-- Customers Count -->
+    <div class="baz-kpi-card baz-kpi-cyan">
+      <div class="baz-kpi-info">
+        <span class="baz-kpi-label">تعداد مشتریان</span>
+        <span class="baz-kpi-val num">{{ customer_count }}</span>
+        <span class="baz-kpi-sub">مجموع گیمرهای ثبت‌شده</span>
+      </div>
+      <div class="baz-kpi-icon-box">
+        <i class="ti ti-users"></i>
+      </div>
+    </div>
+  </div>
+
+  <!-- Live Stations Grid -->
+  <div class="baz-section">
+    <div class="baz-section-header">
+      <h2 class="baz-section-title">وضعیت زندۀ دستگاه‌ها</h2>
+      <a href="{% url 'cloud_devices' %}" class="gn-btn sm">
+        <i class="ti ti-settings"></i> مدیریت استیشن‌ها
+      </a>
+    </div>
+
+    <!-- Live Auto-Refreshing Stations Grid via HTMX -->
+    <div hx-get="{% url 'cloud_device_grid' %}" hx-trigger="every 6s" hx-swap="innerHTML">
+      {% include "cloud/_device_grid.html" %}
+    </div>
+  </div>
+
+  <!-- Revenue Report Chart -->
+  <div class="baz-chart-card" data-gn-tabs>
+    <div class="baz-chart-header">
+      <div>
+        <h3 class="baz-section-title" style="font-size: 15px;">گزارش درآمد</h3>
+        <p class="baz-subtitle">روند فروش و شارژ طی بازه‌های اخیر</p>
+      </div>
+
+      <div class="d-flex align-items-center gap-3 flex-wrap">
+        <div class="baz-chart-legend">
+          <span class="d-flex align-items-center gap-1">
+            <span class="baz-chart-legend-box purple"></span> درآمد دستگاه
+          </span>
+          <span class="d-flex align-items-center gap-1">
+            <span class="baz-chart-legend-box cyan"></span> شارژ کیف پول
+          </span>
+        </div>
+
+        <div class="baz-chart-tabs" role="tablist" data-gn-tablist aria-label="بازه گزارش درآمد">
+          <button id="revTabDaily" class="baz-chart-tab" type="button" role="tab" aria-selected="true" tabindex="0" data-tab-panel="revPanelDaily">روزانه</button>
+          <button id="revTabWeekly" class="baz-chart-tab" type="button" role="tab" aria-selected="false" tabindex="-1" data-tab-panel="revPanelWeekly">هفتگی</button>
+          <button id="revTabMonthly" class="baz-chart-tab" type="button" role="tab" aria-selected="false" tabindex="-1" data-tab-panel="revPanelMonthly">ماهانه</button>
+        </div>
+      </div>
+    </div>
+
+    <div role="tabpanel" id="revPanelDaily" aria-labelledby="revTabDaily" tabindex="0">
+      <div class="baz-bars-wrap">
+        {% for item in revenue_chart %}
+          <div class="baz-bar-col">
+            <div class="baz-bar-pill" style="height: {{ item.height_pct }}%;" data-tooltip="{{ item.tooltip_title|default:item.day_name }}: {{ item.total|toman }} تومان" aria-label="{{ item.tooltip_title|default:item.day_name }}: {{ item.total|toman }} تومان"></div>
+            <span class="baz-bar-label num">{{ item.label }}</span>
+          </div>
+        {% endfor %}
+      </div>
+    </div>
+
+    <div role="tabpanel" id="revPanelWeekly" aria-labelledby="revTabWeekly" hidden="until-found">
+      <div class="baz-bars-wrap">
+        {% for item in revenue_chart_weekly %}
+          <div class="baz-bar-col">
+            <div class="baz-bar-pill" style="height: {{ item.height_pct }}%;" data-tooltip="{{ item.tooltip_title|default:item.day_name }}: {{ item.total|toman }} تومان" aria-label="{{ item.tooltip_title|default:item.day_name }}: {{ item.total|toman }} تومان"></div>
+            <span class="baz-bar-label num">{{ item.label }}</span>
+          </div>
+        {% endfor %}
+      </div>
+    </div>
+
+    <div role="tabpanel" id="revPanelMonthly" aria-labelledby="revTabMonthly" hidden="until-found">
+      <div class="baz-bars-wrap">
+        {% for item in revenue_chart_monthly %}
+          <div class="baz-bar-col">
+            <div class="baz-bar-pill" style="height: {{ item.height_pct }}%;" data-tooltip="{{ item.tooltip_title|default:item.day_name }}: {{ item.total|toman }} تومان" aria-label="{{ item.tooltip_title|default:item.day_name }}: {{ item.total|toman }} تومان"></div>
+            <span class="baz-bar-label num">{{ item.label }}</span>
+          </div>
+        {% endfor %}
+      </div>
+    </div>
+  </div>
+
+</div>
+{% endblock %}

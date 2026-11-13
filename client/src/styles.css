@@ -53,7 +53,7 @@
 
 @layer base {
   html {
-    color-scheme: dark;
+    color-scheme: light;
   }
 
   body {
@@ -63,7 +63,7 @@
   }
 
   ::selection {
-    @apply bg-neon/30 text-paper;
+    @apply bg-neon/20 text-paper;
   }
 
   button,
@@ -74,26 +74,26 @@
 
 @layer components {
   .panel {
-    @apply rounded-3xl border border-line/80 bg-panel/80 backdrop-blur-xl;
+    @apply rounded-2xl border border-line bg-panel/95;
     box-shadow:
-      0 24px 80px -40px rgba(0, 0, 0, 0.9),
-      inset 0 1px 0 rgba(255, 255, 255, 0.03);
+      0 16px 48px -20px rgba(27, 20, 62, 0.08),
+      inset 0 1px 0 rgba(255, 255, 255, 1);
   }
 
   .chip {
-    @apply inline-flex items-center gap-2 rounded-full border border-line bg-ink/60 px-3 py-1 text-[11px] text-mist;
+    @apply inline-flex items-center gap-2 rounded-full border border-line bg-raised/80 px-3 py-1 text-[11px] text-mist font-semibold;
   }
 
   .chip-live {
-    @apply border-neon/25 bg-neon/10 text-neon;
+    @apply border-line bg-raised text-paper;
   }
 
   .field {
-    @apply w-full rounded-xl border border-line bg-ink/70 px-4 py-3 text-sm text-paper outline-none transition placeholder:text-mist/40;
+    @apply w-full rounded-xl border border-line bg-white px-4 py-3 text-sm text-paper outline-none transition placeholder:text-mist/50 font-medium;
   }
 
   .field:focus {
-    @apply border-neon/60 ring-2 ring-neon/10;
+    @apply border-neon ring-2 ring-neon/15;
   }
 
   .field:disabled {
@@ -105,12 +105,16 @@
   }
 
   .btn-primary {
-    @apply bg-neon text-ink hover:bg-neon/90 active:translate-y-px;
-    box-shadow: 0 10px 30px -12px rgba(94, 234, 212, 0.55);
+    @apply bg-neon text-white hover:bg-[#1e293b] active:translate-y-px;
+    box-shadow: 0 4px 16px -4px rgba(15, 23, 42, 0.3);
   }
 
   .btn-ghost {
-    @apply border border-line bg-raised/60 text-paper hover:border-neon/40 hover:bg-raised;
+    @apply border border-line bg-white/90 text-paper hover:border-neon hover:bg-white;
+  }
+
+  .num, .font-mono, [dir="ltr"].font-mono {
+    font-variant-numeric: tabular-nums;
   }
 
   .timer {
@@ -124,9 +128,9 @@
   inset: 0;
   pointer-events: none;
   background:
-    radial-gradient(900px 520px at 82% -12%, rgba(94, 234, 212, 0.11), transparent 62%),
-    radial-gradient(760px 520px at 8% 112%, rgba(251, 191, 36, 0.055), transparent 60%),
-    linear-gradient(180deg, #070b10 0%, #080d13 100%);
+    radial-gradient(900px 520px at 82% -12%, rgba(245, 158, 11, 0.08), transparent 62%),
+    radial-gradient(760px 520px at 8% 112%, rgba(15, 23, 42, 0.04), transparent 60%),
+    linear-gradient(180deg, #f8fafc 0%, #f1f5f9 100%);
 }
 
 .backdrop::after {
@@ -134,11 +138,11 @@
   position: absolute;
   inset: 0;
   background-image:
-    linear-gradient(rgba(139, 163, 184, 0.045) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(139, 163, 184, 0.045) 1px, transparent 1px);
-  background-size: 44px 44px;
-  -webkit-mask-image: radial-gradient(ellipse at center, black 8%, transparent 72%);
-  mask-image: radial-gradient(ellipse at center, black 8%, transparent 72%);
+    linear-gradient(rgba(226, 232, 240, 0.6) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(226, 232, 240, 0.6) 1px, transparent 1px);
+  background-size: 40px 40px;
+  -webkit-mask-image: radial-gradient(ellipse at center, black 30%, transparent 75%);
+  mask-image: radial-gradient(ellipse at center, black 30%, transparent 75%);
 }
 
 .lock-orbit {
@@ -148,11 +152,11 @@
   width: 116px;
   height: 116px;
   border-radius: 9999px;
-  border: 1px solid rgba(94, 234, 212, 0.28);
-  background: radial-gradient(circle at 50% 40%, rgba(94, 234, 212, 0.14), rgba(7, 11, 16, 0.2) 68%);
+  border: 1px solid rgba(226, 232, 240, 0.9);
+  background: radial-gradient(circle at 50% 40%, rgba(255, 255, 255, 1), rgba(241, 245, 249, 0.9) 68%);
   box-shadow:
-    0 0 0 10px rgba(94, 234, 212, 0.025),
-    0 0 70px -14px rgba(94, 234, 212, 0.45);
+    0 0 0 10px rgba(245, 158, 11, 0.08),
+    0 8px 32px -10px rgba(15, 23, 42, 0.08);
 }
 
 .lock-orbit::before {
@@ -160,7 +164,7 @@
   position: absolute;
   inset: -9px;
   border-radius: inherit;
-  border: 1px dashed rgba(94, 234, 212, 0.22);
+  border: 1px dashed rgba(245, 158, 11, 0.35);
   animation: orbit 30s linear infinite;
 }
 
@@ -207,4 +211,14 @@
   .lock-orbit::before {
     animation: none;
   }
+}
+
+/* Win7-friendly rendering: no backdrop filters, crisp text, soft gradients instead. */
+html, body {
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: geometricPrecision;
+}
+.pro-glow {
+  background: radial-gradient(circle, rgba(56, 189, 248, 0.12) 0%, rgba(56, 189, 248, 0.04) 45%, transparent 72%);
 }

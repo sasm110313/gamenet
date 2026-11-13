@@ -27,9 +27,9 @@ GAMENET_ROLE = env("GAMENET_ROLE", default="edge")
 if GAMENET_ROLE not in {"cloud", "edge"}:
     raise SystemExit(f"GAMENET_ROLE must be cloud|edge, got {GAMENET_ROLE!r}")
 GAMENET_ENV = env("GAMENET_ENV", default="dev")
-GAMENET_VERSION = "0.2.0-phase2"
+GAMENET_VERSION = "0.2.10"
 
-ALLOWED_HOSTS = env.list("DJANGO_ALLOWED_HOSTS", default=["127.0.0.1", "localhost"])
+ALLOWED_HOSTS = env.list("DJANGO_ALLOWED_HOSTS", default=["*"])
 CSRF_TRUSTED_ORIGINS = env.list("DJANGO_CSRF_TRUSTED_ORIGINS", default=[])
 USE_X_FORWARDED_HOST = env.bool("DJANGO_USE_X_FORWARDED_HOST", default=False)
 if env.bool("DJANGO_BEHIND_PROXY", default=False):
@@ -44,6 +44,7 @@ INSTALLED_APPS = [
     "django.contrib.sessions",
     "django.contrib.messages",
     "django.contrib.staticfiles",
+    "django.contrib.humanize",
     "rest_framework",
     "channels",
     # business modules
@@ -67,6 +68,7 @@ INSTALLED_APPS = [
 ]
 
 MIDDLEWARE = [
+    "apps.core.middleware_errors.GlobalErrorCaptureMiddleware",
     "django.middleware.security.SecurityMiddleware",
     "whitenoise.middleware.WhiteNoiseMiddleware",
     "django.contrib.sessions.middleware.SessionMiddleware",
@@ -138,7 +140,7 @@ STATIC_ROOT = Path(env("DJANGO_STATIC_ROOT", default=str(ROOT_DIR / ".artifacts"
 STATICFILES_DIRS = [BASE_DIR / "static"]
 STORAGES = {
     "default": {"BACKEND": "django.core.files.storage.FileSystemStorage"},
-    "staticfiles": {"BACKEND": "whitenoise.storage.CompressedStaticFilesStorage"},
+    "staticfiles": {"BACKEND": "django.contrib.staticfiles.storage.StaticFilesStorage"},
 }
 
 # --- Sessions / cookies -----------------------------------------------------
@@ -213,11 +215,11 @@ COMMAND_CLOCK_SKEW_SECONDS = env.int("COMMAND_CLOCK_SKEW_SECONDS", default=60)
 
 # --- Money defaults ---------------------------------------------------------
 DEFAULT_HOURLY_RATE = env.int("DEFAULT_HOURLY_RATE", default=60_000)  # Toman (تعرفه عادی غیر رهرو)
-DEFAULT_CREDIT_LIMIT = env.int("DEFAULT_CREDIT_LIMIT", default=60_000)  # Toman
+DEFAULT_CREDIT_LIMIT = env.int("DEFAULT_CREDIT_LIMIT", default=0)  # Toman (بدهی کلاً غیرمجاز)
 
 # --- Rahro Integration -----------------------------------------------------
 RAHRO_GAMENET_SHARED_SECRET = env("RAHRO_GAMENET_SHARED_SECRET", default="rahro_gamenet_secret_2026")
-RAHRO_API_URL = env("RAHRO_API_URL", default="http://127.0.0.1:8000/rahro/api/gamenet/")
+RAHRO_API_URL = env("RAHRO_API_URL", default="https://hammasjedy.ir/rahro/api/gamenet/")
 
 # --- Security ---------------------------------------------------------------
 if not DEBUG:

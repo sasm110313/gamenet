@@ -18,6 +18,34 @@ class ClientStatus(models.TextChoices):
     MAINTENANCE = "MAINTENANCE", "Maintenance"
 
 
+class ConnectionStatus(models.TextChoices):
+    ONLINE = "ONLINE", "Online"
+    OFFLINE = "OFFLINE", "Offline"
+
+
+class PowerStatus(models.TextChoices):
+    ON = "ON", "On"
+    OFF = "OFF", "Off"
+    UNKNOWN = "UNKNOWN", "Unknown"
+
+
+class KioskStatus(models.TextChoices):
+    LOCKED = "LOCKED", "Locked"
+    UNLOCKED = "UNLOCKED", "Unlocked"
+    DISABLED = "DISABLED", "Disabled"
+
+
+class OccupancyStatus(models.TextChoices):
+    FREE = "FREE", "Free"
+    BUSY = "BUSY", "Busy"
+    MAINTENANCE = "MAINTENANCE", "Maintenance"
+
+
+class HealthStatus(models.TextChoices):
+    HEALTHY = "HEALTHY", "Healthy"
+    ERROR = "ERROR", "Error"
+
+
 # Transitions the hub accepts from a client's own reports. The hub may always
 # force MAINTENANCE/OFFLINE (network truth), and admin commands may force LOCKED.
 CLIENT_ALLOWED_TRANSITIONS: dict[str, set[str]] = {
@@ -55,7 +83,40 @@ class ClientDevice(models.Model):
     status = models.CharField(
         max_length=16, choices=ClientStatus.choices, default=ClientStatus.OFFLINE, db_index=True
     )
+    connection_status = models.CharField(
+        max_length=16,
+        choices=ConnectionStatus.choices,
+        default=ConnectionStatus.OFFLINE,
+        db_index=True,
+    )
+    power_status = models.CharField(
+        max_length=16,
+        choices=PowerStatus.choices,
+        default=PowerStatus.UNKNOWN,
+        db_index=True,
+    )
+    kiosk_status = models.CharField(
+        max_length=16,
+        choices=KioskStatus.choices,
+        default=KioskStatus.LOCKED,
+        db_index=True,
+    )
+    occupancy_status = models.CharField(
+        max_length=16,
+        choices=OccupancyStatus.choices,
+        default=OccupancyStatus.FREE,
+        db_index=True,
+    )
+    health_status = models.CharField(
+        max_length=16,
+        choices=HealthStatus.choices,
+        default=HealthStatus.HEALTHY,
+        db_index=True,
+    )
+    health_message = models.CharField(max_length=255, blank=True)
+    last_power_change_at = models.DateTimeField(null=True, blank=True)
     last_heartbeat_at = models.DateTimeField(null=True, blank=True)
+    connection_owner = models.CharField(max_length=100, blank=True, default="")
     registered_at = models.DateTimeField(default=timezone.now)
     is_active = models.BooleanField(default=True)
     # SHA-256 of the device token; the token itself is never stored.
@@ -72,16 +133,39 @@ class ClientDevice(models.Model):
             models.CheckConstraint(
                 condition=models.Q(status__in=ClientStatus.values),
                 name="clients_device_status_valid",
-            )
+            ),
+            models.CheckConstraint(
+                condition=models.Q(connection_status__in=ConnectionStatus.values),
+                name="clients_device_connection_valid",
+            ),
+            models.CheckConstraint(
+                condition=models.Q(power_status__in=PowerStatus.values),
+                name="clients_device_power_valid",
+            ),
+            models.CheckConstraint(
+                condition=models.Q(kiosk_status__in=KioskStatus.values),
+                name="clients_device_kiosk_valid",
+            ),
+            models.CheckConstraint(
+                condition=models.Q(occupancy_status__in=OccupancyStatus.values),
+                name="clients_device_occupancy_valid",
+            ),
+            models.CheckConstraint(
+                condition=models.Q(health_status__in=HealthStatus.values),
+                name="clients_device_health_valid",
+            ),
         ]
-        indexes = [models.Index(fields=["edge_id", "status"])]
+        indexes = [
+            models.Index(fields=["edge_id", "status"]),
+            models.Index(fields=["edge_id", "connection_status", "occupancy_status"]),
+        ]
 
     def __str__(self) -> str:
-        return f"{self.name} ({self.status})"
+        return f"{self.name} ({self.connection_status}/{self.occupancy_status})"
 
     @property
     def is_online(self) -> bool:
-        return self.status not in {ClientStatus.OFFLINE, ClientStatus.MAINTENANCE}
+        return self.connection_status == ConnectionStatus.ONLINE
 
     def can_transition_to(self, new_status: str) -> bool:
         return new_status in CLIENT_ALLOWED_TRANSITIONS.get(self.status, set())

@@ -150,6 +150,17 @@ class OutboxEvent(models.Model):
         return f"#{self.local_sequence} {self.event_type} [{self.status}]"
 
 
+class RahroDelivery(models.Model):
+    """Durable, session-keyed delivery to the external loyalty service."""
+
+    session_id = models.UUIDField(primary_key=True)
+    payload = models.JSONField(default=dict)
+    attempts = models.PositiveIntegerField(default=0)
+    next_attempt_at = models.DateTimeField(default=timezone.now, db_index=True)
+    delivered_at = models.DateTimeField(null=True, blank=True)
+    last_error = models.TextField(blank=True)
+
+
 class SyncEvent(models.Model):
     """Cloud-side record of a received edge event (the replicated fact log)."""
 

@@ -1,0 +1,7 @@
+{
+  "version": "0.2.9",
+  "url": "/static/updates/server/GameNet-Server-Update-0.2.9.zip",
+  "sha256": "b968e2ad9d1391c66d1a4bb0b6b2a8cf314acd79d09e7532a97773162750078d",
+  "mandatory": true,
+  "release_notes": "اصلاح سیاست قطع ارتباط و مالک اتصال، بودجه مشترک کیف پول، رزرو کوپن، سقف زمان و watchdog مستقل"
+}

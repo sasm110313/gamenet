@@ -1,111 +1,486 @@
 {% extends "base.html" %}
 {% load gn %}
 
-{% block title %}{{ device.name }} · سیستم بازی{% endblock %}
-{% block page_title %}{{ device.name }}{% endblock %}
-{% block page_subtitle %}
-  سیستم بازی سالن گیم‌نت · {{ device.ip_address|default:"شبکه محلی" }}
-{% endblock %}
-
-{% block topbar_status %}
-  <span class="gn-status {{ device.status|status_tone }}" style="font-size: 13px">
-    <span class="dot"></span>{{ device.status|status_fa }}
-  </span>
-{% endblock %}
+{% block title %}{{ device.name }} · وضعیت و تنظیمات سیستم{% endblock %}
+{% block page_title %}{{ device.name }} <span class="badge" style="font-size: 13px; font-weight: 700; background: #ecfdf5; color: #047857; border: 1px solid #a7f3d0; margin-right: 8px; vertical-align: middle;">ایستگاه بازی سالن</span>{% endblock %}
+{% block page_subtitle %}سیستم بازی در بازی سرای رهرو · {{ device.ip_address|default:"شبکه محلی" }}{% endblock %}
 
 {% block content %}
-<div class="gn-grid cols-3 mb-3">
-  <!-- Card 1: State Details -->
-  <div class="gn-card">
-    <h6>وضعیت ایستگاه</h6>
-    <div class="d-flex align-items-center gap-2 mb-2">
-      <span class="gn-status {{ device.status|status_tone }}" style="font-size: 13px">
-        <span class="dot"></span>{{ device.status|status_fa }}
-      </span>
-      {% if not device.is_active %}
-        <span class="gn-status st-offline ms-1">غیرفعال‌شده</span>
-      {% endif %}
-    </div>
-    <div class="d-flex flex-column gap-2" style="font-size: 13px">
-      <div class="d-flex justify-content-between"><span class="gn-muted">نام استیشن</span><strong class="text-light">{{ device.name }}</strong></div>
-      <div class="d-flex justify-content-between"><span class="gn-muted">سرور سالن</span><span>{{ edge.name|default:"سرور سالن اصلی" }}</span></div>
-      <div class="d-flex justify-content-between"><span class="gn-muted">وضعیت</span><span>{% if device.is_active %}<span class="text-success">فعال و آماده</span>{% else %}<span class="text-danger">غیرفعال</span>{% endif %}</span></div>
-    </div>
-  </div>
+<div id="gnCatalogData" hidden data-json="{{ catalog_json }}"></div>
 
-  <!-- Card 2: Remote Controls -->
-  <div class="gn-card">
-    <h6>کنترل از راه دور سیستم</h6>
-    <p class="gn-muted" style="font-size: 12px">
-      دستورهای زیر از طریق سرور سالن مستقیماً به کلاینت ویندوزی ارسال و اعمال می‌شوند.
-    </p>
-    <form method="post" action="{% url 'cloud_device_action' device.id %}">
-      {% csrf_token %}
-      <input type="hidden" name="next" value="{{ request.path }}">
-      <div class="d-flex flex-wrap gap-2">
-        <button class="gn-btn" name="action" value="lock"><i class="ti ti-lock"></i> قفل کردن صفحه</button>
-        <button class="gn-btn" name="action" value="unlock"><i class="ti ti-lock-open"></i> باز کردن قفل</button>
-        <button class="gn-btn" name="action" value="ping"><i class="ti ti-activity"></i> ارسال پینگ</button>
-        <button class="gn-btn" name="action" value="restart"><i class="ti ti-reload"></i> راه‌اندازی مجدد (Restart)</button>
-      </div>
-    </form>
-  </div>
+<div class="cd-scope d-flex flex-column gap-3">
 
-  <!-- Card 3: Session Info / Start Session -->
-  <div class="gn-card">
-    {% if active_session %}
-      <h6>نشست در حال بازی روی این دستگاه</h6>
-      <div class="d-flex flex-column gap-2" style="font-size: 12.5px">
-        <div class="d-flex justify-content-between">
-          <span class="gn-muted">مشتری</span>
-          <strong>{{ active_session.customer.full_name }}</strong>
-        </div>
-        <div class="d-flex justify-content-between">
-          <span class="gn-muted">شماره تماس</span>
-          <span class="num">{{ active_session.customer.phone|default:"—" }}</span>
-        </div>
-        <div class="d-flex justify-content-between">
-          <span class="gn-muted">تعرفه / نرخ</span>
-          <span>{{ active_session.tariff_name }} ({{ active_session.hourly_rate|toman }} / ساعت)</span>
-        </div>
-        <div class="d-flex justify-content-between">
-          <span class="gn-muted">زمان شروع</span>
-          <span class="num">{{ active_session.started_at|date:"H:i:s" }} ({{ active_session.started_at|reltime }})</span>
+  <!-- نوار بالای صفحه: ساختار اختصاصی اپل و تولبار یکپارچه -->
+  <div class="gn-device-header-card">
+    <div class="gn-device-header-main">
+      <div class="d-flex align-items-center gap-3 flex-wrap">
+        <a href="{% url 'cloud_devices' %}" class="gn-back-btn" title="بازگشت به فهرست همه ایستگاه‌ها">
+          <i class="ti ti-arrow-right"></i>
+          <span>ایستگاه‌ها</span>
+        </a>
+        <div class="gn-device-title-wrap">
+          <h2 class="gn-device-title">
+            {{ device.name }}
+            <span class="num" dir="ltr" style="font-size: 13px; font-weight: 700; color: #64748b; background: #f1f5f9; padding: 2px 8px; border-radius: 6px; border: 1px solid #e2e8f0;">
+              {{ device.ip_address|default:"شبکه محلی" }}
+            </span>
+          </h2>
+          <span class="gn-device-subtitle">
+            {% if device.hostname %}<span class="num">{{ device.hostname }}</span> · {% endif %}
+            سیستم بازی «بازی سرای رهرو»
+          </span>
         </div>
       </div>
-      <div class="gn-divider"></div>
-      <form method="post" action="{% url 'cloud_manage_session_stop' active_session.id %}">
-        {% csrf_token %}
-        <input type="hidden" name="next" value="{{ request.path }}">
-        <button class="gn-btn danger w-100 justify-content-center" type="submit">
-          <i class="ti ti-player-stop"></i> پایان نشست و محاسبه هزینه
-        </button>
-      </form>
-    {% else %}
-      <h6>شروع نشست روی این دستگاه</h6>
-      <p class="gn-muted" style="font-size: 12px">این دستگاه در حال حاضر در حال بازی نیست. می‌توانید از اینجا نشست جدیدی آغاز کنید.</p>
-      {% if customers %}
-        <form method="post" action="{% url 'cloud_device_start_session' device.id %}" class="d-flex flex-column gap-2">
-          {% csrf_token %}
-          <input type="hidden" name="next" value="{{ request.path }}">
-          <div>
-            <label class="gn-label">انتخاب مشتری</label>
-            <select class="gn-select w-100" name="customer_id" required>
-              <option value="">-- مشتری را انتخاب کنید --</option>
-              {% for c in customers %}
-                <option value="{{ c.id }}">{{ c.full_name }} ({{ c.phone|default:"بدون شماره" }})</option>
-              {% endfor %}
-            </select>
-          </div>
-          <button class="gn-btn ok w-100 justify-content-center" type="submit">
-            <i class="ti ti-player-play"></i> شروع نشست از ابر
+
+      <div class="gn-device-status-cluster">
+        <span class="gn-status-badge tone-{{ device.connection_status|conn_tone }}" title="وضعیت ارتباط شبکه">
+          <span class="gn-status-dot"></span>
+          {{ device.connection_status|conn_fa }}
+        </span>
+        <span class="gn-status-badge tone-{{ device.kiosk_status|kiosk_tone }}" title="وضعیت کیوسک کلاینت">
+          <i class="ti ti-lock"></i>
+          {{ device.kiosk_status|kiosk_fa }}
+        </span>
+        <span class="gn-status-badge tone-{{ device.occupancy_status|occ_tone }}" title="وضعیت نشست بازیکن">
+          <i class="ti ti-user-check"></i>
+          {{ device.occupancy_status|occ_fa }}
+        </span>
+        <span class="gn-status-badge tone-{{ device.health_status|health_tone }}" title="سلامت نرم‌افزار کلاینت">
+          <i class="ti ti-activity-heartbeat"></i>
+          {{ device.health_status|health_fa }}
+        </span>
+      </div>
+    </div>
+
+    <!-- تولبار ابزارها و عملیات سریع دستگاه -->
+    <div class="gn-device-toolbar">
+      <!-- بخش مانیتورینگ، عیب‌یابی و مدیریت -->
+      <div class="gn-toolbar-cluster">
+        <!-- Deck 1: مانیتورینگ زنده و ریموت -->
+        <div class="gn-deck-group">
+          <button type="button" class="gn-tb-btn primary-emerald" data-gn-remote="{{ device.id }}" data-device-name="{{ device.name }}" title="کنترل ریموت زنده دسکتاپ با ماوس و کیبورد">
+            <i class="ti ti-screen-share"></i>
+            <span>کنترل زنده (RDP)</span>
           </button>
-        </form>
-      {% else %}
-        <div class="gn-muted" style="font-size: 12px">مشتری فعالی روی این هاب یافت نشد.</div>
-      {% endif %}
-    {% endif %}
-  </div>
-</div>
+          <button type="button" class="gn-tb-btn neutral" data-gn-screenshot="{{ device.id }}" data-device-name="{{ device.name }}" title="ثبت اسکرین‌شات از صفحه کلاینت">
+            <i class="ti ti-camera"></i>
+            <span>اسکرین‌شات</span>
+          </button>
+        </div>
 
+        <!-- Deck 2: ابزارهای مدیریت کلاینت و ویندوز -->
+        <div class="gn-deck-group">
+          <form method="post" action="{% url 'cloud_device_action' device.id %}" class="gn-inline-form" data-gn-confirm="آیا از قفل کردن کلاینت {{ device.name }} و بستن تمام بازی‌ها مطمئنید؟">
+            {% csrf_token %}
+            <input type="hidden" name="next" value="{{ request.path }}">
+            <input type="hidden" name="action" value="lock">
+            <button type="submit" class="gn-tb-btn warning-amber" title="قفل کردن فوری کلاینت و بستن بازی‌ها">
+              <i class="ti ti-lock"></i>
+              <span>قفل کلاینت</span>
+            </button>
+          </form>
+
+          <form method="post" action="{% url 'cloud_device_action' device.id %}" class="gn-inline-form" data-gn-confirm="آیا از بستن تمام بازی‌ها و برنامه‌ها در {{ device.name }} مطمئنید؟">
+            {% csrf_token %}
+            <input type="hidden" name="next" value="{{ request.path }}">
+            <input type="hidden" name="action" value="kill_games">
+            <button type="submit" class="gn-tb-btn danger-red" title="بستن فوری تمام بازی‌ها و برنامه‌های کلاینت">
+              <i class="ti ti-device-gamepad-off"></i>
+              <span>بستن بازی‌ها</span>
+            </button>
+          </form>
+
+          <form method="post" action="{% url 'cloud_device_action' device.id %}" class="gn-inline-form" data-gn-confirm="آیا از ریست و اجرای مجدد نرم‌افزار کلاینت {{ device.name }} مطمئنید؟">
+            {% csrf_token %}
+            <input type="hidden" name="next" value="{{ request.path }}">
+            <input type="hidden" name="action" value="restart_app">
+            <button type="submit" class="gn-tb-btn accent-indigo" title="ریست نرم‌افزار کلاینت (بدون ریبوت ویندوز)">
+              <i class="ti ti-refresh"></i>
+              <span>ریست کلاینت</span>
+            </button>
+          </form>
+
+          <form method="post" action="{% url 'cloud_device_action' device.id %}" class="gn-inline-form" data-gn-confirm="آیا از فعال‌سازی Windows Explorer در این کلاینت مطمئنید؟ (کلاینت موقتاً کنار می‌رود)">
+            {% csrf_token %}
+            <input type="hidden" name="next" value="{{ request.path }}">
+            <input type="hidden" name="action" value="admin_unlock">
+            <button type="submit" class="gn-tb-btn accent-blue" title="خروج موقت از کیوسک برای کارهای ادمین">
+              <i class="ti ti-brand-windows"></i>
+              <span>حالت ادمین</span>
+            </button>
+          </form>
+
+          <form method="post" action="{% url 'cloud_device_action' device.id %}" class="gn-inline-form" data-gn-confirm="آیا از بروزرسانی خودکار نرم‌افزار این کلاینت به آخرین نسخه مطمئنید؟">
+            {% csrf_token %}
+            <input type="hidden" name="next" value="{{ request.path }}">
+            <input type="hidden" name="action" value="update">
+            <button type="submit" class="gn-tb-btn accent-indigo" title="بروزرسانی خودکار کلاینت به آخرین نسخه">
+              <i class="ti ti-cloud-download"></i>
+              <span>بروزرسانی کلاینت</span>
+            </button>
+          </form>
+
+          <form method="post" action="{% url 'cloud_device_action' device.id %}" class="gn-inline-form">
+            {% csrf_token %}
+            <input type="hidden" name="next" value="{{ request.path }}">
+            <input type="hidden" name="action" value="ping">
+            <button type="submit" class="gn-tb-btn neutral" title="ارسال پینگ از طریق سرور سالن">
+              <i class="ti ti-activity"></i>
+              <span>پینگ شبکه</span>
+            </button>
+          </form>
+        </div>
+      </div>
+
+      <!-- Deck 3: کنترل توان و برق رایانه -->
+      <div class="gn-toolbar-cluster">
+        <div class="gn-deck-group">
+          <form method="post" action="{% url 'cloud_device_action' device.id %}" class="gn-inline-form">
+            {% csrf_token %}
+            <input type="hidden" name="next" value="{{ request.path }}">
+            <input type="hidden" name="action" value="wake">
+            <button type="submit" class="gn-tb-btn accent-emerald" title="ارسال بسته روشن‌سازی از راه دور (Wake-on-LAN)">
+              <i class="ti ti-bolt"></i>
+              <span>روشن‌سازی (WOL)</span>
+            </button>
+          </form>
+
+          <form method="post" action="{% url 'cloud_device_action' device.id %}" class="gn-inline-form" data-gn-confirm="آیا از ری‌استارت سیستم مطمئنید؟">
+            {% csrf_token %}
+            <input type="hidden" name="next" value="{{ request.path }}">
+            <input type="hidden" name="action" value="restart">
+            <button type="submit" class="gn-tb-btn warning-amber" title="راه‌اندازی مجدد ویندوز">
+              <i class="ti ti-reload"></i>
+              <span>ری‌استارت</span>
+            </button>
+          </form>
+
+          <form method="post" action="{% url 'cloud_device_action' device.id %}" class="gn-inline-form" data-gn-confirm="آیا از خاموش کردن کامل سیستم مطمئن هستید؟">
+            {% csrf_token %}
+            <input type="hidden" name="next" value="{{ request.path }}">
+            <input type="hidden" name="action" value="shutdown">
+            <button type="submit" class="gn-tb-btn danger-red" title="خاموش کردن کامل رایانه (Shutdown)">
+              <i class="ti ti-power"></i>
+              <span>خاموش کردن</span>
+            </button>
+          </form>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  {% if device.is_offline_but_on %}
+    <div class="gn-alert warning py-2.5 px-3" style="border-radius: 10px;">
+      <i class="ti ti-alert-triangle"></i> <strong>سیستم در سالن روشن است اما کلاینت متصل نیست:</strong> نرم‌افزار کلاینت روی دستگاه بسته شده یا مسدود است.
+    </div>
+  {% endif %}
+  {% if device.has_health_error %}
+    <div class="gn-alert error py-2.5 px-3" style="border-radius: 10px;">
+      <i class="ti ti-bug"></i> <strong>خطای گزارش‌شده کلاینت:</strong> {{ device.health_message|default:"مشکل در کلاینت گزارش شده است." }}
+    </div>
+  {% endif %}
+
+  <!-- گرید دو ستونی: نشست و شروع بازی + مشخصات دستگاه -->
+  <div class="row g-3">
+
+    <!-- ستون ۱: نشست فعال یا شروع بازی با مشتری -->
+    <div class="col-lg-6 col-12">
+      <div class="gn-card p-3.5 h-100 d-flex flex-column justify-content-between" style="background: #ffffff; border: 1px solid #e2e8f0; border-radius: 14px;">
+        <div>
+          <div class="d-flex justify-content-between align-items-center mb-3 pb-2.5" style="border-bottom: 1px solid #f1f5f9;">
+            <div class="d-flex align-items-center gap-2">
+              <i class="ti ti-device-gamepad-2" style="font-size: 22px; color: #059669;"></i>
+              <h5 style="margin: 0; font-size: 15px; font-weight: 800; color: #0f172a;">
+                {% if active_session %}نشست بازی در حال اجرا{% else %}شروع بازی و باز کردن کیوسک{% endif %}
+              </h5>
+            </div>
+            {% if active_session %}
+              <span class="gn-chip" style="background: #ecfdf5; color: #047857; border: 1px solid #a7f3d0; font-weight: 800;">
+                <span class="dot" style="background: #059669;"></span> در حال بازی
+              </span>
+            {% else %}
+              <span class="gn-chip" style="background: #f8fafc; color: #64748b; border: 1px solid #cbd5e1; font-weight: 700;">
+                {{ device.occupancy_status|occ_fa }}
+              </span>
+            {% endif %}
+          </div>
+
+          {% if active_session %}
+            <div class="p-3 mb-3 rounded-3" style="background: #f8fafc; border: 1.5px solid #e2e8f0;">
+              <div class="d-flex justify-content-between align-items-center mb-2 flex-wrap gap-2">
+                <div>
+                  <h4 class="mb-0" style="font-size: 17px; font-weight: 800; color: #0f172a;">{{ active_session.customer.full_name }}</h4>
+                  <a href="{% url 'cloud_customer_detail' active_session.customer.id %}#wallet" style="font-size: 12px; color: #2563eb; font-weight: 600;">
+                    مشاهده پروفایل و کیف پول مشتری
+                  </a>
+                </div>
+                <div class="baz-timer-badge" data-elapsed="{{ device.elapsed_seconds }}" data-paused="{% if device.is_paused %}1{% else %}0{% endif %}" style="font-size: 18px; font-weight: 900; background: #0f172a; color: #38bdf8; padding: 6px 14px; border-radius: 8px;">
+                  <i class="ti ti-clock"></i> {{ device.elapsed_seconds|duration_hms }}
+                </div>
+              </div>
+
+              <div class="row g-2 mt-2 pt-2" style="border-top: 1px dashed #cbd5e1; font-size: 13px;">
+                <div class="col-6">
+                  <span style="color: #64748b; font-size: 12px;">تعرفه:</span>
+                  <div class="num font-weight-bold" style="font-size: 14px; color: #0f172a;">{{ active_session.tariff_name }}</div>
+                </div>
+                <div class="col-6">
+                  <span style="color: #64748b; font-size: 12px;">نرخ ساعتی:</span>
+                  <div class="num font-weight-bold" style="font-size: 14px; color: #059669;">{{ active_session.hourly_rate|toman }} ت/ساعت</div>
+                </div>
+                <div class="col-6 mt-2">
+                  <span style="color: #64748b; font-size: 12px;">روش محاسبه:</span>
+                  <div class="num font-weight-bold" style="font-size: 13px; color: #334155;">{{ active_session.billing_mode|billing_mode_fa }}</div>
+                </div>
+                <div class="col-6 mt-2">
+                  <span style="color: #64748b; font-size: 12px;">سیاست قطع ارتباط:</span>
+                  <div class="num font-weight-bold" style="font-size: 13px; color: #334155;">{{ active_session.disconnect_policy|disconnect_policy_fa }}</div>
+                </div>
+              </div>
+            </div>
+
+            <div class="d-flex gap-2">
+              <form method="post" action="{% url 'cloud_manage_session_stop' active_session.id %}" class="flex-grow-1" data-gn-confirm="آیا از پایان نشست بازی اطمینان دارید؟">
+                {% csrf_token %}
+                <input type="hidden" name="next" value="{{ request.path }}">
+                <button type="submit" class="gn-btn danger w-100 justify-content-center" style="height: 42px; font-weight: 800;">
+                  <i class="ti ti-player-stop"></i> پایان نشست و قفل سیستم
+                </button>
+              </form>
+              <a href="{% url 'cloud_customer_detail' active_session.customer.id %}#wallet" class="gn-btn" style="height: 42px;">
+                <i class="ti ti-wallet"></i> شارژ کیف پول
+              </a>
+            </div>
+
+          {% else %}
+            <!-- فرم ساده، سریع و استاندارد شروع نشست -->
+            {% if customers %}
+              <form method="post" action="{% url 'cloud_device_start_session' device.id %}" data-gn-guided-session class="d-flex flex-column gap-3">
+                {% csrf_token %}
+                <input type="hidden" name="next" value="{{ request.path }}">
+                <input type="hidden" name="device_id" data-gn-locked-device value="{{ device.id }}">
+
+                <div>
+                  <label class="cd-label" for="cloudDetCust" style="font-size: 12px; font-weight: 700; color: #334155; margin-bottom: 6px;">
+                    <i class="ti ti-user me-1 text-primary"></i> انتخاب مشتری سالن (الزامی)
+                  </label>
+                  <select id="cloudDetCust" name="customer_id" class="cd-select w-100" data-gn-customer-select required style="height: 42px; font-size: 13px; font-weight: 700;">
+                    <option value="">-- مشتری را انتخاب کنید --</option>
+                    {% for c in customers %}
+                      <option value="{{ c.id }}" data-balance="{{ c.wallet.balance|default:0 }}" data-debt="{{ c.debt_balance|default:0 }}">
+                        {{ c.full_name }} — موجودی: {{ c.wallet.balance|default:0|toman }} ت{% if c.debt_balance > 0 %} (بدهی: {{ c.debt_balance|toman }} ت){% endif %}
+                      </option>
+                    {% endfor %}
+                  </select>
+                </div>
+
+                <!-- کارت وضعیت اعتبار و نرخ ساعتی مشتری انتخاب‌شده -->
+                <div class="d-flex align-items-center justify-content-between p-2.5 rounded-3 flex-wrap gap-2" style="background: #f8fafc; border: 1px solid #e2e8f0; font-size: 12px;">
+                  <div class="d-flex align-items-center gap-3 flex-wrap">
+                    <span><span style="color: #64748b;">موجودی مشتری:</span> <strong class="num" data-gn-gs-balance style="color: #059669; font-weight: 800;">انتخاب نشده</strong></span>
+                    <span style="color: #cbd5e1;">|</span>
+                    <span><span style="color: #64748b;">نرخ ساعتی:</span> <strong class="num" data-gn-gs-rate style="color: #2563eb; font-weight: 800;">خودکار</strong></span>
+                  </div>
+                </div>
+
+                <!-- هشدار بدهی یا نبود اعتبار -->
+                <div class="gn-alert error py-2 px-2.5 m-0" style="font-size: 12px; border-radius: 8px;" data-gn-gs-warn hidden></div>
+
+                <!-- روش محاسبه زمان -->
+                <div class="d-flex align-items-center justify-content-between flex-wrap gap-2">
+                  <div class="gn-radio-pills">
+                    <label class="gn-radio-pill"><input type="radio" name="billing_mode" value="CREDIT" checked> <span>اعتبارمحور (تا پایان شارژ)</span></label>
+                    <label class="gn-radio-pill"><input type="radio" name="billing_mode" value="TIMED"> <span>مدت مشخص (دقیقی)</span></label>
+                  </div>
+                  <div class="d-flex align-items-center gap-1.5" data-gn-gs-timed-wrap hidden>
+                    <input type="number" min="5" max="720" step="5" value="60" name="planned_duration_minutes" class="cd-input num" style="max-width: 80px; height: 34px; font-size: 13px; text-align: center;">
+                    <span style="font-size: 12px; color: #64748b;">دقیقه</span>
+                    <button type="button" class="gn-btn sm" data-gn-gs-duration="30">۳۰د</button>
+                    <button type="button" class="gn-btn sm" data-gn-gs-duration="60">۱س</button>
+                    <button type="button" class="gn-btn sm" data-gn-gs-duration="120">۲س</button>
+                  </div>
+                </div>
+
+                <!-- بخش تنظیمات پیشرفته تعرفه و شبکه به صورت تاشو -->
+                <details style="margin-top: 2px;">
+                  <summary style="cursor: pointer; font-size: 12px; color: #64748b; font-weight: 700; user-select: none;">
+                    <i class="ti ti-settings me-1"></i> تنظیمات تکمیلی (تعرفه اختصاصی، سیاست قطع ارتباط)
+                  </summary>
+                  <div class="p-3 rounded-3 mt-2" style="background: #ffffff; border: 1px dashed #cbd5e1;">
+                    <div class="row g-2">
+                      <div class="col-md-6 col-12">
+                        <label class="cd-label" for="cloudDetRate">تعرفه ساعتی</label>
+                        <select id="cloudDetRate" name="rate_choice" class="cd-select w-100" data-gn-rate-select data-gn-dynamic-rates="1" style="height: 38px;">
+                          <option value="">پیش‌فرض خودکار مشتری / دستگاه</option>
+                          {% for t in tariffs %}
+                            <option value="tariff:{{ t.id }}" data-hourly-rate="{{ t.hourly_rate }}">{{ t.name }} ({{ t.hourly_rate|toman }} ت)</option>
+                          {% endfor %}
+                        </select>
+                      </div>
+                      <div class="col-md-6 col-12">
+                        <label class="cd-label" for="cloudDetPolicy">سیاست در زمان قطع ارتباط</label>
+                        <select id="cloudDetPolicy" name="disconnect_policy" class="cd-select w-100" style="height: 38px;">
+                          <option value="PAUSE" selected>توقف موقت شمارنده (پیشنهادی)</option>
+                          <option value="AUTO_STOP">پایان خودکار نشست</option>
+                          <option value="CONTINUE">ادامه زمان‌سنجی</option>
+                        </select>
+                      </div>
+                    </div>
+                  </div>
+                </details>
+
+                <label class="gn-confirm-check my-0" style="font-size: 12px;">
+                  <input type="checkbox" checked data-gn-gs-confirm style="accent-color: #059669;">
+                  <span>تأیید شروع بازی: کیوسک این دستگاه باز شود و نشست آغاز گردد.</span>
+                </label>
+
+                <button type="submit" class="gn-btn w-100 justify-content-center" style="height: 44px; font-weight: 800; font-size: 14px; background: #059669; color: #ffffff; border: 0; box-shadow: 0 4px 12px rgba(5,150,105,0.3); border-radius: 10px;">
+                  <i class="ti ti-player-play"></i> باز کردن کیوسک و شروع نشست بازی
+                </button>
+              </form>
+            {% else %}
+              <div class="gn-empty p-3">
+                <i class="ti ti-user-off" style="font-size: 28px; opacity: 0.5;"></i>
+                مشتری فعالی در سیستم ثبت نشده است. ابتدا یک مشتری اضافه کنید.
+              </div>
+            {% endif %}
+          {% endif %}
+        </div>
+      </div>
+    </div>
+
+    <!-- ستون ۲: مشخصات فنی و شبکه سیستم با گرید منظم -->
+    <div class="col-lg-6 col-12">
+      <div class="gn-card p-3.5 h-100" style="background: #ffffff; border: 1px solid #e2e8f0; border-radius: 14px;">
+        <div class="d-flex justify-content-between align-items-center mb-3 pb-2.5" style="border-bottom: 1px solid #f1f5f9;">
+          <div class="d-flex align-items-center gap-2">
+            <i class="ti ti-cpu" style="font-size: 22px; color: #0f172a;"></i>
+            <h5 style="margin: 0; font-size: 15px; font-weight: 800; color: #0f172a;">مشخصات فنی و شبکه سیستم</h5>
+          </div>
+          <span class="num" dir="ltr" style="font-size: 12px; color: #64748b; font-weight: 700;">IP: {{ device.ip_address|default:"—" }}</span>
+        </div>
+
+        <div class="gn-specs-grid">
+          <div class="gn-spec-tile">
+            <div class="gn-spec-icon"><i class="ti ti-network"></i></div>
+            <div class="gn-spec-content">
+              <span class="gn-spec-label">آدرس شبکه (IP)</span>
+              <span class="gn-spec-value num" dir="ltr">{{ device.ip_address|default:"—" }}</span>
+            </div>
+          </div>
+
+          <div class="gn-spec-tile">
+            <div class="gn-spec-icon"><i class="ti ti-binary"></i></div>
+            <div class="gn-spec-content">
+              <span class="gn-spec-label">مک‌آدرس (MAC)</span>
+              <span class="gn-spec-value num" dir="ltr">{{ device.metadata.mac_address|default:"—" }}</span>
+            </div>
+          </div>
+
+          <div class="gn-spec-tile">
+            <div class="gn-spec-icon"><i class="ti ti-device-desktop"></i></div>
+            <div class="gn-spec-content">
+              <span class="gn-spec-label">نام رایانه (Hostname)</span>
+              <span class="gn-spec-value num">{{ device.hostname|default:"—" }}</span>
+            </div>
+          </div>
+
+          <div class="gn-spec-tile" title="{{ device.operating_system|default:'ویندوز' }}">
+            <div class="gn-spec-icon"><i class="ti ti-brand-windows"></i></div>
+            <div class="gn-spec-content">
+              <span class="gn-spec-label">سیستم‌عامل کلاینت</span>
+              <span class="gn-spec-value num" style="font-size: 12.5px;">{{ device.operating_system|os_fa }}</span>
+            </div>
+          </div>
+
+          <div class="gn-spec-tile">
+            <div class="gn-spec-icon"><i class="ti ti-server"></i></div>
+            <div class="gn-spec-content">
+              <span class="gn-spec-label">سرور لبه سالن</span>
+              <span class="gn-spec-value">{{ edge.name|default:"سرور سالن اصلی" }}</span>
+            </div>
+          </div>
+
+          <div class="gn-spec-tile">
+            <div class="gn-spec-icon"><i class="ti ti-apps"></i></div>
+            <div class="gn-spec-content">
+              <span class="gn-spec-label">نسخه نرم‌افزار کلاینت</span>
+              <span class="gn-spec-value num">v{{ device.application_version|default:"0.1.0" }}</span>
+            </div>
+          </div>
+
+          <div class="gn-spec-tile">
+            <div class="gn-spec-icon"><i class="ti ti-clock-pause"></i></div>
+            <div class="gn-spec-content">
+              <span class="gn-spec-label">خاموشی خودکار عدم استفاده</span>
+              <span class="gn-spec-value num">{{ device.metadata.idle_shutdown_minutes|default:"15" }} دقیقه</span>
+            </div>
+          </div>
+
+          <div class="gn-spec-tile">
+            <div class="gn-spec-icon"><i class="ti ti-activity-heartbeat"></i></div>
+            <div class="gn-spec-content">
+              <span class="gn-spec-label">آخرین ارتباط زنده</span>
+              <span class="gn-spec-value num" style="color: #059669;">
+                {% if device.last_heartbeat_at %}{{ device.last_heartbeat_at|reltime }}{% else %}—{% endif %}
+              </span>
+            </div>
+          </div>
+
+          <div class="gn-spec-tile">
+            <div class="gn-spec-icon"><i class="ti ti-shield-check"></i></div>
+            <div class="gn-spec-content">
+              <span class="gn-spec-label">وضعیت سلامت</span>
+              <span class="gn-spec-value" style="color: #059669;">{{ device.health_status|health_fa }}</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- مانیتورینگ زنده صفحه دسکتاپ و دسترسی کامل RDP -->
+  <div class="gn-card p-3.5" style="background: #ffffff; border: 1px solid #e2e8f0; border-radius: 14px;">
+    <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
+      <div class="d-flex align-items-center gap-2">
+        <i class="ti ti-photo-sensor-2" style="font-size: 22px; color: #0f172a;"></i>
+        <div>
+          <h5 style="margin: 0; font-size: 15px; font-weight: 800; color: #0f172a;">تصویر صفحه و کنترل از راه دور کلاینت (RDP)</h5>
+          <span style="font-size: 12px; color: #64748b;">مشاهده دسکتاپ گیمر یا کنترل مستقیم ماوس و صفحه کلید</span>
+        </div>
+      </div>
+      <div class="gn-deck-group">
+        <button type="button" class="gn-tb-btn neutral" data-gn-inline-shot="{{ device.id }}" data-img="cloudInlineShotImg" data-status="cloudInlineShotStatus" data-dl="cloudInlineShotDl" title="ثبت اسکرین‌شات لحظه‌ای و نمایش مستقیم در این کادر">
+          <i class="ti ti-camera"></i>
+          <span>دریافت تصویر زنده</span>
+        </button>
+        <button type="button" class="gn-tb-btn primary-emerald" data-gn-remote="{{ device.id }}" data-device-name="{{ device.name }}" title="باز کردن پنجره کنترل زنده دسکتاپ">
+          <i class="ti ti-screen-share"></i>
+          <span>کنترل مستقیم RDP</span>
+        </button>
+      </div>
+    </div>
+
+    <div id="cloudInlineShotStatus" style="font-size: 12px; color: #64748b; margin-bottom: 8px;">
+      جهت مشاهده دسکتاپ گیمر دکمه «دریافت تصویر زنده» را بفشارید.
+    </div>
+
+    <div class="gn-screen-frame">
+      <div id="cloudInlineShotPlaceholder" class="gn-screen-placeholder">
+        <i class="ti ti-device-desktop"></i>
+        <h6>تصویر مانیتور کلاینت هنوز دریافت نشده است</h6>
+        <p>برای دریافت جدیدترین فریم صفحه بدون متوقف شدن بازی روی «دریافت تصویر زنده» کلیک کنید یا با «کنترل مستقیم RDP» ماوس و کیبورد را در دست بگیرید.</p>
+      </div>
+      <img id="cloudInlineShotImg" alt="تصویر زنده مانیتور کلاینت" style="max-width: 100%; max-height: 480px; border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,0.5);" hidden onload="document.getElementById('cloudInlineShotPlaceholder').style.display='none';">
+    </div>
+
+    <div class="mt-2.5 d-flex justify-content-end">
+      <a id="cloudInlineShotDl" href="#" download="{{ device.name }}-screen.jpg" class="gn-btn sm" hidden style="height: 34px;">
+        <i class="ti ti-download"></i> دانلود تصویر باکیفیت
+      </a>
+    </div>
+  </div>
+
+</div>
 {% endblock %}

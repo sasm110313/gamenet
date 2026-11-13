@@ -1,0 +1,24 @@
+[
+  {
+    "id": "cs2",
+    "name": "شطرنج",
+    "category": "فکری و رومیزی",
+    "icon": "♟️",
+    "executable": "C:\\Program Files\\Microsoft Games\\Chess\\chess.exe",
+    "arguments": "",
+    "working_dir": "C:\\Program Files\\Microsoft Games\\Chess\\",
+    "color": "border-amber/30 bg-amber/[0.06]",
+    "is_active": true
+  },
+  {
+    "id": "game_8bb7ee4e",
+    "name": "سسسس",
+    "category": "شوتر رقابتی",
+    "icon": "🏎️",
+    "executable": "C:\\Program Files\\Microsoft Games\\Chess",
+    "arguments": "",
+    "working_dir": "C:\\Program Files\\Microsoft Games\\Chess",
+    "color": "border-neon/30 bg-neon/[0.06]",
+    "is_active": true
+  }
+]

@@ -1,0 +1,68 @@
+[
+  {
+    "id": "cs2",
+    "name": "Counter-Strike 2",
+    "category": "شوتر رقابتی",
+    "icon": "🎯",
+    "executable": "cs2.exe",
+    "arguments": "",
+    "working_dir": "",
+    "color": "border-amber/30 bg-amber/[0.06]",
+    "is_active": true
+  },
+  {
+    "id": "dota2",
+    "name": "Dota 2",
+    "category": "استراتژی تیمی",
+    "icon": "⚔️",
+    "executable": "dota2.exe",
+    "arguments": "",
+    "working_dir": "",
+    "color": "border-danger/30 bg-danger/[0.06]",
+    "is_active": true
+  },
+  {
+    "id": "fc24",
+    "name": "EA SPORTS FC 24",
+    "category": "فوتبال و ورزشی",
+    "icon": "⚽",
+    "executable": "fc24.exe",
+    "arguments": "",
+    "working_dir": "",
+    "color": "border-neon/30 bg-neon/[0.06]",
+    "is_active": true
+  },
+  {
+    "id": "gta5",
+    "name": "Grand Theft Auto V",
+    "category": "جهان‌باز و اکشن",
+    "icon": "🚗",
+    "executable": "gta5.exe",
+    "arguments": "",
+    "working_dir": "",
+    "color": "border-sky-500/30 bg-sky-500/[0.06]",
+    "is_active": true
+  },
+  {
+    "id": "warzone",
+    "name": "Call of Duty: Warzone",
+    "category": "بتل رویال",
+    "icon": "🪖",
+    "executable": "warzone.exe",
+    "arguments": "",
+    "working_dir": "",
+    "color": "border-purple-500/30 bg-purple-500/[0.06]",
+    "is_active": true
+  },
+  {
+    "id": "nfs",
+    "name": "Need for Speed",
+    "category": "اتومبیل‌رانی",
+    "icon": "🏎️",
+    "executable": "nfs.exe",
+    "arguments": "",
+    "working_dir": "",
+    "color": "border-orange-500/30 bg-orange-500/[0.06]",
+    "is_active": true
+  }
+]

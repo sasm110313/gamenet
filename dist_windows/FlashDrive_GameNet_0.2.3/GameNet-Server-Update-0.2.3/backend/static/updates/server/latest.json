@@ -1,0 +1,7 @@
+{
+  "version": "0.2.3",
+  "url": "/static/updates/server/GameNet-Server-Update-0.2.3.zip",
+  "sha256": "bf9a1b9d0ff7eb7a44288ecb4f150558f8d23665091b9a068f21943f7a8f8b5e",
+  "mandatory": true,
+  "release_notes": "نسخه 0.2.3 سرور سالن رهرو - رفع خطای ۵۰۰ تغییر رمز، رفع خطای ۵۰۰ شروع نشست، کش هوشمند صفحه شارژ، تثبیت دائم تعرفه کادر، سیستم گزارش و کپی خطای سرور"
+}

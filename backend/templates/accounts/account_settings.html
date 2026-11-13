@@ -1,0 +1,137 @@
+{% extends "base.html" %}
+{% load gn %}
+
+{% block title %}تنظیمات حساب کاربری مدیر · بازی سرای رهرو{% endblock %}
+{% block page_title %}حساب کاربری مدیر سالن{% endblock %}
+{% block page_subtitle %}تغییر نام کاربری، نام نمایشی و رمز عبور ورود به پنل مدیریت{% endblock %}
+
+{% block content %}
+<div class="cd-scope d-flex flex-column gap-3" style="max-width: 900px; margin: 0 auto;">
+
+  <!-- هدر اطلاعات پروفایل مدیر -->
+  <div class="gn-device-header-card">
+    <div class="gn-device-header-main">
+      <div class="d-flex align-items-center gap-3">
+        <span class="d-inline-flex justify-content-center align-items-center rounded-circle" style="width: 52px; height: 52px; background: #0f172a; color: #38bdf8; font-size: 22px; font-weight: 900; border: 2px solid #38bdf8; box-shadow: 0 4px 12px rgba(15,23,42,0.15);">
+          {{ admin_user.username|slice:":1"|upper }}
+        </span>
+        <div class="gn-device-title-wrap">
+          <h2 class="gn-device-title" style="font-size: 20px;">
+            {{ admin_user.label|default:admin_user.username }}
+            <span class="badge" style="font-size: 11px; font-weight: 700; background: #ecfdf5; color: #047857; border: 1px solid #a7f3d0; margin-right: 8px;">مدیر ارشد سیستم</span>
+          </h2>
+          <span class="gn-device-subtitle">
+            نام کاربری فعلی: <strong class="num" dir="ltr" style="color: #0f172a;">@{{ admin_user.username }}</strong>
+            {% if is_edge %} · سرور محلی سالن{% else %} · پنل مرکزی ابری{% endif %}
+          </span>
+        </div>
+      </div>
+
+      <div>
+        <a href="{% if is_edge %}{% url 'edge_overview' %}{% else %}{% url 'cloud_overview' %}{% endif %}" class="gn-back-btn">
+          <i class="ti ti-arrow-right"></i>
+          <span>بازگشت به داشبورد</span>
+        </a>
+      </div>
+    </div>
+  </div>
+
+  <form method="post" action="" class="d-flex flex-column gap-3">
+    {% csrf_token %}
+
+    <div class="row g-3">
+      <!-- کارت ۱: مشخصات کاربری و شناسایی -->
+      <div class="col-md-6 col-12">
+        <div class="gn-card p-3.5 h-100" style="background: #ffffff; border: 1px solid #e2e8f0; border-radius: 14px;">
+          <div class="d-flex align-items-center gap-2 mb-3 pb-2.5" style="border-bottom: 1px solid #f1f5f9;">
+            <i class="ti ti-user-circle" style="font-size: 22px; color: #2563eb;"></i>
+            <h5 style="margin: 0; font-size: 15px; font-weight: 800; color: #0f172a;">اطلاعات کاربری</h5>
+          </div>
+
+          <div class="d-flex flex-column gap-3">
+            <div>
+              <label class="cd-label" for="accUsername" style="font-size: 12.5px; font-weight: 700; color: #334155; margin-bottom: 6px;">
+                نام کاربری ورود (Username) <span class="text-danger">*</span>
+              </label>
+              <div class="input-group" style="direction: ltr;">
+                <span class="input-group-text" style="background: #f8fafc; border: 1px solid #cbd5e1; border-right: 0; color: #64748b; font-weight: 800;">@</span>
+                <input id="accUsername" type="text" name="username" value="{{ admin_user.username }}" required class="cd-input form-control num" placeholder="مثلاً: admin یا reza" style="height: 42px; font-weight: 800; border: 1px solid #cbd5e1; border-radius: 0 8px 8px 0;">
+              </div>
+              <small class="text-muted" style="font-size: 11px; margin-top: 4px; display: block;">
+                نام کاربری برای ورود به پنل وب و اپلیکیشن دسکتاپ استفاده می‌شود.
+              </small>
+            </div>
+
+            <div>
+              <label class="cd-label" for="accDisplayName" style="font-size: 12.5px; font-weight: 700; color: #334155; margin-bottom: 6px;">
+                نام نمایشی مدیر (Display Name)
+              </label>
+              <input id="accDisplayName" type="text" name="display_name" value="{{ admin_user.display_name }}" class="cd-input w-100" placeholder="مثلاً: مدیر بازی‌سرا" style="height: 42px; font-weight: 700;">
+              <small class="text-muted" style="font-size: 11px; margin-top: 4px; display: block;">
+                این نام در گوشه بالای پنل و رسیدهای مالی نمایش داده می‌شود.
+              </small>
+            </div>
+
+            <div class="p-2.5 rounded-3" style="background: #f8fafc; border: 1px dashed #cbd5e1; font-size: 12px; color: #475569;">
+              <i class="ti ti-info-circle me-1 text-primary"></i>
+              با تغییر نام کاربری، جلسات فعال شما بدون وقفه ادامه می‌یابد و نیازی به ورود مجدد نخواهد بود.
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- کارت ۲: تغییر رمز عبور -->
+      <div class="col-md-6 col-12">
+        <div class="gn-card p-3.5 h-100" style="background: #ffffff; border: 1px solid #e2e8f0; border-radius: 14px;">
+          <div class="d-flex align-items-center gap-2 mb-3 pb-2.5" style="border-bottom: 1px solid #f1f5f9;">
+            <i class="ti ti-key" style="font-size: 22px; color: #059669;"></i>
+            <h5 style="margin: 0; font-size: 15px; font-weight: 800; color: #0f172a;">تغییر رمز عبور</h5>
+          </div>
+
+          <div class="d-flex flex-column gap-2.5">
+            <div>
+              <label class="cd-label" for="accCurrentPass" style="font-size: 12px; font-weight: 700; color: #334155; margin-bottom: 5px;">
+                رمز عبور فعلی
+              </label>
+              <input id="accCurrentPass" type="password" name="current_password" class="cd-input w-100 num" placeholder="رمز فعلی را وارد کنید" style="height: 40px;" autocomplete="current-password">
+            </div>
+
+            <div>
+              <label class="cd-label" for="accNewPass" style="font-size: 12px; font-weight: 700; color: #334155; margin-bottom: 5px;">
+                رمز عبور جدید
+              </label>
+              <input id="accNewPass" type="password" name="new_password" class="cd-input w-100 num" placeholder="حداقل ۴ کاراکتر" style="height: 40px;" autocomplete="new-password">
+            </div>
+
+            <div>
+              <label class="cd-label" for="accConfirmPass" style="font-size: 12px; font-weight: 700; color: #334155; margin-bottom: 5px;">
+                تکرار رمز عبور جدید
+              </label>
+              <input id="accConfirmPass" type="password" name="confirm_password" class="cd-input w-100 num" placeholder="رمز جدید را مجدداً وارد کنید" style="height: 40px;" autocomplete="new-password">
+            </div>
+
+            <div class="p-2 rounded-2" style="background: #fffbeb; border: 1px solid #fde68a; font-size: 11.5px; color: #92400e;">
+              <i class="ti ti-shield-lock me-1"></i>
+              اگر مایل به تغییر رمز عبور نیستید، فیلدهای بالا را خالی بگذارید.
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- دکمه ذخیره نهایی -->
+    <div class="d-flex justify-content-between align-items-center p-3 rounded-3 mt-1" style="background: #ffffff; border: 1px solid #e2e8f0; border-radius: 12px;">
+      <span class="text-muted" style="font-size: 12px;">
+        اطلاعات با کلیک روی ذخیره بلافاصله در سیستم اعمال خواهند شد.
+      </span>
+
+      <button type="submit" class="gn-btn ok" style="height: 42px; padding: 0 24px; font-weight: 800; font-size: 13.5px; background: #059669; color: #ffffff; border-radius: 9px; box-shadow: 0 2px 6px rgba(5,150,105,0.25);">
+        <i class="ti ti-device-floppy"></i>
+        <span>ذخیره تغییرات حساب کاربری</span>
+      </button>
+    </div>
+
+  </form>
+
+</div>
+{% endblock %}

@@ -3,69 +3,281 @@
 
 {% block title %}ایستگاه‌های بازی{% endblock %}
 {% block page_title %}ایستگاه‌های بازی{% endblock %}
-{% block page_subtitle %}مدیریت لحظه‌ای، تنظیمات و کنترل ۱۰ استیشن سالن{% endblock %}
+{% block page_subtitle %}کنترل گروهی، وضعیت زنده و تنظیمات {{ total_devices }} ایستگاه سالن{% endblock %}
 
 {% block content %}
-<div class="baz-dash">
+<div id="gnCatalogData" hidden data-json="{{ catalog_json }}"></div>
 
-  <!-- Header & Live Indicators -->
-  <div class="baz-header mb-3">
-    <div class="baz-title-wrap">
-      <div class="baz-accent-bar"></div>
-      <div>
-        <h1 class="baz-title">ایستگاه‌های بازی</h1>
-        <p class="baz-subtitle">نمای زنده، وضعیت گیمرها، کارهای سریع و تنظیمات سیستم‌ها</p>
+<div class="baz-dash gn-stations-page">
+
+  <!-- Status tiles double as one-tap filters -->
+  <nav class="gn-status-tiles" aria-label="فیلتر سریع وضعیت ایستگاه‌ها">
+    <a href="{% url 'edge_devices' %}{% if filters.q %}?q={{ filters.q|urlencode }}{% endif %}"
+       class="gn-status-tile {% if not filters.conn and not filters.power and not filters.kiosk and not filters.occ and not filters.health %}is-active{% endif %}">
+      <span class="k">کل ایستگاه‌ها</span>
+      <span class="v num">{{ ortho.total_devices }}</span>
+    </a>
+
+    <a href="{% url 'edge_devices' %}?occ=BUSY{% if filters.q %}&q={{ filters.q|urlencode }}{% endif %}"
+       class="gn-status-tile tone-busy {% if filters.occ == 'BUSY' %}is-active{% endif %}">
+      <span class="k">در حال بازی</span>
+      <span class="v num">{{ ortho.active_count }}</span>
+    </a>
+
+    <a href="{% url 'edge_devices' %}?conn=ONLINE&occ=FREE&kiosk=UNLOCKED{% if filters.q %}&q={{ filters.q|urlencode }}{% endif %}"
+       class="gn-status-tile tone-free {% if filters.conn == 'ONLINE' and filters.occ == 'FREE' %}is-active{% endif %}">
+      <span class="k">آزاد و آنلاین</span>
+      <span class="v num">{{ ortho.free_count }}</span>
+    </a>
+
+    <a href="{% url 'edge_devices' %}?conn=ONLINE&kiosk=LOCKED&occ=FREE{% if filters.q %}&q={{ filters.q|urlencode }}{% endif %}"
+       class="gn-status-tile tone-locked {% if filters.kiosk == 'LOCKED' %}is-active{% endif %}">
+      <span class="k">قفل · آماده</span>
+      <span class="v num">{{ ortho.locked_count }}</span>
+    </a>
+
+    <a href="{% url 'edge_devices' %}?conn=ONLINE{% if filters.q %}&q={{ filters.q|urlencode }}{% endif %}"
+       class="gn-status-tile {% if filters.conn == 'ONLINE' and not filters.occ %}is-active{% endif %}">
+      <span class="k">آنلاین</span>
+      <span class="v num">{{ ortho.online_count }}</span>
+    </a>
+
+    <a href="{% url 'edge_devices' %}?conn=OFFLINE{% if filters.q %}&q={{ filters.q|urlencode }}{% endif %}"
+       class="gn-status-tile tone-offline {% if filters.conn == 'OFFLINE' %}is-active{% endif %}">
+      <span class="k">آفلاین</span>
+      <span class="v num">{{ ortho.offline_count }}</span>
+    </a>
+
+    {% if ortho.error_count %}
+      <a href="{% url 'edge_devices' %}?health=ERROR{% if filters.q %}&q={{ filters.q|urlencode }}{% endif %}"
+         class="gn-status-tile tone-error {% if filters.health == 'ERROR' %}is-active{% endif %}">
+        <span class="k">خطای سرویس</span>
+        <span class="v num">{{ ortho.error_count }}</span>
+      </a>
+    {% endif %}
+  </nav>
+
+  <!-- Search + advanced filters -->
+  <form method="get" class="gn-card gn-station-filters" aria-label="جستجو و فیلتر ایستگاه‌ها">
+    <div class="gn-station-filters-row">
+      <div class="gn-search-field">
+        <i class="ti ti-search" aria-hidden="true"></i>
+        <input id="fEdgeQ"
+               class="gn-input"
+               name="q"
+               value="{{ filters.q|default:'' }}"
+               placeholder="جستجوی نام، IP یا نام شبکه‌ای ایستگاه"
+               aria-label="جستجوی ایستگاه">
+      </div>
+
+      <button type="submit" class="gn-btn primary sm">
+        <i class="ti ti-filter" aria-hidden="true"></i>
+        اعمال
+      </button>
+
+      {% if filter_qs %}
+        <a href="{% url 'edge_devices' %}" class="gn-btn sm" title="حذف همه فیلترها">
+          <i class="ti ti-x" aria-hidden="true"></i>
+          پاک کردن
+        </a>
+      {% endif %}
+
+      <details class="gn-filter-more" {% if filters.conn or filters.power or filters.kiosk or filters.occ or filters.health %}open{% endif %}>
+        <summary class="gn-btn sm">
+          <i class="ti ti-adjustments-horizontal" aria-hidden="true"></i>
+          فیلتر پیشرفته
+        </summary>
+
+        <div class="gn-filter-more-body">
+          <div>
+            <label class="gn-label" for="fEdgeConn">ارتباط کلاینت</label>
+            <select id="fEdgeConn" class="gn-select" name="conn">
+              <option value="">همه</option>
+              <option value="ONLINE" {% if filters.conn == 'ONLINE' %}selected{% endif %}>آنلاین</option>
+              <option value="OFFLINE" {% if filters.conn == 'OFFLINE' %}selected{% endif %}>آفلاین</option>
+            </select>
+          </div>
+          <div>
+            <label class="gn-label" for="fEdgePower">پاور سیستم</label>
+            <select id="fEdgePower" class="gn-select" name="power">
+              <option value="">همه</option>
+              <option value="ON" {% if filters.power == 'ON' %}selected{% endif %}>روشن</option>
+              <option value="OFF" {% if filters.power == 'OFF' %}selected{% endif %}>خاموش</option>
+            </select>
+          </div>
+          <div>
+            <label class="gn-label" for="fEdgeKiosk">قفل کیوسک</label>
+            <select id="fEdgeKiosk" class="gn-select" name="kiosk">
+              <option value="">همه</option>
+              <option value="LOCKED" {% if filters.kiosk == 'LOCKED' %}selected{% endif %}>قفل</option>
+              <option value="UNLOCKED" {% if filters.kiosk == 'UNLOCKED' %}selected{% endif %}>باز</option>
+              <option value="DISABLED" {% if filters.kiosk == 'DISABLED' %}selected{% endif %}>کیوسک غیرفعال</option>
+            </select>
+          </div>
+          <div>
+            <label class="gn-label" for="fEdgeOcc">اشغال ایستگاه</label>
+            <select id="fEdgeOcc" class="gn-select" name="occ">
+              <option value="">همه</option>
+              <option value="FREE" {% if filters.occ == 'FREE' %}selected{% endif %}>آزاد</option>
+              <option value="BUSY" {% if filters.occ == 'BUSY' %}selected{% endif %}>مشغول</option>
+              <option value="MAINTENANCE" {% if filters.occ == 'MAINTENANCE' %}selected{% endif %}>تعمیر</option>
+            </select>
+          </div>
+          <div>
+            <label class="gn-label" for="fEdgeHealth">سلامت سرویس</label>
+            <select id="fEdgeHealth" class="gn-select" name="health">
+              <option value="">همه</option>
+              <option value="HEALTHY" {% if filters.health == 'HEALTHY' %}selected{% endif %}>سالم</option>
+              <option value="ERROR" {% if filters.health == 'ERROR' %}selected{% endif %}>دارای خطا</option>
+            </select>
+          </div>
+        </div>
+      </details>
+    </div>
+  </form>
+
+  <!-- Stations table -->
+  <section class="gn-card gn-table-card">
+    <div class="gn-table-card-head">
+      <h2 class="gn-table-card-title">فهرست ایستگاه‌ها</h2>
+
+      <div class="gn-table-card-tools">
+        <span class="gn-live-pill" title="این فهرست هر ۶ ثانیه خودکار به‌روزرسانی می‌شود">
+          <span class="baz-pulse-dot" aria-hidden="true"></span>
+          زنده
+        </span>
+
+        <form method="post" action="{% url 'edge_trigger_clients_update' %}" class="gn-inline-form">
+          {% csrf_token %}
+          <button type="submit"
+                  class="gn-btn sm"
+                  data-gn-confirm="دستور به‌روزرسانی خودکار برای همه کلاینت‌های سالن ارسال شود؟ کلاینت‌ها فایل جدید را دریافت و بدون دخالت دستی اجرا می‌کنند.">
+            <i class="ti ti-cloud-download" aria-hidden="true"></i>
+            به‌روزرسانی کلاینت‌ها
+          </button>
+        </form>
+
+        <button type="button" class="gn-btn primary sm" data-gn-dialog-open="addStationModal">
+          <i class="ti ti-plus" aria-hidden="true"></i>
+          ایستگاه جدید
+        </button>
       </div>
     </div>
 
-    <div class="baz-header-actions">
-      <div class="baz-legend">
-        <span class="baz-legend-item">
-          <span class="baz-legend-dot green"></span> در حال بازی: <strong class="num ms-1">{{ active_count }}</strong>
-        </span>
-        <span class="baz-legend-item">
-          <span class="baz-legend-dot amber"></span> قفل: <strong class="num ms-1">{{ locked_count }}</strong>
-        </span>
-        <span class="baz-legend-item">
-          <span class="baz-legend-dot gray"></span> آزاد / خاموش: <strong class="num ms-1">{{ free_count|add:offline_count }}</strong>
-        </span>
+    <div id="stations-live-container"
+         hx-get="{% url 'edge_devices_stations_partial' %}{% if filter_qs %}?{{ filter_qs }}{% endif %}"
+         hx-trigger="every 6s"
+         hx-swap="innerHTML">
+      {% include "edge/_stations_live.html" with bulk_enabled=True total_count=total_devices %}
+    </div>
+  </section>
+
+  <!-- Bulk action bar: hidden until at least one row is selected.
+       Placed after the table so `position: sticky; bottom` can pin it to the
+       viewport while a long station list is being worked on. -->
+  <form id="gnBulkForm"
+        method="post"
+        action="{% url 'edge_devices_bulk_action' %}"
+        class="gn-bulk-bar"
+        data-gn-bulk
+        hidden>
+    {% csrf_token %}
+    <input type="hidden" name="next" value="{{ request.get_full_path }}">
+    <input type="hidden" name="device_ids" value="" data-gn-station-ids>
+
+    <div class="gn-bulk-summary">
+      <span class="gn-bulk-count"><strong class="num" data-gn-sel-count>۰</strong> ایستگاه انتخاب شده</span>
+      <button type="button" class="gn-bulk-clear" data-gn-clear-selection>لغو انتخاب</button>
+    </div>
+
+    <div class="gn-bulk-groups" role="group" aria-label="عملیات گروهی">
+      <div class="gn-bulk-group">
+        <button type="submit" name="action" value="wake" class="gn-bulk-btn" title="برای ایستگاه‌های آفلاین بسته روشن‌سازی ارسال می‌شود">
+          <i class="ti ti-power" aria-hidden="true"></i> روشن
+        </button>
+        <button type="submit" name="action" value="lock" class="gn-bulk-btn"
+                data-gn-confirm="قفل و بستن بازی‌ها برای {n} ایستگاه انجام شود؟ نشست‌های فعال تسویه و بسته می‌شوند.">
+          <i class="ti ti-lock" aria-hidden="true"></i> قفل
+        </button>
+        <button type="submit" name="action" value="kill_games" class="gn-bulk-btn"
+                data-gn-confirm="تمام بازی‌ها و برنامه‌های {n} ایستگاه بسته شوند؟ نشست‌ها پایان می‌یابند.">
+          <i class="ti ti-x" aria-hidden="true"></i> بستن بازی‌ها
+        </button>
+        <button type="submit" name="action" value="stop_sessions" class="gn-bulk-btn"
+                data-gn-confirm="نشست {n} ایستگاه پایان یابد، هزینه تسویه و سیستم قفل شود؟">
+          <i class="ti ti-player-stop" aria-hidden="true"></i> پایان نشست
+        </button>
       </div>
 
-      <div class="baz-live-pill">
-        <span class="baz-pulse-dot"></span>
-        <span>به‌روزرسانی بی‌درنگ</span>
+      <span class="gn-bulk-sep" aria-hidden="true"></span>
+
+      <div class="gn-bulk-group">
+        <button type="submit" name="action" value="restart_app" class="gn-bulk-btn"
+                data-gn-confirm="نرم‌افزار کلاینت {n} ایستگاه ری‌استارت شود؟">
+          <i class="ti ti-reload" aria-hidden="true"></i> ریست کلاینت
+        </button>
+        <button type="submit" name="action" value="restart" class="gn-bulk-btn"
+                data-gn-confirm="سیستم {n} ایستگاه ری‌استارت شود؟ نشست‌های فعال بسته می‌شوند.">
+          <i class="ti ti-refresh" aria-hidden="true"></i> ری‌استارت
+        </button>
+        <button type="submit" name="action" value="shutdown" class="gn-bulk-btn danger"
+                data-gn-confirm="سیستم {n} ایستگاه خاموش شود؟ نشست‌های فعال بسته و تسویه می‌شوند.">
+          <i class="ti ti-power-off" aria-hidden="true"></i> خاموش
+        </button>
+        <button type="submit" name="action" value="unpair" class="gn-bulk-btn danger"
+                data-gn-confirm="کلاینت {n} ایستگاه از هاب خارج شود؟ برای استفاده مجدد باید دوباره ثبت شود.">
+          <i class="ti ti-logout" aria-hidden="true"></i> خروج کلاینت
+        </button>
       </div>
     </div>
-  </div>
+  </form>
 
-  <!-- Live Auto-Refreshing Stations Grid Container via HTMX -->
-  <div id="stations-live-container"
-       hx-get="{% url 'edge_devices_stations_partial' %}"
-       hx-trigger="every 2s"
-       hx-swap="innerHTML">
-    {% include "edge/_stations_cards.html" %}
-  </div>
+  <!-- Connection help, collapsed by default -->
+  <details class="gn-card gn-conn-help">
+    <summary>
+      <span class="gn-conn-help-title">
+        <i class="ti ti-wifi" aria-hidden="true"></i>
+        اتصال کلاینت‌ها به این سرور (شبکه محلی سالن)
+      </span>
+      <span class="gn-conn-help-ip num" dir="ltr">{{ edge_primary_ip|default:"192.168.0.xxx" }}:19443</span>
+    </summary>
+    <div class="gn-conn-help-body">
+      <p>
+        کلاینت‌ها با جستجوی خودکار سرور را پیدا می‌کنند. اگر می‌خواهید دستی وصل شوند،
+        آدرس زیر را در کلاینت وارد کنید و کد ثبت و اثر انگشت را خالی بگذارید.
+      </p>
+      <div class="gn-conn-help-actions">
+        <code class="gn-conn-help-code" id="hub-ip-display" dir="ltr">{{ edge_primary_ip|default:"192.168.0.xxx" }}:19443</code>
+        <button type="button"
+                class="gn-btn sm"
+                data-copy-text="{{ edge_primary_ip|default:'192.168.0.xxx' }}:19443">
+          <i class="ti ti-copy" aria-hidden="true"></i>
+          کپی آدرس
+        </button>
+      </div>
+    </div>
+  </details>
 
 </div>
 
 <!-- 1. Modal: تنظیمات ایستگاه -->
-<dialog id="stationSettingsModal" class="gn-dialog" style="max-width: 480px; width: 90%; background: #111625; color: #f8fafc; border: 1px solid #1e263d; border-radius: 16px; padding: 0;">
-  <div style="padding: 16px 20px; border-bottom: 1px solid rgba(255,255,255,0.08); display: flex; justify-content: space-between; align-items: center;">
-    <h5 class="mb-0" style="font-weight: 700;"><i class="ti ti-settings me-1"></i> تنظیمات ایستگاه <span id="settingsStationLabel" class="text-primary"></span></h5>
-    <button type="button" class="btn-close btn-close-white" onclick="closeDialog('stationSettingsModal')">✕</button>
+<dialog id="stationSettingsModal" class="gn-dialog" closedby="any" aria-labelledby="settingsModalTitle" style="max-width: 480px; width: 92%; background: #ffffff; color: var(--gn-text); border: 1px solid var(--gn-border); border-radius: 16px; padding: 0;">
+  <div style="padding: 16px 20px; border-bottom: 1px solid var(--gn-border); display: flex; justify-content: space-between; align-items: center;">
+    <h5 id="settingsModalTitle" class="mb-0" style="font-weight: 700; color: var(--gn-text);"><i class="ti ti-settings me-1"></i> تنظیمات ایستگاه <span id="settingsStationLabel" class="text-primary"></span></h5>
+    <button type="button" class="btn-close" data-gn-dialog-close="stationSettingsModal" aria-label="بستن"></button>
   </div>
   <form id="stationSettingsForm" method="post" action="" style="padding: 20px;">
     {% csrf_token %}
     <input type="hidden" name="next" value="edge_devices">
 
     <div class="mb-3">
-      <label class="gn-label">نام / برچسب نمایشی ایستگاه</label>
+      <label class="gn-label" for="settingsNameInput">نام / برچسب نمایشی ایستگاه</label>
       <input type="text" name="name" id="settingsNameInput" class="gn-input w-100" placeholder="مثلاً PC-01 یا VIP-01" required>
       <small class="gn-muted" style="font-size: 11px;">نامی که در پنل و روی صفحه کلاینت نمایش داده می‌شود.</small>
     </div>
 
     <div class="mb-3">
-      <label class="gn-label">تعرفه پیش‌فرض این استیشن</label>
+      <label class="gn-label" for="settingsTariffSelect">تعرفه پیش‌فرض این استیشن</label>
       <select name="default_tariff_id" id="settingsTariffSelect" class="gn-input w-100">
         <option value="">تعرفه عمومی سالن (پیش‌فرض)</option>
         {% for t in tariffs %}
@@ -74,167 +286,254 @@
       </select>
     </div>
 
+    <div class="mb-3">
+      <label class="gn-label" for="settingsMacInput">آدرس MAC کارت شبکه (Wake-on-LAN)</label>
+      <input type="text" name="mac_address" id="settingsMacInput" class="gn-input w-100 num" dir="ltr" placeholder="AA:BB:CC:DD:EE:FF" maxlength="20">
+      <small class="gn-muted" style="font-size: 11px;">پس از اتصال کلاینت معمولاً خودکار ذخیره می‌شود؛ برای روشن کردن با LAN استفاده می‌شود.</small>
+    </div>
+
+    <div class="mb-3">
+      <label class="gn-label" for="settingsIdleInput">خاموشی خودکار عدم استفاده (دقیقه)</label>
+      <input type="number" name="idle_shutdown_minutes" id="settingsIdleInput" class="gn-input w-100 num" dir="ltr" min="0" max="720" value="15" placeholder="۱۵ دقیقه (۰ = غیرفعال)">
+      <small class="gn-muted" style="font-size: 11px;">پس از این مدت عدم استفاده (موس/کیبورد)، سیستم برای صرفه‌جویی برق خاموش می‌شود.</small>
+    </div>
+
     <div class="mb-4 d-flex align-items-center gap-2">
       <input type="checkbox" name="is_active" id="settingsIsActiveInput" value="1" style="width: 18px; height: 18px; cursor: pointer;">
-      <label for="settingsIsActiveInput" class="mb-0" style="cursor: pointer; font-size: 13px;">این دستگاه فعال است و قابل استفاده باشد</label>
+      <label for="settingsIsActiveInput" class="mb-0" style="cursor: pointer; font-size: 13px; color: var(--gn-text);">این دستگاه فعال است و قابل استفاده باشد</label>
     </div>
 
     <div class="d-flex justify-content-end gap-2">
-      <button type="button" class="gn-btn" onclick="closeDialog('stationSettingsModal')">انصراف</button>
+      <button type="button" class="gn-btn" data-gn-dialog-close="stationSettingsModal">انصراف</button>
       <button type="submit" class="gn-btn primary"><i class="ti ti-check"></i> ذخیره تنظیمات</button>
     </div>
   </form>
+
+  <div style="padding: 14px 20px; border-top: 1px solid var(--gn-border); background: #fef2f2; display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 8px; border-radius: 0 0 16px 16px;">
+    <form id="stationResetForm" method="post" action="" style="margin: 0;">
+      {% csrf_token %}
+      <input type="hidden" name="next" value="edge_devices">
+      <button type="submit" class="gn-btn sm" style="background: #fffbeb; color: #b45309; border: 1px solid #fcd34d;" data-gn-confirm="اتصال کلاینت این ایستگاه ریست شود تا آماده ثبت سیستم جدید شود؟">
+        <i class="ti ti-plug-off"></i> ریست اتصال کلاینت
+      </button>
+    </form>
+    <form id="stationDeleteForm" method="post" action="" style="margin: 0;">
+      {% csrf_token %}
+      <input type="hidden" name="next" value="edge_devices">
+      <button type="submit" class="gn-btn danger sm" data-gn-confirm="آیا از حذف این ایستگاه و قطع اتصال کلاینت آن مطمئن هستید؟">
+        <i class="ti ti-trash"></i> حذف ایستگاه
+      </button>
+    </form>
+  </div>
 </dialog>
 
-<!-- 2. Modal: شارژ سریع کیف پول گیمر -->
-<dialog id="quickDepositModal" class="gn-dialog" style="max-width: 440px; width: 90%; background: #111625; color: #f8fafc; border: 1px solid #1e263d; border-radius: 16px; padding: 0;">
-  <div style="padding: 16px 20px; border-bottom: 1px solid rgba(255,255,255,0.08); display: flex; justify-content: space-between; align-items: center;">
-    <h5 class="mb-0" style="font-weight: 700;"><i class="ti ti-wallet me-1 text-success"></i> شارژ سریع کیف پول</h5>
-    <button type="button" class="btn-close btn-close-white" onclick="closeDialog('quickDepositModal')">✕</button>
+<!-- 1b. Modal: افزودن ایستگاه جدید -->
+<dialog id="addStationModal" class="gn-dialog" closedby="any" aria-labelledby="addStationTitle" style="max-width: 460px; width: 92%; background: #ffffff; color: var(--gn-text); border: 1px solid var(--gn-border); border-radius: 16px; padding: 0;">
+  <div style="padding: 16px 20px; border-bottom: 1px solid var(--gn-border); display: flex; justify-content: space-between; align-items: center;">
+    <h5 id="addStationTitle" class="mb-0" style="font-weight: 700; color: var(--gn-text);"><i class="ti ti-device-desktop-plus me-1 text-primary"></i> افزودن ایستگاه جدید سالن</h5>
+    <button type="button" class="btn-close" data-gn-dialog-close="addStationModal" aria-label="بستن"></button>
   </div>
-  <form id="quickDepositForm" method="post" action="" style="padding: 20px;">
+  <form method="post" action="{% url 'edge_device_create' %}" style="padding: 20px;">
     {% csrf_token %}
     <input type="hidden" name="next" value="edge_devices">
 
     <div class="mb-3">
-      <div class="d-flex justify-content-between align-items-center mb-1">
-        <span class="gn-muted" style="font-size: 12px;">مشتری:</span>
-        <strong id="depositCustomerName" class="text-light"></strong>
-      </div>
-      <div class="d-flex justify-content-between align-items-center">
-        <span class="gn-muted" style="font-size: 12px;">موجودی فعلی:</span>
-        <span id="depositCurrentBalance" class="num font-weight-bold text-info"></span>
-      </div>
+      <label class="gn-label" for="addStationName">شماره یا نام ایستگاه</label>
+      <input type="text" name="name" id="addStationName" class="gn-input w-100" placeholder="مثلاً ۱۱ یا PC-11 یا VIP-01" required autofocus>
+      <small class="gn-muted" style="font-size: 11px;">اگر فقط عدد وارد کنید (مثلاً ۱۲) به‌صورت خودکار PC-12 ثبت می‌شود.</small>
     </div>
 
     <div class="mb-3">
-      <label class="gn-label">مبلغ شارژ (تومان)</label>
-      <input type="text" name="amount" id="depositAmountInput" class="gn-input w-100 num" placeholder="مثلاً 50,000" required autofocus>
-      <div class="d-flex gap-1 mt-2">
-        <button type="button" class="gn-btn sm" onclick="setDepositAmount(20000)">۲۰,۰۰۰</button>
-        <button type="button" class="gn-btn sm" onclick="setDepositAmount(50000)">۵۰,۰۰۰</button>
-        <button type="button" class="gn-btn sm" onclick="setDepositAmount(100000)">۱۰۰,۰۰۰</button>
-        <button type="button" class="gn-btn sm" onclick="setDepositAmount(200000)">۲۰۰,۰۰۰</button>
-      </div>
-    </div>
-
-    <div class="mb-4">
-      <label class="gn-label">یادداشت (اختیاری)</label>
-      <input type="text" name="note" class="gn-input w-100" placeholder="مثلاً پرداخت نقدی صندوق">
-    </div>
-
-    <div class="d-flex justify-content-end gap-2">
-      <button type="button" class="gn-btn" onclick="closeDialog('quickDepositModal')">انصراف</button>
-      <button type="submit" class="gn-btn success"><i class="ti ti-cash"></i> ثبت شارژ و افزایش اعتبار</button>
-    </div>
-  </form>
-</dialog>
-
-<!-- 3. Modal: شروع دستی جلسه برای مشتری -->
-<dialog id="startSessionModal" class="gn-dialog" style="max-width: 480px; width: 90%; background: #111625; color: #f8fafc; border: 1px solid #1e263d; border-radius: 16px; padding: 0;">
-  <div style="padding: 16px 20px; border-bottom: 1px solid rgba(255,255,255,0.08); display: flex; justify-content: space-between; align-items: center;">
-    <h5 class="mb-0" style="font-weight: 700;"><i class="ti ti-player-play me-1 text-success"></i> شروع نشست دستی</h5>
-    <button type="button" class="btn-close btn-close-white" onclick="closeDialog('startSessionModal')">✕</button>
-  </div>
-  <form method="post" action="{% url 'edge_session_start' %}" style="padding: 20px;">
-    {% csrf_token %}
-    <input type="hidden" name="device_id" id="startSessionDeviceId" value="">
-
-    <div class="mb-3">
-      <label class="gn-label">دستگاه انتخاب‌شده</label>
-      <div id="startSessionDeviceName" class="gn-input w-100 font-weight-bold text-light" style="background: rgba(255,255,255,0.04); cursor: not-allowed;"></div>
-    </div>
-
-    <div class="mb-3">
-      <label class="gn-label">انتخاب مشتری</label>
-      <select name="customer_id" class="gn-input w-100" required>
-        <option value="">-- یک مشتری را انتخاب کنید --</option>
-        {% for c in customers %}
-          <option value="{{ c.id }}">{{ c.full_name }} {% if c.username %}(@{{ c.username }}){% endif %} - موجودی: {{ c.wallet.balance|default:0|toman }} ت</option>
-        {% endfor %}
-      </select>
-    </div>
-
-    <div class="mb-4">
-      <label class="gn-label">تعرفه اعمالی</label>
-      <select name="customer_rate_id" class="gn-input w-100">
-        <option value="">تعرفه پیش‌فرض مشتری / دستگاه</option>
+      <label class="gn-label" for="addStationTariff">تعرفه پیش‌فرض</label>
+      <select name="default_tariff_id" id="addStationTariff" class="gn-input w-100">
+        <option value="">تعرفه عمومی سالن (پیش‌فرض)</option>
         {% for t in tariffs %}
           <option value="{{ t.id }}">{{ t.name }} ({{ t.hourly_rate|toman }} ت/ساعت)</option>
         {% endfor %}
       </select>
     </div>
 
+    <div class="mb-4">
+      <label class="gn-label" for="addStationIdle">خاموشی خودکار عدم استفاده (دقیقه)</label>
+      <input type="number" name="idle_shutdown_minutes" id="addStationIdle" class="gn-input w-100 num" dir="ltr" min="0" max="720" value="15">
+      <small class="gn-muted" style="font-size: 11px;">عدد ۰ یعنی خاموشی خودکار غیرفعال باشد.</small>
+    </div>
+
     <div class="d-flex justify-content-end gap-2">
-      <button type="button" class="gn-btn" onclick="closeDialog('startSessionModal')">انصراف</button>
-      <button type="submit" class="gn-btn success"><i class="ti ti-lock-open"></i> شروع بازی و باز کردن سیستم</button>
+      <button type="button" class="gn-btn" data-gn-dialog-close="addStationModal">انصراف</button>
+      <button type="submit" class="gn-btn primary"><i class="ti ti-plus"></i> ایجاد ایستگاه</button>
     </div>
   </form>
 </dialog>
 
-<script>
-  // Dialog Open/Close Helpers
-  function openStationSettings(deviceId, name, defaultTariffId, isActive) {
-    const dialog = document.getElementById('stationSettingsModal');
-    const form = document.getElementById('stationSettingsForm');
-    form.action = '/devices/' + deviceId + '/update';
-    document.getElementById('settingsStationLabel').textContent = name;
-    document.getElementById('settingsNameInput').value = name;
-    document.getElementById('settingsTariffSelect').value = defaultTariffId || '';
-    document.getElementById('settingsIsActiveInput').checked = (isActive === '1');
-    dialog.showModal();
-  }
+<!-- 2. Modal: شارژ شفاف کیف پول گیمر -->
+<dialog id="quickDepositModal" class="gn-dialog" closedby="any" aria-labelledby="quickDepositTitle" style="max-width: 520px; width: 92%; background: #ffffff; color: var(--gn-text); border: 1px solid var(--gn-border); border-radius: 16px; padding: 0;">
+  <div style="padding: 16px 20px; border-bottom: 1px solid var(--gn-border); display: flex; justify-content: space-between; align-items: center;">
+    <h5 id="quickDepositTitle" class="mb-0" style="font-weight: 700; color: var(--gn-text);"><i class="ti ti-wallet me-1 text-success"></i> شارژ کیف پول با ثبت شماره پیگیری</h5>
+    <button type="button" class="btn-close" data-gn-dialog-close="quickDepositModal" aria-label="بستن"></button>
+  </div>
+  <form id="quickDepositForm" method="post" action="" data-action-template="/customers/__ID__/deposit" data-gn-transparent-wallet data-operator="{{ operator_label }}" style="padding: 20px;">
+    {% csrf_token %}
+    <input type="hidden" name="next" value="edge_devices">
 
-  function openQuickDeposit(customerId, customerName, currentBalance) {
-    const dialog = document.getElementById('quickDepositModal');
-    const form = document.getElementById('quickDepositForm');
-    form.action = '/customers/' + customerId + '/deposit';
-    document.getElementById('depositCustomerName').textContent = customerName;
-    document.getElementById('depositCurrentBalance').textContent = Number(currentBalance || 0).toLocaleString() + ' تومان';
-    document.getElementById('depositAmountInput').value = '';
-    dialog.showModal();
-    setTimeout(() => document.getElementById('depositAmountInput').focus(), 100);
-  }
+    <div class="mb-3 d-flex justify-content-between align-items-center">
+      <span class="gn-muted" style="font-size: 12px;">مشتری: <strong id="depositCustomerName" style="color: var(--gn-text);"></strong></span>
+      <span class="gn-muted" style="font-size: 12px;">موجودی فعلی: <strong id="depositCurrentBalance" class="num text-success"></strong></span>
+    </div>
 
-  function setDepositAmount(amount) {
-    document.getElementById('depositAmountInput').value = amount;
-  }
+    <div class="mb-3">
+      <label class="gn-label" for="depositAmountInput">مبلغ شارژ (تومان)</label>
+      <input type="text" name="amount" id="depositAmountInput" class="gn-input w-100 num" inputmode="numeric" placeholder="مثلاً 50,000" required autofocus>
+      <div class="d-flex gap-1 mt-2 flex-wrap">
+        <button type="button" class="gn-btn sm" data-gn-deposit-amount="20000">۲۰,۰۰۰</button>
+        <button type="button" class="gn-btn sm" data-gn-deposit-amount="50000">۵۰,۰۰۰</button>
+        <button type="button" class="gn-btn sm" data-gn-deposit-amount="100000">۱۰۰,۰۰۰</button>
+        <button type="button" class="gn-btn sm" data-gn-deposit-amount="200000">۲۰۰,۰۰۰</button>
+      </div>
+    </div>
 
-  function openStartSession(deviceId, deviceName) {
-    const dialog = document.getElementById('startSessionModal');
-    document.getElementById('startSessionDeviceId').value = deviceId;
-    document.getElementById('startSessionDeviceName').textContent = deviceName;
-    dialog.showModal();
-  }
+    <div class="mb-3">
+      <label class="gn-label" for="depositNoteInput">یادداشت تراکنش (ثبت در سابقه غیرقابل‌حذف)</label>
+      <input type="text" name="note" id="depositNoteInput" class="gn-input w-100" value="شارژ سریع کیف پول در باجه" placeholder="مثلاً پرداخت کارتخوان باجه">
+    </div>
 
-  function closeDialog(id) {
-    const dialog = document.getElementById(id);
-    if (dialog) dialog.close();
-  }
+    <!-- Pre-submit transparent summary -->
+    <div class="gn-review-box mb-3" data-gn-wallet-summary>
+      <div class="gn-review-title"><i class="ti ti-receipt text-primary"></i> پیش‌نمایش سند تراکنش قبل از ثبت</div>
+      <div class="gn-review-grid">
+        <div class="gn-review-item"><span class="k">نام مشتری</span><span class="v" data-gn-ws-customer>—</span></div>
+        <div class="gn-review-item"><span class="k">موجودی فعلی</span><span class="v num" data-gn-ws-current>۰ تومان</span></div>
+        <div class="gn-review-item"><span class="k">مبلغ شارژ</span><span class="v num accent" data-gn-ws-amount>+۰ تومان</span></div>
+        <div class="gn-review-item"><span class="k">موجودی پس از شارژ</span><span class="v num" data-gn-ws-after>۰ تومان</span></div>
+        <div class="gn-review-item"><span class="k">اپراتور ثبت‌کننده</span><span class="v" data-gn-ws-operator>{{ operator_label }}</span></div>
+        <div class="gn-review-item"><span class="k">یادداشت تراکنش</span><span class="v" data-gn-ws-note>—</span></div>
+      </div>
+    </div>
 
-  // Close dialog on clicking outside backdrop
-  document.querySelectorAll('dialog.gn-dialog').forEach(dialog => {
-    dialog.addEventListener('click', (e) => {
-      const rect = dialog.getBoundingClientRect();
-      const isInDialog = (rect.top <= e.clientY && e.clientY <= rect.top + rect.height &&
-                          rect.left <= e.clientX && e.clientX <= rect.left + rect.width);
-      if (!isInDialog) dialog.close();
-    });
-  });
+    <label class="gn-confirm-check mb-2">
+      <input type="checkbox" checked data-gn-wallet-confirm>
+      <span>اطلاعات فوق بررسی شد و سند غیرقابل‌حذف با شماره پیگیری ثبت شود.</span>
+    </label>
+    <div class="gn-alert error py-1 px-2 mb-3" style="font-size: 11.5px;" data-gn-wallet-confirm-err hidden>
+      لطفاً تیک تأیید سند تراکنش را فعال کنید.
+    </div>
 
-  // Client-side live timer tick every second for smooth seconds ticking between 2s polls
-  setInterval(() => {
-    const now = Math.floor(Date.now() / 1000);
-    document.querySelectorAll('.baz-timer-badge[data-started]').forEach(el => {
-      const started = parseInt(el.getAttribute('data-started') || '0', 10);
-      if (started > 0) {
-        const diff = Math.max(0, now - started);
-        const h = Math.floor(diff / 3600).toString().padStart(2, '0');
-        const m = Math.floor((diff % 3600) / 60).toString().padStart(2, '0');
-        const s = (diff % 60).toString().padStart(2, '0');
-        el.innerHTML = '<i class="ti ti-clock"></i> ' + h + ':' + m + ':' + s;
-      }
-    });
-  }, 1000);
-</script>
+    <div class="d-flex justify-content-end gap-2">
+      <button type="button" class="gn-btn" data-gn-dialog-close="quickDepositModal">انصراف</button>
+      <button type="submit" class="gn-btn success"><i class="ti ti-cash"></i> تأیید و ثبت شارژ</button>
+    </div>
+  </form>
+</dialog>
+
+<!-- 3. Modal: شروع کامل نشست دستی برای مشتری -->
+<dialog id="startSessionModal" class="gn-dialog" closedby="any" aria-labelledby="startSessionTitle" style="max-width: 600px; width: 94%; background: #ffffff; color: var(--gn-text); border: 1px solid var(--gn-border); border-radius: 16px; padding: 0; max-height: 92vh; overflow: auto;">
+  <div style="padding: 16px 20px; border-bottom: 1px solid var(--gn-border); display: flex; justify-content: space-between; align-items: center;">
+    <h5 id="startSessionTitle" class="mb-0" style="font-weight: 700; color: var(--gn-text);"><i class="ti ti-player-play me-1 text-success"></i> شروع دستی نشست برای مشتری</h5>
+    <button type="button" class="btn-close" data-gn-dialog-close="startSessionModal" aria-label="بستن"></button>
+  </div>
+  <form method="post" action="{% url 'edge_session_start' %}" data-gn-guided-session style="padding: 20px;">
+    {% csrf_token %}
+    <input type="hidden" name="next" value="edge_devices">
+    <input type="hidden" name="device_id" id="startSessionDeviceId" data-gn-locked-device value="">
+
+    <div class="gn-grid cols-2 mb-3">
+      <div>
+        <label class="gn-label">دستگاه انتخاب‌شده</label>
+        <div id="startSessionDeviceName" class="gn-input w-100 font-weight-bold" style="background: var(--gn-surface-2); color: var(--gn-text);"></div>
+      </div>
+      <div>
+        <label class="gn-label" for="modalStartCustomer">انتخاب مشتری</label>
+        <select id="modalStartCustomer" name="customer_id" class="gn-select w-100" data-gn-customer-select required>
+          <option value="">-- یک مشتری انتخاب کنید --</option>
+          {% for c in customers %}
+            <option value="{{ c.id }}">{{ c.full_name }}{% if c.username %} (@{{ c.username }}){% endif %} · {{ c.wallet.balance|default:0|toman }} ت</option>
+          {% endfor %}
+        </select>
+      </div>
+    </div>
+
+    <div class="gn-grid cols-2 mb-3">
+      <div class="gn-review-item">
+        <span class="k">موجودی و اعتبار مشتری</span>
+        <span class="v num" data-gn-gs-balance>مشتری انتخاب نشده</span>
+      </div>
+      <div class="gn-review-item">
+        <span class="k">قیمت ساعتی و منبع تعرفه</span>
+        <span class="v num" data-gn-gs-rate>—</span>
+      </div>
+    </div>
+
+    <div class="gn-grid cols-2 mb-3">
+      <div>
+        <label class="gn-label" for="modalStartRate">انتخاب تعرفه</label>
+        <select id="modalStartRate" name="rate_choice" class="gn-select w-100" data-gn-rate-select data-gn-dynamic-rates="1">
+          <option value="">پیش‌فرض خودکار مشتری / دستگاه</option>
+          {% for t in tariffs %}
+            <option value="tariff:{{ t.id }}" data-hourly-rate="{{ t.hourly_rate }}">{{ t.name }} ({{ t.hourly_rate|toman }} ت/ساعت)</option>
+          {% endfor %}
+        </select>
+      </div>
+
+      <div>
+        <label class="gn-label" for="modalDisconnectPolicy">وضعیت نشست در قطع ارتباط دستگاه</label>
+        <select id="modalDisconnectPolicy" name="disconnect_policy" class="gn-select w-100">
+          <option value="PAUSE" selected>توقف موقت شمارنده تا اتصال مجدد</option>
+          <option value="AUTO_STOP">پایان خودکار نشست و تسویه حساب</option>
+          <option value="CONTINUE">ادامه زمان‌سنجی در قطع ارتباط</option>
+        </select>
+      </div>
+    </div>
+
+    <fieldset class="mb-3" style="border: 0; padding: 0; margin: 0;">
+      <legend class="gn-label">تعیین نوع محاسبه نشست</legend>
+      <div class="gn-radio-pills">
+        <label class="gn-radio-pill">
+          <input type="radio" name="billing_mode" value="CREDIT" checked>
+          <span>اعتبارمحور (باز تا زمان شارژ)</span>
+        </label>
+        <label class="gn-radio-pill">
+          <input type="radio" name="billing_mode" value="TIMED">
+          <span>زمانی (مدت مشخص)</span>
+        </label>
+      </div>
+    </fieldset>
+
+    <div class="mb-3" data-gn-gs-timed-wrap hidden>
+      <label class="gn-label" for="modalPlannedMins">مدت زمان نشست (دقیقه)</label>
+      <div class="d-flex gap-2 align-items-center flex-wrap">
+        <input id="modalPlannedMins" type="number" min="5" max="720" step="5" value="60" name="planned_duration_minutes" class="gn-input num" style="max-width: 140px;">
+        <button type="button" class="gn-btn sm" data-gn-gs-duration="30">۳۰ دقیقه</button>
+        <button type="button" class="gn-btn sm" data-gn-gs-duration="60">۱ ساعت</button>
+        <button type="button" class="gn-btn sm" data-gn-gs-duration="120">۲ ساعت</button>
+        <button type="button" class="gn-btn sm" data-gn-gs-duration="180">۳ ساعت</button>
+      </div>
+    </div>
+
+    <div class="gn-alert warning mb-3 py-2 px-3" style="font-size: 12px;" data-gn-gs-warn hidden></div>
+
+    <div class="gn-review-box mb-3">
+      <div class="gn-review-title"><i class="ti ti-clipboard-check text-primary"></i> تأیید نهایی پیش از باز شدن دستگاه و شروع شمارنده</div>
+      <div class="gn-review-grid">
+        <div class="gn-review-item"><span class="k">مشتری</span><span class="v" data-gn-gs-sum-customer>—</span></div>
+        <div class="gn-review-item"><span class="k">دستگاه</span><span class="v" data-gn-gs-sum-device>—</span></div>
+        <div class="gn-review-item"><span class="k">نوع محاسبه</span><span class="v" data-gn-gs-sum-mode>اعتبارمحور</span></div>
+        <div class="gn-review-item"><span class="k">برآورد هزینه</span><span class="v num accent" data-gn-gs-estimate data-gn-gs-sum-cost>—</span></div>
+        <div class="gn-review-item" style="grid-column: 1 / -1;"><span class="k">وضعیت در قطع ارتباط</span><span class="v" data-gn-gs-sum-policy>توقف موقت شمارنده تا اتصال مجدد</span></div>
+      </div>
+    </div>
+
+    <label class="gn-confirm-check mb-2">
+      <input type="checkbox" name="confirm_start" value="1" checked data-gn-gs-confirm>
+      <span>شروع نشست را تأیید می‌کنم؛ دستگاه باز شود و شمارنده آغاز گردد.</span>
+    </label>
+    <div class="gn-alert error py-1 px-2 mb-3" style="font-size: 11.5px;" data-gn-gs-confirm-err hidden>
+      برای شروع نشست، تیک تأیید نهایی را فعال کنید.
+    </div>
+
+    <div class="d-flex justify-content-end gap-2">
+      <button type="button" class="gn-btn" data-gn-dialog-close="startSessionModal">انصراف</button>
+      <button type="submit" class="gn-btn success"><i class="ti ti-lock-open"></i> تأیید، باز کردن دستگاه و شروع نشست</button>
+    </div>
+  </form>
+</dialog>
 {% endblock %}

@@ -27,8 +27,8 @@
       <input class="gn-input" name="full_name" required maxlength="120" placeholder="نام و نام خانوادگی">
     </div>
     <div>
-      <label class="gn-label">شماره تماس</label>
-      <input class="gn-input num" name="phone" maxlength="24" placeholder="09…">
+      <label class="gn-label">شماره تماس <span class="text-danger">*</span></label>
+      <input class="gn-input num" name="phone" maxlength="24" placeholder="09…" required>
     </div>
     <div>
       <label class="gn-label">گروه</label>
@@ -40,8 +40,8 @@
       </select>
     </div>
     <div>
-      <label class="gn-label">سقف اعتبار</label>
-      <input class="gn-input num" name="credit_limit" value="60000" inputmode="numeric" required>
+      <label class="gn-label">سقف بدهی</label>
+      <input class="gn-input num" name="credit_limit" value="0" readonly title="بدهی در سیستم غیرفعال است">
     </div>
     <button class="gn-btn primary" type="submit"><i class="ti ti-cloud-upload"></i> ارسال</button>
   </form>
@@ -62,7 +62,7 @@
             <td class="mono gn-muted" style="font-size: 10.5px">{{ customer.edge_id|shortid }}</td>
             <td class="gn-muted">{{ customer.group.name|default:"—" }}</td>
             <td class="num {% if customer.wallet.balance < 0 %}text-danger{% endif %}">{{ customer.wallet.balance|default:0|toman }}</td>
-            <td class="num gn-muted">{{ customer.credit_limit|toman }}</td>
+            <td class="gn-muted" style="font-size: 11.5px;">غیرمجاز (۰)</td>
             <td class="num gn-muted">{{ customer.revision }}</td>
             <td class="text-end">
               <a class="gn-btn sm" href="{% url 'cloud_manage_customer' customer.id %}"><i class="ti ti-settings"></i> مدیریت</a>

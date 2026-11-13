@@ -3,35 +3,42 @@ chcp 65001 >nul
 title GameNet Salon Server - Uninstall Service
 setlocal enabledelayedexpansion
 
-:: Check administrator privileges
 net session >nul 2>&1
 if %errorlevel% neq 0 (
     echo.
-    echo [خطا] لطفاً این فایل را به صورت Run as Administrator اجرا کنید.
-    echo [ERROR] Please run this batch script as Administrator.
+    echo [ERROR] Administrator privileges are required.
+    echo Please right-click and choose "Run as administrator".
     echo.
     pause
     exit /b 1
 )
 
-echo ===================================================================
-echo     GameNet Salon Server - حذف سرویس ویندوز
-echo ===================================================================
-echo.
+if exist "%~dp0backend\manage.py" (
+    set "ROOT_DIR=%~dp0"
+) else if exist "%~dp0..\..\backend\manage.py" (
+    set "ROOT_DIR=%~dp0..\.."
+) else (
+    echo [ERROR] Could not locate GameNet root directory.
+    pause
+    exit /b 1
+)
+for %%I in ("%ROOT_DIR%") do set "ROOT_DIR=%%~fI"
 
-if exist "%~dp0nssm.exe" (
-    "%~dp0nssm.exe" stop GameNetServer >nul 2>&1
-    "%~dp0nssm.exe" remove GameNetServer confirm >nul 2>&1
+if exist "%ROOT_DIR%\Uninstall.exe" (
+    start "" "%ROOT_DIR%\Uninstall.exe"
+    exit /b 0
 )
 
-schtasks /delete /tn "GameNetSalonServer" /f >nul 2>&1
+set /p "CONFIRM=Remove GameNetServer Windows service and background tasks? [Y/N]: "
+if /i not "!CONFIRM!"=="Y" exit /b 0
 
-netsh advfirewall firewall delete rule name="GameNet Salon Server HTTPS" >nul 2>&1
-netsh advfirewall firewall delete rule name="GameNet Salon Server Discovery" >nul 2>&1
-
-powershell -NoProfile -Command ^
-    "$desk = [Environment]::GetFolderPath('Desktop'); " ^
-    "Remove-Item \"$desk\مدیریت گیم‌نت (GameNet Server).lnk\" -ErrorAction SilentlyContinue" >nul 2>&1
-
-echo سرویس، قوانین فایروال و میانبر دسکتاپ با موفقیت حذف شدند.
+set "SVC_EXE=%ROOT_DIR%\GameNet_Service.exe"
+if not exist "%SVC_EXE%" set "SVC_EXE=%ROOT_DIR%\deploy\windows\GameNet_Service.exe"
+if exist "%SVC_EXE%" (
+    "%SVC_EXE%" --uninstall
+)
+sc.exe stop GameNetServer >nul 2>&1
+sc.exe delete GameNetServer >nul 2>&1
+taskkill /f /im GameNet_Server.exe >nul 2>&1
+echo Service and scheduled tasks removed.
 pause

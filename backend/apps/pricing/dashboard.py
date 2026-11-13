@@ -5,10 +5,12 @@ from __future__ import annotations
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.shortcuts import redirect, render
+from django.urls import reverse
 from django.views.decorators.http import require_POST
 
 from apps.audit.models import AuditLog
 from apps.core.dashboard import edge_common
+from apps.core.ids import parse_uuid
 from apps.customer_groups.models import CustomerGroup
 from apps.customer_groups.services import GroupError, create_group, update_group
 from apps.pricing.models import Tariff
@@ -92,7 +94,7 @@ def tariff_update(request, tariff_id):
 @login_required
 @require_POST
 def group_create(request):
-    tariff = Tariff.objects.filter(id=request.POST.get("tariff_id")).first()
+    tariff = Tariff.objects.filter(id=parse_uuid(request.POST.get("tariff_id"))).first()
     if tariff is None:
         messages.error(request, "تعرفه انتخاب‌شده معتبر نیست.")
         return redirect("edge_pricing")
@@ -102,7 +104,7 @@ def group_create(request):
         )
     except GroupError as exc:
         messages.error(request, str(exc))
-        return redirect("edge_pricing")
+        return redirect(reverse("edge_pricing") + "#groups")
     AuditLog.objects.create(
         actor=request.user,
         actor_label=request.user.label,
@@ -113,7 +115,7 @@ def group_create(request):
         ip_address=request.META.get("REMOTE_ADDR"),
     )
     messages.success(request, f"گروه {group.name} ثبت شد.")
-    return redirect("edge_pricing")
+    return redirect(reverse("edge_pricing") + "#groups")
 
 
 @login_required
@@ -122,8 +124,8 @@ def group_update(request, group_id):
     group = CustomerGroup.objects.filter(id=group_id).first()
     if group is None:
         messages.error(request, "گروه یافت نشد.")
-        return redirect("edge_pricing")
-    tariff = Tariff.objects.filter(id=request.POST.get("tariff_id")).first()
+        return redirect(reverse("edge_pricing") + "#groups")
+    tariff = Tariff.objects.filter(id=parse_uuid(request.POST.get("tariff_id"))).first()
     try:
         update_group(
             group,
@@ -134,9 +136,9 @@ def group_update(request, group_id):
             if request.POST.get("expected_revision")
             else None,
         )
-    except GroupError as exc:
+    except (GroupError, ValueError) as exc:
         messages.error(request, str(exc))
-        return redirect("edge_pricing")
+        return redirect(reverse("edge_pricing") + "#groups")
     AuditLog.objects.create(
         actor=request.user,
         actor_label=request.user.label,
@@ -151,4 +153,4 @@ def group_update(request, group_id):
         ip_address=request.META.get("REMOTE_ADDR"),
     )
     messages.success(request, "گروه به‌روزرسانی شد.")
-    return redirect("edge_pricing")
+    return redirect(reverse("edge_pricing") + "#groups")

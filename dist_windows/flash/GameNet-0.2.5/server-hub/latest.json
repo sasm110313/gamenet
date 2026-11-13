@@ -1,0 +1,7 @@
+{
+  "version": "0.2.5",
+  "url": "/static/updates/server/GameNet-Server-Update-0.2.5.zip",
+  "sha256": "4c9efa15a8aaf8c80c49bb6321689eaa3b81bb859c7854256ec545088886d400",
+  "mandatory": false,
+  "release_notes": "نسخه 0.2.5 سرور سالن — افزودن دسکتاپ سرور (RDP)، رفع database is locked، NameErrorهای پنل، نمای جدولی و ریسپانسیو"
+}

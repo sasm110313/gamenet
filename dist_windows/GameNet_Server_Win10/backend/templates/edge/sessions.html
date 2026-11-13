@@ -1,0 +1,220 @@
+{% extends "base.html" %}
+{% load gn %}
+
+{% block title %}نشست‌ها{% endblock %}
+{% block page_title %}نشست‌ها{% endblock %}
+{% block page_subtitle %}فرایند کامل شروع دستی نشست، مدیریت شمارنده زنده و محاسبه هزینه{% endblock %}
+
+{% block topbar_status %}
+  <span class="gn-chip {% if active_sessions %}accent{% endif %}">
+    <span class="dot"></span>{{ active_sessions|length }} نشست فعال
+  </span>
+{% endblock %}
+
+{% block content %}
+<div id="gnCatalogData" hidden data-json="{{ catalog_json }}"></div>
+
+<div class="gn-card mb-4" style="border: 1px solid #cbd5e1; border-radius: 16px; padding: 18px; box-shadow: 0 4px 12px rgba(15,23,42,0.04);">
+  <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
+    <div class="d-flex align-items-center gap-2">
+      <div style="width: 34px; height: 34px; border-radius: 10px; background: #ecfdf5; color: #059669; display: flex; align-items: center; justify-content: center; font-size: 18px;">
+        <i class="ti ti-player-play"></i>
+      </div>
+      <div>
+        <h6 class="mb-0" style="font-weight: 800; font-size: 15px; color: #0f172a;">شروع سریع نشست بازی</h6>
+        <span class="gn-muted" style="font-size: 11.5px;">مشتری و سیستم را انتخاب کرده و دکمه شروع بازی را بزنید</span>
+      </div>
+    </div>
+  </div>
+
+  {% if customers and devices %}
+    <form method="post" action="{% url 'edge_session_start' %}" data-gn-guided-session class="d-flex flex-column gap-3">
+      {% csrf_token %}
+      <input type="hidden" name="next" value="edge_sessions">
+      <input type="hidden" name="require_confirm" value="1">
+      <input type="hidden" name="confirm_start" value="1" data-gn-gs-confirm>
+
+      <!-- ردیف اصلی: انتخاب مشتری، سیستم و دکمه شروع -->
+      <div class="gn-grid cols-3" style="align-items: flex-end; gap: 14px;">
+        <div>
+          <label class="gn-label" for="sessStartCustomer" style="font-weight: 700; font-size: 12px; margin-bottom: 6px;">
+            <i class="ti ti-user me-1 text-primary"></i> ۱. انتخاب مشتری:
+          </label>
+          <select id="sessStartCustomer" class="gn-select w-100" name="customer_id" required data-gn-customer-select style="height: 42px; font-weight: 600; font-size: 13px;">
+            <option value="">-- مشتری را انتخاب کنید --</option>
+            {% for customer in customers %}
+              <option value="{{ customer.id }}" {% if customer.debt_balance > 0 %}data-has-debt="1"{% endif %}>
+                {{ customer.full_name }}{% if customer.wallet %} (موجودی: {{ customer.wallet.balance|toman }} ت){% endif %}{% if customer.debt_balance > 0 %} ⚠️ [دارای بدهی]{% endif %}
+              </option>
+            {% endfor %}
+          </select>
+        </div>
+
+        <div>
+          <label class="gn-label" for="sessStartDevice" style="font-weight: 700; font-size: 12px; margin-bottom: 6px;">
+            <i class="ti ti-device-desktop me-1 text-info"></i> ۲. انتخاب سیستم (PC):
+          </label>
+          <select id="sessStartDevice" class="gn-select w-100" name="device_id" required data-gn-device-select style="height: 42px; font-weight: 600; font-size: 13px;">
+            <option value="">-- سیستم آماده و آزاد --</option>
+            {% for device in devices %}
+              <option value="{{ device.id }}">{{ device.name }} · {{ device.connection_status|conn_fa }} ({{ device.kiosk_status|kiosk_fa }})</option>
+            {% endfor %}
+          </select>
+        </div>
+
+        <div>
+          <button class="gn-btn success w-100" type="submit" style="height: 42px; font-weight: 800; font-size: 13.5px; background: #059669; color: #ffffff; border: 0; box-shadow: 0 4px 14px rgba(5,150,105,0.3); display: flex; align-items: center; justify-content: center; gap: 8px;">
+            <i class="ti ti-lock-open" style="font-size: 17px;"></i> باز کردن سیستم و شروع بازی
+          </button>
+        </div>
+      </div>
+
+      <!-- نوار زنده وضعیت اعتبار و تعرفه -->
+      <div class="d-flex align-items-center justify-content-between p-2.5 rounded flex-wrap gap-2" style="background: #f8fafc; border: 1px solid #e2e8f0; font-size: 12px;">
+        <div class="d-flex align-items-center gap-3 flex-wrap">
+          <span><span class="text-muted">موجودی مشتری:</span> <strong class="num" data-gn-gs-balance style="color: #059669; font-weight: 800;">انتخاب نشده</strong></span>
+          <span style="color: #cbd5e1;">|</span>
+          <span><span class="text-muted">نرخ ساعتی:</span> <strong class="num" data-gn-gs-rate style="color: #2563eb; font-weight: 800;">خودکار</strong></span>
+        </div>
+        <div class="gn-alert warning py-1 px-2.5 m-0" style="font-size: 11px; border-radius: 6px;" data-gn-gs-warn hidden></div>
+      </div>
+
+      <!-- تنظیمات پیشرفته (اختیاری) -->
+      <details style="margin-top: 2px;">
+        <summary style="cursor: pointer; font-size: 11.5px; color: #64748b; font-weight: 700; user-select: none;">
+          <i class="ti ti-settings me-1"></i> تنظیمات پیشرفته (تعرفه دستی، محدودیت زمان، سیاست قطعی شبکه)
+        </summary>
+        <div class="p-3 rounded mt-2" style="background: #ffffff; border: 1px dashed #cbd5e1;">
+          <div class="gn-grid cols-3 gap-3">
+            <div>
+              <label class="gn-label" for="sessStartRate" style="font-size: 11.5px;">تعرفه ساعتی:</label>
+              <select id="sessStartRate" class="gn-select w-100" name="rate_choice" data-gn-rate-select data-gn-dynamic-rates="1" style="font-size: 12px;">
+                <option value="">پیش‌فرض خودکار مشتری / گروه</option>
+                {% for tariff in tariffs %}
+                  <option value="tariff:{{ tariff.id }}" data-hourly-rate="{{ tariff.hourly_rate }}">{{ tariff.name }} ({{ tariff.hourly_rate|toman }} ت/ساعت)</option>
+                {% endfor %}
+              </select>
+            </div>
+
+            <div>
+              <label class="gn-label" style="font-size: 11.5px;">روش محاسبه نشست:</label>
+              <div class="d-flex gap-2 align-items-center mt-1">
+                <label style="font-size: 11.5px; display: inline-flex; align-items: center; gap: 4px; cursor: pointer;">
+                  <input type="radio" name="billing_mode" value="CREDIT" checked> اعتبارمحور (آزاد)
+                </label>
+                <label style="font-size: 11.5px; display: inline-flex; align-items: center; gap: 4px; cursor: pointer;">
+                  <input type="radio" name="billing_mode" value="TIMED"> زمانی (محدود)
+                </label>
+              </div>
+              <div class="mt-2" data-gn-gs-timed-wrap hidden>
+                <div class="d-flex gap-1.5 align-items-center">
+                  <input id="sessPlannedMinutes" type="number" min="5" max="720" step="5" value="60" name="planned_duration_minutes" class="gn-input num" style="max-width: 90px; height: 32px; font-size: 12px;">
+                  <button type="button" class="gn-btn sm" data-gn-gs-duration="30">۳۰ د</button>
+                  <button type="button" class="gn-btn sm" data-gn-gs-duration="60">۱ س</button>
+                  <button type="button" class="gn-btn sm" data-gn-gs-duration="120">۲ س</button>
+                </div>
+              </div>
+            </div>
+
+            <div>
+              <label class="gn-label" for="sessDisconnectPolicy" style="font-size: 11.5px;">سیاست در زمان قطعی:</label>
+              <select id="sessDisconnectPolicy" name="disconnect_policy" class="gn-select w-100" style="font-size: 11.5px;">
+                <option value="PAUSE" selected>توقف موقت زمان‌سنج (پیشنهادی)</option>
+                <option value="AUTO_STOP">پایان خودکار نشست پس از ۶۰ ثانیه</option>
+                <option value="CONTINUE">ادامه شمارش با هشدار</option>
+              </select>
+            </div>
+          </div>
+        </div>
+      </details>
+    </form>
+  {% else %}
+    <div class="gn-empty p-3"><i class="ti ti-plug-off"></i>برای شروع نشست به حداقل یک مشتری ثبت‌شده و یک سیستم آنلاین و آزاد نیاز است.</div>
+  {% endif %}
+</div>
+
+<div class="gn-card mb-3">
+  <h6>نشست‌های فعال</h6>
+  <div class="gn-table-wrap" tabindex="0" role="region" aria-label="نشست‌های فعال">
+    <table class="gn-table">
+      <thead>
+        <tr>
+          <th>مشتری</th>
+          <th>دستگاه</th>
+          <th>شروع و شمارنده</th>
+          <th>نوع / سیاست قطعی</th>
+          <th>نرخ / تعرفه</th>
+          <th class="text-end">پایان</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for session in active_sessions %}
+          <tr>
+            <td><a href="{% url 'edge_customer_detail' session.customer.id %}" style="color: var(--gn-text); text-decoration: none"><strong>{{ session.customer.full_name }}</strong></a></td>
+            <td><a href="{% url 'edge_device_detail' session.device.id %}" style="font-weight: 700;">{{ session.device.name }}</a></td>
+            <td>
+              <div class="num gn-muted" style="font-size: 11px;">شروع: {{ session.started_at|date:"H:i:s" }}</div>
+              {% with elapsed=session.billable_elapsed_seconds %}
+                <span class="baz-timer-badge mt-1" data-elapsed="{{ elapsed }}" data-paused="{% if session.paused_at %}1{% else %}0{% endif %}">
+                  <i class="ti ti-clock"></i> {{ elapsed|duration_hms }}{% if session.paused_at %} (متوقف){% endif %}
+                </span>
+              {% endwith %}
+              {% if session.connection_lost_at %}
+                <div><span class="gn-ortho-pill tone-warn mt-1">قطع ارتباط دستگاه</span></div>
+              {% endif %}
+            </td>
+            <td style="font-size: 12px;">
+              <div><span class="gn-chip">{{ session.billing_mode|billing_mode_fa }}{% if session.planned_duration_minutes %} ({{ session.planned_duration_minutes }} د){% endif %}</span></div>
+              <div class="gn-muted mt-1" style="font-size: 11px;">{{ session.disconnect_policy|disconnect_policy_fa }}</div>
+            </td>
+            <td class="gn-muted">
+              <div>{{ session.tariff_name }}</div>
+              <div class="num" style="font-size: 11px;">{{ session.hourly_rate|toman }} ت/ساعت</div>
+            </td>
+            <td class="text-end">
+              <form method="post" action="{% url 'edge_session_stop' session.id %}">
+                {% csrf_token %}
+                <button class="gn-btn sm danger" type="submit"><i class="ti ti-player-stop"></i> پایان و تسویه</button>
+              </form>
+            </td>
+          </tr>
+        {% empty %}
+          <tr><td colspan="6"><div class="gn-empty"><i class="ti ti-clock-off"></i>نشست فعالی وجود ندارد.</div></td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<div class="gn-card">
+  <div class="d-flex justify-content-between align-items-center mb-2 flex-wrap gap-2">
+    <h6 class="mb-0">تاریخچه نشست‌ها</h6>
+    <form method="get" class="d-flex gap-2">
+      <input class="gn-input" name="q" value="{{ q }}" placeholder="مشتری، دستگاه یا شناسه">
+      <button class="gn-btn" type="submit"><i class="ti ti-search"></i></button>
+    </form>
+  </div>
+  <div class="gn-table-wrap" tabindex="0" role="region" aria-label="تاریخچه نشست‌ها">
+    <table class="gn-table">
+      <thead><tr><th>مشتری</th><th>دستگاه</th><th>روش / قطعی</th><th>شروع</th><th>مدت مفید</th><th>نرخ</th><th>هزینه</th><th>وضعیت</th><th>دلیل پایان</th></tr></thead>
+      <tbody>
+        {% for session in recent_sessions %}
+          <tr>
+            <td><a href="{% url 'edge_customer_detail' session.customer.id %}" style="color: var(--gn-text); text-decoration: none; font-weight: 600;">{{ session.customer.full_name }}</a></td>
+            <td>{{ session.device.name }}</td>
+            <td class="gn-muted" style="font-size: 11px;">{{ session.billing_mode|billing_mode_fa }} · {{ session.disconnect_policy|disconnect_policy_fa }}</td>
+            <td class="num gn-muted">{{ session.started_at|date:"m-d H:i" }}</td>
+            <td class="num">{% if session.elapsed_seconds is not None %}{{ session.elapsed_seconds|duration_hms }}{% else %}—{% endif %}</td>
+            <td class="gn-muted">{{ session.tariff_name }}<div class="num" style="font-size: 10.5px">{{ session.hourly_rate|toman }} ت</div></td>
+            <td class="num font-weight-bold text-success">{{ session.cost|default:0|toman }}</td>
+            <td><span class="gn-status {{ session.status|status_tone }}"><span class="dot"></span>{{ session.status|status_fa }}</span></td>
+            <td class="gn-muted" style="font-size: 11.5px">{{ session.end_reason|default:"—" }}</td>
+          </tr>
+        {% empty %}
+          <tr><td colspan="9"><div class="gn-empty">نشستی ثبت نشده است.</div></td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}

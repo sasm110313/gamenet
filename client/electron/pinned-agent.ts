@@ -1,3 +1,4 @@
+import crypto from "node:crypto";
 import https from "node:https";
 import tls from "node:tls";
 import type { AgentOptions } from "node:https";
@@ -65,6 +66,74 @@ export function parsePairing(input: string): PairingTarget {
     throw new Error("شماره پورت هاب معتبر نیست");
   }
   return { host, port, fingerprint };
+}
+
+export function fetchServerTlsFingerprint(
+  host: string,
+  port: number,
+  timeoutMs = 7_000,
+): Promise<string> {
+  return new Promise<string>((resolve, reject) => {
+    let settled = false;
+    const finish = (err: Error | null, fp?: string): void => {
+      if (settled) return;
+      settled = true;
+      try {
+        socket.destroy();
+      } catch {}
+      if (err) {
+        reject(err);
+      } else {
+        resolve(fp || "");
+      }
+    };
+
+    const socket = tls.connect({
+      host,
+      port,
+      rejectUnauthorized: false,
+      timeout: timeoutMs,
+    });
+
+    socket.once("secureConnect", () => {
+      try {
+        const cert = socket.getPeerCertificate(true);
+        let fp = "";
+        if (cert && Buffer.isBuffer(cert.raw) && cert.raw.length > 0) {
+          fp = crypto.createHash("sha256").update(cert.raw).digest("hex").toUpperCase();
+        } else if (cert && cert.fingerprint256) {
+          fp = normalizeFingerprint(cert.fingerprint256);
+        }
+        if (!/^[0-9A-F]{64}$/.test(fp)) {
+          finish(new Error("سرور گواهی TLS معتبری ارائه نکرد"));
+          return;
+        }
+        finish(null, fp);
+      } catch (err) {
+        finish(err instanceof Error ? err : new Error(String(err)));
+      }
+    });
+
+    socket.once("timeout", () => {
+      finish(new Error("زمان اتصال به سرور تمام شد"));
+    });
+    socket.once("error", (err) => {
+      finish(err instanceof Error ? err : new Error(String(err)));
+    });
+  });
+}
+
+const agentCache = new Map<string, PinnedHttpsAgent>();
+
+export function getPinnedHttpsAgent(fingerprint: string, options: AgentOptions = {}): PinnedHttpsAgent {
+  const norm = normalizeFingerprint(fingerprint);
+  if (Object.keys(options).length) return new PinnedHttpsAgent(norm, options);
+  let cached = agentCache.get(norm);
+  if (!cached) {
+    cached = new PinnedHttpsAgent(norm, options);
+    agentCache.set(norm, cached);
+  }
+  return cached;
 }
 
 export class PinnedHttpsAgent extends https.Agent {

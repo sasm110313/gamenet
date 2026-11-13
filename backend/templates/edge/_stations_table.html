@@ -1,0 +1,170 @@
+{% load gn %}
+<div class="gn-table-wrap gn-stations-wrap" tabindex="0" role="region" aria-label="جدول ایستگاه‌ها">
+  <table class="gn-table gn-stations-table{% if bulk_enabled %} is-selectable{% endif %}">
+    <thead>
+      <tr>
+        {% if bulk_enabled %}
+          <th class="gn-col-check">
+            <input type="checkbox"
+                   class="gn-check"
+                   data-gn-station-all
+                   aria-label="انتخاب همه ایستگاه‌های نمایش‌داده‌شده">
+          </th>
+        {% endif %}
+        <th>ایستگاه</th>
+        <th>وضعیت</th>
+        <th>مشتری</th>
+        <th>شروع / مدت</th>
+        <th>هزینه</th>
+        <th>باقی‌مانده</th>
+        <th class="gn-col-actions">اقدام</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for device in devices %}
+        <tr data-station-row data-station-name="{{ device.name }}">
+          {% if bulk_enabled %}
+            <td class="gn-col-check">
+              <input type="checkbox"
+                     class="gn-check"
+                     value="{{ device.id }}"
+                     data-gn-station-check
+                     aria-label="انتخاب {{ device.name }}">
+            </td>
+          {% endif %}
+          <td class="gn-cell-station">
+            <a href="{% url 'edge_device_detail' device.id %}" class="gn-station-name">{{ device.name }}</a>
+            <span class="gn-station-meta num" dir="ltr">
+              {% if device.ip_address %}{{ device.ip_address }}{% elif device.hostname %}{{ device.hostname }}{% else %}بدون آدرس{% endif %}
+            </span>
+          </td>
+          <td class="gn-cell-state">
+            <span class="gn-station-state state-{{ device.station_state }}"
+                  {% if device.station_state == 'error' and device.health_message %}title="{{ device.health_message }}"{% endif %}>
+              <span class="dot" aria-hidden="true"></span>{{ device.station_state_fa }}
+            </span>
+            <span class="gn-station-meta">
+              {{ device.connection_status|conn_fa }}
+              {% if device.connection_status == 'ONLINE' %}
+                · {{ device.power_status|power_fa }} · {{ device.kiosk_status|kiosk_fa }}
+              {% elif device.is_offline_but_on %}
+                · روشن مانده
+              {% endif %}
+              {% if device.has_health_error and device.station_state != 'error' %}
+                · <span title="{{ device.health_message|default:'' }}">خطای سرویس</span>
+              {% endif %}
+            </span>
+          </td>
+          <td class="gn-cell-customer">
+            {% if device.active_session %}
+              <a href="{% url 'edge_customer_detail' device.active_session.customer.id %}#wallet" class="gn-station-customer">
+                {{ device.active_session.customer.full_name }}
+              </a>
+              <span class="gn-station-meta">
+                {% if device.active_session.customer.username %}@{{ device.active_session.customer.username }}{% endif %}
+                {% if device.is_paused %} · <span class="text-warning">شمارنده متوقف</span>{% endif %}
+                {% if device.connection_lost %} · <span class="text-danger">ارتباط قطع</span>{% endif %}
+              </span>
+            {% else %}
+              <span class="gn-station-idle">—</span>
+            {% endif %}
+          </td>
+          <td class="gn-cell-time num">
+            {% if device.active_session %}
+              <span class="gn-station-strong" dir="ltr">{{ device.started_at_str }}</span>
+              <span class="gn-station-meta" dir="ltr">{{ device.elapsed_seconds|duration_hms }}</span>
+            {% else %}
+              <span class="gn-station-idle">—</span>
+            {% endif %}
+          </td>
+          <td class="gn-cell-money num">
+            {% if device.active_session %}
+              <span class="gn-station-strong">{{ device.current_cost|toman }}</span>
+              <span class="gn-station-meta">تومان</span>
+            {% else %}
+              <span class="gn-station-idle">—</span>
+            {% endif %}
+          </td>
+          <td class="gn-cell-remaining num">
+            {% if device.active_session %}
+              <span class="gn-station-strong {% if device.is_low_balance %}is-low{% endif %}">
+                {{ device.remaining_money|toman }} <span class="unit">ت</span>
+              </span>
+              <span class="gn-station-meta" dir="ltr">{{ device.remaining_seconds|duration_hms }} مانده</span>
+            {% else %}
+              <span class="gn-station-idle">—</span>
+            {% endif %}
+          </td>
+          <td class="gn-col-actions">
+            <div class="gn-row-actions">
+              {% if device.active_session %}
+                <form method="post" action="{% url 'edge_session_stop' device.active_session.id %}" class="gn-inline-form">
+                  {% csrf_token %}
+                  <input type="hidden" name="next" value="{{ request.get_full_path }}">
+                  <button type="submit"
+                          class="gn-icon-btn danger"
+                          data-gn-confirm="نشست {{ device.name }} پایان یابد، هزینه تسویه و سیستم قفل شود؟"
+                          title="پایان نشست و قفل"
+                          aria-label="پایان نشست {{ device.name }}">
+                    <i class="ti ti-player-stop" aria-hidden="true"></i>
+                  </button>
+                </form>
+              {% endif %}
+
+              <button type="button"
+                      class="gn-icon-btn"
+                      data-gn-screenshot="{{ device.id }}"
+                      data-device-name="{{ device.name }}"
+                      title="اسکرین‌شات زنده"
+                      aria-label="اسکرین‌شات زنده {{ device.name }}">
+                <i class="ti ti-camera" aria-hidden="true"></i>
+              </button>
+
+              <button type="button"
+                      class="gn-icon-btn"
+                      style="color:#0284c7;border-color:rgba(2,132,199,.28);"
+                      data-gn-remote="{{ device.id }}"
+                      data-device-name="{{ device.name }}"
+                      title="کنترل از راه دور (RDP)"
+                      aria-label="کنترل از راه دور {{ device.name }}">
+                <i class="ti ti-screen-share" aria-hidden="true"></i>
+              </button>
+
+              <a href="{% url 'edge_device_detail' device.id %}"
+                 class="gn-icon-btn"
+                 title="جزئیات و تنظیمات"
+                 aria-label="جزئیات {{ device.name }}">
+                <i class="ti ti-adjustments" aria-hidden="true"></i>
+              </a>
+            </div>
+          </td>
+        </tr>
+      {% empty %}
+        <tr>
+          <td colspan="{% if bulk_enabled %}8{% else %}7{% endif %}">
+            <div class="gn-empty">
+              <i class="ti ti-device-desktop-off" aria-hidden="true"></i>
+              ایستگاهی با این فیلترها پیدا نشد.
+              <div class="mt-3">
+                <a href="{% url 'edge_devices' %}" class="gn-btn sm">پاک کردن فیلترها</a>
+              </div>
+            </div>
+          </td>
+        </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+
+<div class="gn-table-foot">
+  <span>
+    نمایش <strong class="num">{{ devices|length }}</strong>
+    {% if total_count %}از <strong class="num">{{ total_count }}</strong>{% endif %} ایستگاه
+  </span>
+  {% if bulk_enabled and devices %}
+    <span class="gn-table-foot-hint">
+      <i class="ti ti-info-circle" aria-hidden="true"></i>
+      برای انتخاب چند ایستگاه، تیک کنار هر ردیف را بزنید (Shift + کلیک برای انتخاب بازه).
+    </span>
+  {% endif %}
+</div>

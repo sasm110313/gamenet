@@ -1,0 +1,32 @@
+{% extends "base.html" %}
+{% load gn %}
+
+{% block title %}دستورها{% endblock %}
+{% block page_title %}دستورهای راه دور{% endblock %}
+{% block page_subtitle %}هر دستور امضا شده، منقضی می‌شود و حداکثر یک‌بار اجرا می‌شود{% endblock %}
+
+{% block content %}
+<div class="gn-card">
+  <table class="gn-table">
+    <thead>
+      <tr><th>نوع</th><th>Edge</th><th>وضعیت</th><th>صدور</th><th>انقضا</th><th>تأیید</th><th>نتیجه / خطا</th><th>شناسه</th></tr>
+    </thead>
+    <tbody>
+      {% for cmd in commands %}
+        <tr>
+          <td>{{ cmd.command_type }}</td>
+          <td>{{ cmd.edge.name }}</td>
+          <td><span class="gn-status {{ cmd.status|status_tone }}"><span class="dot"></span>{{ cmd.status|status_fa }}</span></td>
+          <td class="num gn-muted">{{ cmd.issued_at|date:"H:i:s" }}</td>
+          <td class="num gn-muted">{{ cmd.expires_at|date:"H:i:s" }}</td>
+          <td class="num gn-muted">{{ cmd.acknowledged_at|date:"H:i:s"|default:"—" }}</td>
+          <td class="gn-muted" style="font-size: 11px">{{ cmd.result|default:cmd.error|truncatechars:60|default:"—" }}</td>
+          <td class="mono gn-muted">{{ cmd.id|shortid }}</td>
+        </tr>
+      {% empty %}
+        <tr><td colspan="8"><div class="gn-empty"><i class="ti ti-terminal-2"></i>دستوری صادر نشده است.</div></td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endblock %}

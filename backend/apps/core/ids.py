@@ -26,3 +26,13 @@ def uuid7() -> uuid.UUID:
 
 def uuid7_from(value: str | uuid.UUID) -> uuid.UUID:
     return value if isinstance(value, uuid.UUID) else uuid.UUID(str(value))
+
+
+def parse_uuid(value) -> uuid.UUID | None:
+    """Return a UUID for well-formed input, otherwise None (never raises)."""
+    if isinstance(value, uuid.UUID):
+        return value
+    try:
+        return uuid.UUID(str(value or "").strip())
+    except (ValueError, TypeError, AttributeError):
+        return None

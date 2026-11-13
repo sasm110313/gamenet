@@ -1,0 +1,7 @@
+{
+  "version": "0.2.10",
+  "url": "/static/updates/server/GameNet-Server-Update-0.2.10.zip",
+  "sha256": "fe11c226d5c5b9626a1d0302eeafa68334947900980838d3314967e75e6b2eb4",
+  "mandatory": true,
+  "release_notes": "رفع reconnect ابر، پردازش async کاتالوگ، ACK و retry، صف پایدار نشست‌های رهرو، جلوگیری از ارسال دوگانه، سینک رمز و کوپن و بسته وابستگی نصب‌های قبلی"
+}

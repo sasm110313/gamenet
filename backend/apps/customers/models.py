@@ -25,6 +25,12 @@ class Customer(models.Model):
         related_name="customers",
     )
     credit_limit = models.PositiveIntegerField(default=settings.DEFAULT_CREDIT_LIMIT)
+    debt_balance = models.PositiveIntegerField(default=0)
+    max_debt_limit = models.PositiveIntegerField(default=40_000)
+    active_coupons = models.PositiveSmallIntegerField(
+        default=0,
+        help_text="تعداد کوپن‌های فعال ۵۰٪ رهرو (هر کوپن معادل ۱ ساعت بازی با نرخ ۲۰,۰۰۰ تومان)",
+    )
     is_active = models.BooleanField(default=True)
     notes = models.CharField(max_length=255, blank=True)
     is_replica = models.BooleanField(default=False)
@@ -44,14 +50,52 @@ class Customer(models.Model):
         indexes = [models.Index(fields=["edge_id", "is_active", "full_name"])]
 
     def set_password(self, raw_password: str) -> None:
-        from django.contrib.auth.hashers import make_password
-        self.password_hash = make_password(raw_password)
+        # Fast, salted PBKDF2 so a gamer login on the hub stays well under 200ms.
+        import hashlib
+        import secrets
+
+        salt = secrets.token_hex(8)
+        iterations = 30_000
+        digest = hashlib.pbkdf2_hmac(
+            "sha256", raw_password.encode("utf-8"), salt.encode("ascii"), iterations
+        ).hex()
+        self.password_hash = f"pbkdf2_30k${iterations}${salt}${digest}"
 
     def check_password(self, raw_password: str) -> bool:
-        from django.contrib.auth.hashers import check_password
-        if not self.password_hash:
+        import hashlib
+        import hmac
+
+        stored = self.password_hash or ""
+        if not stored:
             return False
-        return check_password(raw_password, self.password_hash)
+        if stored.startswith("pbkdf2_30k$"):
+            try:
+                _, iterations, salt, digest = stored.split("$", 3)
+                candidate = hashlib.pbkdf2_hmac(
+                    "sha256", raw_password.encode("utf-8"), salt.encode("ascii"), int(iterations)
+                ).hex()
+                return hmac.compare_digest(candidate, digest)
+            except Exception:
+                return False
+
+        # Legacy Django hash: verify once, then upgrade in place.
+        from django.contrib.auth.hashers import check_password
+
+        try:
+            ok = check_password(raw_password, stored)
+        except Exception:
+            return False
+        if ok:
+            self.set_password(raw_password)
+            try:
+                self.save(update_fields=["password_hash"])
+            except Exception:
+                pass
+        return ok
 
     def __str__(self) -> str:
         return self.full_name
+
+    @property
+    def has_debt(self) -> bool:
+        return self.debt_balance > 0

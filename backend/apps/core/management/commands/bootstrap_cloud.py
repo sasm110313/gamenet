@@ -33,11 +33,15 @@ class Command(BaseCommand):
 
         user = User.objects.filter(username=username).first()
         if user is None:
-            if not password:
-                raise SystemExit("ADMIN_PASSWORD (or --password) is required to create the admin")
-            user = User.objects.create_superuser(username=username, password=password,
-                                                 email=options["email"])
-            self.stdout.write(self.style.SUCCESS(f"created admin {username}"))
+            if User.objects.filter(is_superuser=True).exists():
+                user = User.objects.filter(is_superuser=True).first()
+                self.stdout.write("Superuser already configured with custom username.")
+            else:
+                if not password:
+                    raise SystemExit("ADMIN_PASSWORD (or --password) is required to create the admin")
+                user = User.objects.create_superuser(username=username, password=password,
+                                                     email=options["email"])
+                self.stdout.write(self.style.SUCCESS(f"created admin {username}"))
         else:
             self.stdout.write(f"admin {username} already exists")
 

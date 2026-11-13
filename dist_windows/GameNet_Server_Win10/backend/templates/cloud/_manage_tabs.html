@@ -1,0 +1,17 @@
+{% load gn %}
+<div class="gn-card mb-3">
+  <div class="d-flex align-items-center justify-content-between flex-wrap gap-2">
+    <div>
+      <h6 class="mb-1">مدیریت از راه دور</h6>
+      <p class="gn-subtitle mb-0">هر عملیات یک فرمان امضاشده و منقضی‌شدنی است؛ Edge مقصد مرجع نهایی داده‌هاست.</p>
+    </div>
+    <div class="d-inline-flex gap-1">
+      <a class="gn-btn {% if request.path|slice:':17' == '/manage/customers' %}primary{% endif %}" href="{% url 'cloud_manage_customers' %}">
+        <i class="ti ti-users"></i> مشتریان و کیف پول
+      </a>
+      <a class="gn-btn {% if request.path|slice:':15' == '/manage/pricing' %}primary{% endif %}" href="{% url 'cloud_manage_pricing' %}">
+        <i class="ti ti-tags"></i> تعرفه‌ها و گروه‌ها
+      </a>
+    </div>
+  </div>
+</div>

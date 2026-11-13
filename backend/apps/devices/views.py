@@ -10,7 +10,8 @@ from rest_framework.response import Response
 from rest_framework.throttling import ScopedRateThrottle
 from rest_framework.views import APIView
 
-from apps.clients.models import ClientDevice
+from apps.audit.models import AuditLog
+from apps.clients.models import ClientDevice, ConnectionStatus, HealthStatus, KioskStatus, PowerStatus
 from apps.commands.models import DeviceCommand, DeviceCommandStatus
 from apps.core.api import ApiError, AuthenticationFailed
 from apps.core.auth import authenticate_device_header, client_ip
@@ -61,6 +62,7 @@ class DeviceRegisterView(APIView):
                 operating_system=str(data.get("operating_system", "")),
                 application_version=str(data.get("application_version", "")),
                 ip_address=client_ip(request),
+                mac_address=str(data.get("mac_address", "")).strip(),
                 device_id=data.get("device_id") or None,
             )
         except RegistrationError as exc:
@@ -80,6 +82,13 @@ class DeviceRegisterView(APIView):
         )
 
 
+def _clean_enum(value, enum_cls):
+    if value is None:
+        return None
+    text = str(value).strip().upper()
+    return text if text in enum_cls.values else None
+
+
 class DeviceHeartbeatView(APIView):
     def post(self, request):
         require_edge()
@@ -91,14 +100,34 @@ class DeviceHeartbeatView(APIView):
             force=False,
             app_version=str(request.data.get("app_version", "")),
             ip_address=client_ip(request),
+            mac_address=str(request.data.get("mac_address", "")).strip(),
+            connection_status=ConnectionStatus.ONLINE,
+            power_status=_clean_enum(request.data.get("power_state"), PowerStatus) or PowerStatus.ON,
+            kiosk_status=_clean_enum(request.data.get("kiosk_state"), KioskStatus),
+            health_status=_clean_enum(request.data.get("health_status"), HealthStatus),
+            health_message=request.data.get("health_message"),
             reason="rest heartbeat",
         )
-        device.refresh_from_db(fields=["status"])
+        device.refresh_from_db(
+            fields=[
+                "status",
+                "connection_status",
+                "power_status",
+                "kiosk_status",
+                "occupancy_status",
+                "health_status",
+            ]
+        )
         cfg = _hub_config()
         return Response(
             {
                 "server_time": timezone.now().isoformat(),
                 "desired_state": device.status,
+                "connection_status": device.connection_status,
+                "power_status": device.power_status,
+                "kiosk_status": device.kiosk_status,
+                "occupancy_status": device.occupancy_status,
+                "health_status": device.health_status,
                 **cfg,
             }
         )
@@ -200,31 +229,38 @@ class ClientUserLoginView(APIView):
         if customer is None:
             raise ApiError("invalid_credentials", "کاربری با این مشخصات یافت نشد یا حساب غیرفعال است.", status.HTTP_401_UNAUTHORIZED)
 
-        # اعتبارسنجی رمز عبور:
-        # ۱. اگر پسورد هش تنظیم شده باشد: بررسی پسورد یا انطباق با کد ۴-۶ رقمی/شماره تماس
-        # ۲. اگر پسورد هش تنظیم نشده باشد: پذیرش ورود با همان کد ۴-۶ رقمی یا شماره
+        if not raw_password:
+            raise ApiError("password_required", "وارد کردن رمز عبور الزامی است.", status.HTTP_400_BAD_REQUEST)
+
+        # اعتبارسنجی رمز عبور (اجباری - رمز اولیه شماره موبایل است و در صورت تغییر، رمز جدید)
         valid_password = False
         if customer.password_hash:
-            if clean_password and (
-                customer.check_password(raw_password)
-                or customer.check_password(clean_password)
-                or clean_password == customer.username
-                or clean_password == customer.phone
-                or raw_password == customer.username
-            ):
+            if customer.check_password(raw_password) or customer.check_password(clean_password):
                 valid_password = True
-        else:
-            # بدون نیاز به رمز پیچیده؛ ورود با کد ۴-۶ رقمی
-            if not clean_password or clean_password == customer.username or clean_password == customer.phone:
+
+        # اگر رمز اولیه همان شماره موبایل باشد
+        if not valid_password and customer.phone:
+            clean_phone = customer.phone.translate(trans).strip()
+            if clean_password == clean_phone or raw_password == customer.phone:
                 valid_password = True
+                customer.set_password(clean_phone)
+                customer.save(update_fields=["password_hash"])
 
         if not valid_password:
-            raise ApiError("invalid_credentials", "کد ورود یا رمز عبور اشتباه است.", status.HTTP_401_UNAUTHORIZED)
+            raise ApiError("invalid_credentials", "رمز عبور اشتباه است.", status.HTTP_401_UNAUTHORIZED)
 
         try:
-            session = start_session(customer=customer, device=device)
+            from apps.sessions.models import GamingSession, SessionStatus
+            session = GamingSession.objects.filter(device=device, status=SessionStatus.ACTIVE).first()
+            if session is not None and session.customer_id != customer.pk:
+                raise SessionError("نشست دستگاه متعلق به مشتری دیگری است.")
+            if session is None:
+                session = start_session(customer=customer, device=device)
         except SessionError as exc:
             raise ApiError("session_start_failed", str(exc), status.HTTP_400_BAD_REQUEST) from exc
+        except Exception as exc:
+            logger.exception("Unexpected error in start_session for %s on %s: %s", customer.id, device.id, exc)
+            raise ApiError("session_start_error", f"خطای سرور در شروع نشست و باز کردن سیستم: {exc}", status.HTTP_500_INTERNAL_SERVER_ERROR) from exc
 
         wallet = Wallet.objects.filter(customer=customer).first()
         balance = wallet.balance if wallet else 0
@@ -240,7 +276,19 @@ class ClientUserLoginView(APIView):
                 "credit_limit": customer.credit_limit,
                 "hourly_rate": session.hourly_rate,
                 "tariff_name": session.tariff_name,
+                "coupon_hours": getattr(session, "coupon_hours", 0) or 0,
+                "coupon_hourly_rate": getattr(session, "coupon_hourly_rate", 20000) or 20000,
+                "has_coupon": bool(getattr(session, "coupon_hours", 0) > 0),
+                "coupon_message": (
+                    f"🎁 شما دارای {session.coupon_hours} کوپن تخفیف ۵۰٪ رهرو هستید؛ "
+                    f"تا {session.coupon_hours} ساعت با تعرفه ویژه ۲۰,۰۰۰ تومان در ساعت محاسبه می‌شوید."
+                ) if getattr(session, "coupon_hours", 0) > 0 else "",
+                "billing_mode": session.billing_mode,
+                "planned_duration_minutes": session.planned_duration_minutes,
+                "disconnect_policy": session.disconnect_policy,
                 "started_at": session.started_at.isoformat(),
+                "elapsed_seconds": session.billable_elapsed_seconds(),
+                "cost": session.calculate_cost(session.billable_elapsed_seconds())[0],
             },
             status=status.HTTP_200_OK,
         )
@@ -256,11 +304,22 @@ class ClientUserLogoutView(APIView):
         from apps.sessions.services import stop_session
         from apps.wallets.models import Wallet
 
-        session = GamingSession.objects.filter(device=device, status=SessionStatus.ACTIVE).first()
+        data = request.data if isinstance(request.data, dict) else {}
+        import uuid
+        try:
+            session_id = uuid.UUID(str(data.get("session_id", "")))
+        except ValueError:
+            raise ApiError("invalid_session", "شناسه نشست الزامی است.", status.HTTP_400_BAD_REQUEST)
+        session = GamingSession.objects.filter(device=device, pk=session_id).first()
         if session is None:
             return Response({"ok": True, "message": "هیچ نشست فعالی برای این دستگاه یافت نشد."})
 
-        session, entry = stop_session(session, reason="خروج توسط کاربر از کلاینت")
+        keep_processes = bool(data.get("keep_processes"))
+        if keep_processes:
+            return Response({"ok": True, "session_id": str(session.id), "temporarily_locked": True})
+        reason = "خروج موقت و قفل سیستم توسط کاربر (Alt+F5)" if keep_processes else "خروج توسط کاربر از کلاینت"
+
+        session, entry = stop_session(session, reason=reason, keep_processes=keep_processes)
         wallet = Wallet.objects.filter(customer=session.customer).first()
         balance = wallet.balance if wallet else 0
 
@@ -274,4 +333,148 @@ class ClientUserLogoutView(APIView):
             },
             status=status.HTTP_200_OK,
         )
+
+
+class ClientAdminUnlockView(APIView):
+    """Allows an administrator to authenticate from the client and exit kiosk / launch explorer."""
+
+    def post(self, request):
+        require_edge()
+        device = device_or_401(request)
+        data = request.data or {}
+        username = str(data.get("username", "")).strip()
+        password = str(data.get("password", ""))
+        from django.contrib.auth import authenticate
+
+        user = authenticate(request, username=username, password=password)
+        if user is None and password != password.strip():
+            user = authenticate(request, username=username, password=password.strip())
+        if user is None or not (user.is_staff or user.is_superuser):
+            raise ApiError("unauthorized", "نام کاربری یا رمز عبور ادمین نامعتبر است.", status.HTTP_401_UNAUTHORIZED)
+
+        AuditLog.objects.create(
+            actor=user,
+            actor_label=user.label,
+            action="client.admin_unlock_local",
+            object_type="device",
+            object_id=str(device.id),
+            metadata={"device_name": device.name},
+            ip_address=request.META.get("REMOTE_ADDR"),
+        )
+        return Response({"ok": True, "message": "دسترسی ادمین تایید شد."})
+
+
+class ClientResetPairingView(APIView):
+    """Allows an authenticated admin on the client PC to unpair & reset the station slot cleanly."""
+
+    def post(self, request):
+        require_edge()
+        device = device_or_401(request)
+        data = request.data or {}
+        username = str(data.get("username", "")).strip()
+        password = str(data.get("password", ""))
+
+        from django.contrib.auth import authenticate
+        from apps.devices.services import RegistrationError, reset_device_pairing
+
+        user = authenticate(request, username=username, password=password)
+        if user is None and password != password.strip():
+            user = authenticate(request, username=username, password=password.strip())
+        if user is None or not (user.is_staff or user.is_superuser):
+            raise ApiError("unauthorized", "نام کاربری یا رمز عبور ادمین نامعتبر است.", status.HTTP_401_UNAUTHORIZED)
+
+        try:
+            reset_device_pairing(device, actor=user, notify_client=False)
+        except RegistrationError as exc:
+            raise ApiError("reset_blocked", str(exc), status.HTTP_400_BAD_REQUEST) from exc
+
+        AuditLog.objects.create(
+            actor=user,
+            actor_label=user.label,
+            action="device.reset_by_client",
+            object_type="device",
+            object_id=str(device.id),
+            metadata={"device_name": device.name},
+            ip_address=request.META.get("REMOTE_ADDR"),
+        )
+        return Response({"ok": True, "message": f"اتصال ایستگاه «{device.name}» با موفقیت بازنشانی شد."})
+
+
+class ClientChangePasswordView(APIView):
+    """Allows the currently logged in gamer on this device to change their password."""
+
+    def post(self, request):
+        require_edge()
+        device = device_or_401(request)
+        from apps.sessions.models import GamingSession, SessionStatus
+
+        session = GamingSession.objects.filter(device=device, status=SessionStatus.ACTIVE).first()
+        if session is None:
+            raise ApiError("no_active_session", "نشست فعالی برای این دستگاه یافت نشد. ابتدا وارد سیستم شوید.", status.HTTP_400_BAD_REQUEST)
+
+        customer = session.customer
+        data = request.data or {}
+        raw_current = str(data.get("current_password", "")).strip()
+        raw_new = str(data.get("new_password", "")).strip()
+
+        persian_arabic = "۰۱۲۳۴۵۶۷۸۹٠١٢٣٤٥٦٧٨٩"
+        english = "01234567890123456789"
+        trans = str.maketrans(persian_arabic, english)
+        clean_current = raw_current.translate(trans).strip()
+        clean_new = raw_new.translate(trans).strip()
+
+        if not raw_new or len(clean_new) < 4:
+            raise ApiError("invalid_new_password", "رمز عبور جدید باید حداقل ۴ رقم یا کاراکتر باشد.", status.HTTP_400_BAD_REQUEST)
+
+        valid_current = False
+        if customer.password_hash:
+            if customer.check_password(raw_current) or customer.check_password(clean_current):
+                valid_current = True
+
+        if not valid_current and customer.phone:
+            clean_phone = customer.phone.translate(trans).strip()
+            if clean_current == clean_phone or raw_current == customer.phone:
+                valid_current = True
+
+        if not valid_current:
+            raise ApiError("invalid_current_password", "رمز عبور فعلی نادرست است.", status.HTTP_401_UNAUTHORIZED)
+
+        from django.db import transaction
+
+        with transaction.atomic():
+            customer.set_password(clean_new)
+            customer.save(update_fields=["password_hash"])
+
+            AuditLog.objects.create(
+                actor=None,
+                actor_label=customer.full_name,
+                action="customer.password_changed_by_client",
+                object_type="customer",
+                object_id=str(customer.id),
+                metadata={"device_id": str(device.id), "device_name": device.name},
+                ip_address=request.META.get("REMOTE_ADDR"),
+            )
+        return Response({"ok": True, "message": "رمز عبور با موفقیت تغییر یافت."})
+
+
+def download_update_file(request, filename: str):
+    """High-performance direct serving of client auto-update assets (app.asar, latest.json, exe)."""
+    import os
+    from django.conf import settings
+    from django.http import HttpResponse, Http404
+
+    safe_filename = os.path.basename(filename)
+    for static_dir in getattr(settings, "STATICFILES_DIRS", []):
+        filepath = os.path.join(static_dir, "updates", safe_filename)
+        if os.path.isfile(filepath):
+            with open(filepath, "rb") as f:
+                content = f.read()
+            content_type = "application/json" if safe_filename.endswith(".json") else "application/octet-stream"
+            resp = HttpResponse(content, content_type=content_type)
+            resp["Content-Length"] = str(len(content))
+            resp["Access-Control-Allow-Origin"] = "*"
+            resp["Cache-Control"] = "no-cache, no-store, must-revalidate"
+            return resp
+    raise Http404("Update file not found")
+
 

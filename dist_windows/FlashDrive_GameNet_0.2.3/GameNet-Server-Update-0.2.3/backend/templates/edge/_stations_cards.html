@@ -1,0 +1,251 @@
+{% load gn %}
+
+<div class="pro-station-grid" id="stations-grid">
+  {% for device in devices %}
+    <div class="pro-card {% if device.active_session or device.occupancy_status == 'BUSY' %}is-active{% elif device.kiosk_status == 'LOCKED' and device.connection_status == 'ONLINE' %}is-locked{% elif device.connection_status == 'OFFLINE' %}is-offline{% else %}is-idle{% endif %}"
+         id="card-{{ device.id }}"
+         data-card-href="{% if device.active_session %}{% url 'edge_customer_detail' device.active_session.customer.id %}#wallet{% else %}{% url 'edge_device_detail' device.id %}{% endif %}"
+         title="{% if device.active_session %}کلیک روی کارت: مدیریت اکانت، شارژ و کسر شارژ {{ device.active_session.customer.full_name }}{% else %}کلیک روی کارت: وضعیت و تنظیمات {{ device.name }}{% endif %}">
+
+      <!-- Header: Station Name + Primary Occupancy/Connection + Settings Cog -->
+      <div class="pro-card-header">
+        <div class="pro-station-title">
+          <span class="pro-station-badge">{{ device.name }}</span>
+          <span class="pro-status-pill {% if device.occupancy_status == 'BUSY' or device.active_session %}active{% elif device.connection_status == 'OFFLINE' %}offline{% elif device.kiosk_status == 'LOCKED' %}locked{% else %}idle{% endif %}">
+            <span class="baz-station-dot {% if device.occupancy_status == 'BUSY' or device.active_session %}green{% elif device.connection_status == 'OFFLINE' %}gray{% elif device.kiosk_status == 'LOCKED' %}amber{% else %}cyan{% endif %}"></span>
+            {% if device.active_session %}مشغول{% else %}{{ device.occupancy_status|occ_fa }}{% endif %}
+          </span>
+        </div>
+
+        <button type="button" class="baz-mini-btn" title="تنظیمات استیشن" data-gn-station-settings data-device-id="{{ device.id }}" data-device-name="{{ device.name }}" data-tariff-id="{{ device.metadata.default_tariff_id|default:'' }}" data-mac-address="{{ device.metadata.mac_address|default:'' }}" data-idle-shutdown="{{ device.metadata.idle_shutdown_minutes|default:'15' }}" data-is-active="{{ device.is_active|yesno:'1,0' }}">
+          <i class="ti ti-settings"></i>
+        </button>
+      </div>
+
+      <!-- Orthogonal State Strip (5 independent dimensions) -->
+      <div class="gn-ortho-row" aria-label="وضعیت‌های مستقل دستگاه و کلاینت">
+        <span class="gn-ortho-pill tone-{{ device.connection_status|conn_tone }}" title="ارتباط کلاینت با سرور">
+          <i class="ti ti-wifi"></i> {{ device.connection_status|conn_fa }}
+        </span>
+        <span class="gn-ortho-pill tone-{{ device.power_status|power_tone }}" title="وضعیت پاور سیستم">
+          <i class="ti ti-power"></i> {{ device.power_status|power_fa }}
+        </span>
+        <span class="gn-ortho-pill tone-{{ device.kiosk_status|kiosk_tone }}" title="وضعیت قفل کیوسک">
+          <i class="ti ti-lock"></i> {{ device.kiosk_status|kiosk_fa }}
+        </span>
+        <span class="gn-ortho-pill tone-{{ device.occupancy_status|occ_tone }}" title="وضعیت اشغال ایستگاه">
+          <i class="ti ti-user-check"></i> {{ device.occupancy_status|occ_fa }}
+        </span>
+        <span class="gn-ortho-pill tone-{{ device.health_status|health_tone }}" title="{{ device.health_message|default:'وضعیت سلامت سرویس کلاینت' }}">
+          <i class="ti ti-activity-heartbeat"></i> {{ device.health_status|health_fa }}
+        </span>
+      </div>
+
+      {% if device.is_offline_but_on %}
+        <div class="gn-alert warning mb-2 py-1 px-2" style="font-size: 11px;">
+          <i class="ti ti-alert-triangle"></i> سیستم <strong>روشن</strong> است ولی ارتباط کلاینت <strong>آفلاین</strong> است.
+        </div>
+      {% endif %}
+      {% if device.has_health_error %}
+        <div class="gn-alert error mb-2 py-1 px-2" style="font-size: 11px;">
+          <i class="ti ti-bug"></i> خطای سرویس: {{ device.health_message|default:"اشکال در کلاینت" }}
+        </div>
+      {% endif %}
+
+      {% if device.active_session %}
+        <!-- 1. GAMER IN THE STATION -->
+        <div class="pro-gamer-section">
+          <div class="pro-avatar">{{ device.active_session.customer.full_name|slice:":1" }}</div>
+          <div class="pro-gamer-meta flex-grow-1">
+            <div class="pro-gamer-name">{{ device.active_session.customer.full_name }}</div>
+            <div class="pro-gamer-user">
+              {% if device.active_session.customer.username %}@{{ device.active_session.customer.username }} · {% endif %}
+              {{ device.active_session.billing_mode|billing_mode_fa }}
+            </div>
+          </div>
+        </div>
+
+        <!-- 2. RUNNING SOFTWARE / GAME -->
+        <div class="pro-app-badge" title="نرم‌افزار یا بازی در حال اجرا">
+          <i class="ti ti-device-gamepad-2 text-primary"></i>
+          <span>{{ device.active_app|default:"میزکار کیوسک" }}</span>
+        </div>
+
+        {% if device.is_paused or device.connection_lost %}
+          <div class="gn-alert warning mb-2 py-1 px-2" style="font-size: 11px;">
+            <i class="ti ti-player-pause"></i> شمارنده به دلیل قطع ارتباط متوقف شده است ({{ device.active_session.disconnect_policy|disconnect_policy_fa }}).
+          </div>
+        {% endif %}
+
+        <!-- 3. METRICS -->
+        <div class="pro-metrics-grid">
+          <div class="pro-metric-box">
+            <span class="pro-metric-label">⏱️ زمان سپری‌شده</span>
+            <span class="pro-metric-val baz-timer-badge p-0 bg-transparent border-0" data-elapsed="{{ device.elapsed_seconds }}" data-paused="{% if device.is_paused %}1{% else %}0{% endif %}" data-started="{{ device.active_session.started_at|date:'U' }}">
+              {{ device.elapsed_seconds|duration_hms }}{% if device.is_paused %} (متوقف){% endif %}
+            </span>
+          </div>
+
+          <div class="pro-metric-box">
+            <span class="pro-metric-label">⏳ زمان مانده</span>
+            <span class="pro-metric-val time-left {% if device.is_low_balance %}text-danger{% endif %}" data-gn-countdown-seconds="{{ device.remaining_seconds }}" data-paused="{% if device.is_paused %}1{% else %}0{% endif %}">
+              {{ device.remaining_seconds|duration_hms }}
+            </span>
+          </div>
+
+          <div class="pro-metric-box">
+            <span class="pro-metric-label">💸 هزینه تا الان</span>
+            <span class="pro-metric-val spent num">{{ device.current_cost|toman }} ت</span>
+          </div>
+
+          <div class="pro-metric-box">
+            <span class="pro-metric-label">💰 پول مانده</span>
+            <span class="pro-metric-val money-left num {% if device.is_low_balance %}low{% endif %}">
+              {{ device.remaining_money|toman }} ت
+            </span>
+          </div>
+        </div>
+
+        <div class="pro-bar-wrap" title="درصد مصرف اعتبار / زمان">
+          <div class="pro-bar-fill {% if device.is_low_balance %}low{% endif %}" style="width: {{ device.spent_percent }}%;"></div>
+        </div>
+
+        <!-- Quick Actions for Active Session -->
+        <div class="pro-card-actions">
+          <form method="post" action="{% url 'edge_session_stop' device.active_session.id %}" class="flex-grow-1" data-gn-confirm="آیا از پایان بازی و بستن حساب {{ device.name }} مطمئنید؟">
+            {% csrf_token %}
+            <input type="hidden" name="next" value="edge_devices">
+            <button type="submit" class="gn-btn sm danger w-100 justify-content-center" style="font-size: 11.5px; padding: 6px;">
+              <i class="ti ti-player-stop"></i> پایان بازی
+            </button>
+          </form>
+
+          <button type="button" class="gn-btn sm success" style="font-size: 11.5px; padding: 6px 12px;" title="شارژ سریع کیف پول گیمر" data-gn-quick-deposit data-customer-id="{{ device.active_session.customer.id }}" data-customer-name="{{ device.active_session.customer.full_name }}" data-balance="{{ device.wallet_balance }}" data-operator="{{ operator_label|default:'' }}">
+            <i class="ti ti-plus"></i> شارژ
+          </button>
+        </div>
+
+      {% else %}
+        <!-- STANDBY / NO GAMER -->
+        <div class="d-flex flex-column align-items-center justify-content-center py-3 my-auto text-center">
+          {% if device.connection_status == 'ONLINE' and device.kiosk_status == 'LOCKED' %}
+            <div style="width: 46px; height: 46px; border-radius: 50%; background: rgba(245, 158, 11, 0.1); display: flex; align-items: center; justify-content: center; margin-bottom: 8px;">
+              <i class="ti ti-lock" style="font-size: 22px; color: var(--gn-amber);"></i>
+            </div>
+            <div style="font-size: 13.5px; font-weight: 700; color: var(--gn-text);">آماده ورود گیمر</div>
+            <div class="gn-muted mt-1" style="font-size: 11.5px;">کلاینت آنلاین · کیوسک قفل · {{ device.occupancy_status|occ_fa }}</div>
+          {% elif device.connection_status == 'ONLINE' and device.kiosk_status == 'UNLOCKED' %}
+            <div style="width: 46px; height: 46px; border-radius: 50%; background: rgba(16, 185, 129, 0.1); display: flex; align-items: center; justify-content: center; margin-bottom: 8px;">
+              <i class="ti ti-lock-open" style="font-size: 22px; color: var(--gn-success);"></i>
+            </div>
+            <div style="font-size: 13.5px; font-weight: 700; color: var(--gn-text);">قفل باز است</div>
+            <div class="gn-muted mt-1" style="font-size: 11.5px;">کلاینت آنلاین · {{ device.occupancy_status|occ_fa }}</div>
+          {% elif device.connection_status == 'ONLINE' and device.kiosk_status == 'DISABLED' %}
+            <div style="width: 46px; height: 46px; border-radius: 50%; background: rgba(37, 99, 235, 0.1); display: flex; align-items: center; justify-content: center; margin-bottom: 8px;">
+              <i class="ti ti-brand-windows" style="font-size: 22px; color: #2563eb;"></i>
+            </div>
+            <div style="font-size: 13.5px; font-weight: 700; color: var(--gn-text);">حالت ادمین (کیوسک غیرفعال)</div>
+            <div class="gn-muted mt-1" style="font-size: 11.5px;">دسکتاپ ویندوز باز است</div>
+          {% elif device.is_offline_but_on %}
+            <div style="width: 46px; height: 46px; border-radius: 50%; background: rgba(245, 158, 11, 0.14); display: flex; align-items: center; justify-content: center; margin-bottom: 8px;">
+              <i class="ti ti-wifi-off" style="font-size: 22px; color: #b45309;"></i>
+            </div>
+            <div style="font-size: 13.5px; font-weight: 700; color: var(--gn-text);">روشن ولی آفلاین</div>
+            <div class="gn-muted mt-1" style="font-size: 11.5px;">سیستم روشن است؛ سرویس کلاینت قطع است</div>
+          {% else %}
+            <div style="width: 46px; height: 46px; border-radius: 50%; background: #f1f5f9; display: flex; align-items: center; justify-content: center; margin-bottom: 8px;">
+              <i class="ti ti-power" style="font-size: 22px; color: var(--gn-subtle);"></i>
+            </div>
+            <div style="font-size: 13.5px; font-weight: 700; color: var(--gn-text);">آفلاین · خاموش</div>
+            <div class="gn-muted mt-1" style="font-size: 11.5px;">امکان ارسال دستور روشن‌سازی (LAN)</div>
+          {% endif %}
+        </div>
+
+        <!-- Quick Actions for Inactive Station -->
+        <div class="pro-card-actions">
+          {% if device.connection_status == 'OFFLINE' %}
+            <form method="post" action="{% url 'edge_device_action' device.id %}" class="flex-grow-1">
+              {% csrf_token %}
+              <input type="hidden" name="next" value="{% url 'edge_devices' %}">
+              <input type="hidden" name="action" value="wake">
+              <button type="submit" class="gn-btn sm success w-100 justify-content-center" style="font-size: 11.5px; padding: 6px;" title="ارسال بسته Wake-on-LAN برای روشن کردن سیستم">
+                <i class="ti ti-power"></i> روشن کردن (LAN)
+              </button>
+            </form>
+          {% elif device.kiosk_status == 'LOCKED' %}
+            <form method="post" action="{% url 'edge_device_action' device.id %}" class="flex-grow-1">
+              {% csrf_token %}
+              <input type="hidden" name="next" value="{% url 'edge_devices' %}">
+              <input type="hidden" name="action" value="unlock">
+              <button type="submit" class="gn-btn sm success w-100 justify-content-center" style="font-size: 11.5px; padding: 6px;">
+                <i class="ti ti-lock-open"></i> باز کردن قفل
+              </button>
+            </form>
+          {% else %}
+            <form method="post" action="{% url 'edge_device_action' device.id %}" class="flex-grow-1">
+              {% csrf_token %}
+              <input type="hidden" name="next" value="{% url 'edge_devices' %}">
+              <input type="hidden" name="action" value="lock">
+              <button type="submit" class="gn-btn sm warning w-100 justify-content-center" style="font-size: 11.5px; padding: 6px;">
+                <i class="ti ti-lock"></i> قفل کیوسک
+              </button>
+            </form>
+          {% endif %}
+
+          <button type="button" class="gn-btn sm primary" style="font-size: 11.5px; padding: 6px 10px;" title="شروع دستی نشست با انتخاب مشتری، تعرفه و روش محاسبه" data-gn-start-session data-device-id="{{ device.id }}" data-device-name="{{ device.name }}" data-tariff-id="{{ device.metadata.default_tariff_id|default:'' }}">
+            <i class="ti ti-player-play"></i> شروع نشست
+          </button>
+        </div>
+      {% endif %}
+
+      <!-- Sub-footer: Screenshot + RDP + Explorer + Restart + Detail View -->
+      <div class="d-flex justify-content-between align-items-center mt-2 pt-2" style="border-top: 1px solid var(--gn-border); font-size: 11px;">
+        <div class="d-flex gap-1.5 flex-wrap">
+          <button type="button" class="baz-mini-btn" title="گرفتن اسکرین‌شات زنده از صفحه" data-gn-screenshot="{{ device.id }}" data-device-name="{{ device.name }}">
+            <i class="ti ti-camera"></i>
+          </button>
+          <button type="button" class="baz-mini-btn" title="کنترل از راه دور (RDP داخل مرورگر)" style="color: #0284c7; border-color: rgba(2, 132, 199, 0.3);" data-gn-remote="{{ device.id }}" data-device-name="{{ device.name }}">
+            <i class="ti ti-screen-share"></i>
+          </button>
+
+          <form method="post" action="{% url 'edge_device_action' device.id %}" class="gn-inline-form" data-gn-confirm="آیا از خروج از کیوسک و فعال‌سازی Windows Explorer در {{ device.name }} مطمئنید؟">
+            {% csrf_token %}
+            <input type="hidden" name="next" value="edge_devices">
+            <input type="hidden" name="action" value="admin_unlock">
+            <button type="submit" class="baz-mini-btn" title="خروج از کیوسک و دسترسی ادمین به دسکتاپ ویندوز" style="color: #2563eb; border-color: rgba(37, 99, 235, 0.3);">
+              <i class="ti ti-brand-windows"></i> اکسپلورر
+            </button>
+          </form>
+
+          <form method="post" action="{% url 'edge_device_action' device.id %}" class="gn-inline-form" data-gn-confirm="آیا از ری‌استارت سیستم {{ device.name }} مطمئنید؟">
+            {% csrf_token %}
+            <input type="hidden" name="next" value="edge_devices">
+            <input type="hidden" name="action" value="restart">
+            <button type="submit" class="baz-mini-btn" title="ری‌استارت سیستم" style="color: var(--gn-danger); border-color: rgba(239, 68, 68, 0.25);">
+              <i class="ti ti-reload"></i> ری‌استارت
+            </button>
+          </form>
+
+          <form method="post" action="{% url 'edge_device_action' device.id %}" class="gn-inline-form" data-gn-confirm="آیا از خاموش کردن کامل سیستم {{ device.name }} مطمئن هستید؟">
+            {% csrf_token %}
+            <input type="hidden" name="next" value="edge_devices">
+            <input type="hidden" name="action" value="shutdown">
+            <button type="submit" class="baz-mini-btn" title="خاموش کردن کامل سیستم (Shutdown)" style="color: #dc2626; border-color: rgba(220, 38, 38, 0.35); background: #fef2f2;">
+              <i class="ti ti-power"></i> خاموش
+            </button>
+          </form>
+        </div>
+
+        <a href="{% url 'edge_device_detail' device.id %}" class="baz-mini-btn" title="سوابق و جزئیات">
+          <i class="ti ti-history"></i> سوابق
+        </a>
+      </div>
+
+    </div>
+  {% empty %}
+    <div class="gn-empty" style="grid-column: 1 / -1;">
+      <i class="ti ti-device-desktop-off"></i>
+      دستگاهی یافت نشد.
+    </div>
+  {% endfor %}
+</div>

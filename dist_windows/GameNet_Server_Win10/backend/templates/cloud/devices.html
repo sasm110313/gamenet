@@ -1,0 +1,496 @@
+{% extends "base.html" %}
+{% load gn %}
+
+{% block title %}ایستگاه‌های بازی{% endblock %}
+{% block page_title %}مدیریت سیستم‌های سالن{% endblock %}
+{% block page_subtitle %}نظارت زنده، قفل و بازگشایی و کنترل سیستم‌های بازی سرای رهرو{% endblock %}
+
+{% block content %}
+<div id="gnCatalogData" hidden data-json="{{ catalog_json }}"></div>
+
+<details class="mb-3"><summary class="gn-btn sm">⚙️ ابزارهای سریع: افزودن سیستم / شروع نشست از راه دور</summary>
+<div class="gn-grid cols-2 mt-3" style="display:grid">
+  <div class="gn-card">
+    <h6>افزودن سیستم جدید به سالن</h6>
+    <p class="gn-muted" style="font-size: 12.5px">
+      یک نام برای سیستم (مثلاً PC-02) وارد کنید تا کد ثبت صادر شود. این کد روی کلاینت جدید وارد می‌شود.
+    </p>
+    <form method="post" action="{% url 'cloud_create_client_code' %}" class="d-flex flex-column gap-2">
+      {% csrf_token %}
+      <input type="hidden" name="next" value="cloud_devices">
+      <div class="d-flex gap-2">
+        {% if edges %}
+          <input type="hidden" name="edge_id" value="{{ edges.0.id }}">
+        {% endif %}
+        <div class="flex-grow-1">
+          <label class="gn-label" for="cloudNewDeviceLabel">نام سیستم (برچسب)</label>
+          <input id="cloudNewDeviceLabel" class="gn-input" name="label" placeholder="PC-02" required>
+        </div>
+      </div>
+      <div class="d-flex justify-content-end">
+        <button class="gn-btn primary" type="submit"><i class="ti ti-key"></i> صدور کد ثبت سیستم</button>
+      </div>
+    </form>
+  </div>
+
+  <div class="gn-card">
+    <h6>شروع کامل نشست از راه دور (هدایت‌شده)</h6>
+    {% if customers and devices %}
+      <form method="post" action="" data-action-template="/devices/__ID__/start-session" data-gn-guided-session class="d-flex flex-column gap-2">
+        {% csrf_token %}
+        <input type="hidden" name="next" value="cloud_devices">
+        <div class="gn-grid cols-2">
+          <div>
+            <label class="gn-label" for="cloudInlineDev">انتخاب دستگاه</label>
+            <select id="cloudInlineDev" class="gn-select" name="device_id" data-gn-device-select required>
+              <option value="">-- انتخاب دستگاه --</option>
+              {% for d in devices %}
+                {% if not d.active_session %}
+                  <option value="{{ d.id }}">
+                    {{ d.name }} · {{ d.connection_status|conn_fa }} / {{ d.power_status|power_fa }} / {{ d.occupancy_status|occ_fa }}
+                  </option>
+                {% endif %}
+              {% endfor %}
+            </select>
+          </div>
+          <div>
+            <label class="gn-label" for="cloudInlineCust">انتخاب مشتری</label>
+            <select id="cloudInlineCust" class="gn-select" name="customer_id" data-gn-customer-select required>
+              <option value="">-- انتخاب مشتری --</option>
+              {% for c in customers %}
+                <option value="{{ c.id }}">{{ c.full_name }} · {{ c.wallet.balance|default:0|toman }} ت</option>
+              {% endfor %}
+            </select>
+          </div>
+        </div>
+
+        <div class="gn-grid cols-2">
+          <div class="gn-review-item"><span class="k">موجودی مشتری</span><span class="v num" data-gn-gs-balance>مشتری انتخاب نشده</span></div>
+          <div class="gn-review-item"><span class="k">نرخ ساعتی</span><span class="v num" data-gn-gs-rate>—</span></div>
+        </div>
+
+        <div class="gn-grid cols-2">
+          <div>
+            <label class="gn-label" for="cloudInlineRate">تعرفه</label>
+            <select id="cloudInlineRate" class="gn-select" name="rate_choice" data-gn-rate-select data-gn-dynamic-rates="1">
+              <option value="">پیش‌فرض خودکار مشتری / دستگاه</option>
+              {% for t in tariffs %}
+                <option value="tariff:{{ t.id }}" data-hourly-rate="{{ t.hourly_rate }}">{{ t.name }} ({{ t.hourly_rate|toman }} ت)</option>
+              {% endfor %}
+            </select>
+          </div>
+          <div>
+            <label class="gn-label" for="cloudInlinePolicy">وضعیت در قطع ارتباط</label>
+            <select id="cloudInlinePolicy" class="gn-select" name="disconnect_policy">
+              <option value="PAUSE" selected>توقف شمارنده در قطع شبکه</option>
+              <option value="AUTO_STOP">پایان و تسویه خودکار</option>
+              <option value="CONTINUE">ادامه زمان‌سنجی</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="d-flex justify-content-between align-items-center flex-wrap gap-2">
+          <div class="gn-radio-pills">
+            <label class="gn-radio-pill"><input type="radio" name="billing_mode" value="CREDIT" checked> <span>اعتبارمحور</span></label>
+            <label class="gn-radio-pill"><input type="radio" name="billing_mode" value="TIMED"> <span>زمانی</span></label>
+          </div>
+          <div class="d-flex align-items-center gap-1" data-gn-gs-timed-wrap hidden>
+            <input type="number" name="planned_duration_minutes" min="5" max="720" step="5" value="60" class="gn-input num" style="max-width: 90px;">
+            <span class="gn-muted" style="font-size: 11px;">دقیقه</span>
+          </div>
+          <div class="num font-weight-bold" style="font-size: 12px;" data-gn-gs-estimate>—</div>
+        </div>
+
+        <div class="gn-alert warning py-1 px-2" style="font-size: 11.5px;" data-gn-gs-warn hidden></div>
+
+        <div class="d-flex justify-content-between align-items-center gap-2 flex-wrap">
+          <label class="gn-confirm-check" style="padding: 4px 8px; font-size: 11px;">
+            <input type="checkbox" checked data-gn-gs-confirm>
+            <span>تأیید شروع و بازگشایی دستگاه</span>
+          </label>
+          <button class="gn-btn success" type="submit"><i class="ti ti-player-play"></i> تأیید و شروع نشست</button>
+        </div>
+        <div class="gn-alert error py-1 px-2" style="font-size: 11px;" data-gn-gs-confirm-err hidden>تیک تأیید نهایی را بزنید.</div>
+      </form>
+    {% else %}
+      <div class="gn-muted" style="font-size: 12.5px">مشتری یا دستگاه فعالی برای شروع نشست در دسترس نیست.</div>
+    {% endif %}
+  </div>
+</div>
+</details>
+
+<div class="gn-card">
+  <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
+    <div class="d-flex align-items-center gap-2 flex-wrap">
+      <h6 class="mb-0">لیست سیستم‌های سالن</h6>
+      <span class="gn-muted num" style="font-size: 12px">({{ devices|length }} دستگاه)</span>
+    </div>
+    <div class="gn-ortho-row mb-0">
+      <span class="gn-ortho-pill tone-ok">آنلاین: {{ ortho.online_count }}</span>
+      <span class="gn-ortho-pill tone-muted">آفلاین: {{ ortho.offline_count }}</span>
+      <span class="gn-ortho-pill tone-info">روشن: {{ ortho.power_on_count }}</span>
+      <span class="gn-ortho-pill tone-warn">قفل: {{ ortho.locked_count }}</span>
+      <span class="gn-ortho-pill tone-ok">مشغول: {{ ortho.active_count }}</span>
+      <span class="gn-ortho-pill tone-info">آزاد: {{ ortho.free_count }}</span>
+      {% if ortho.error_count %}<span class="gn-ortho-pill tone-bad">خطا: {{ ortho.error_count }}</span>{% endif %}
+    </div>
+  </div>
+
+  <!-- Orthogonal Multi-Axis Filter Bar -->
+  <form method="get" class="gn-filter-bar mb-3" aria-label="فیلتر ایستگاه‌ها">
+    <div>
+      <label class="gn-label" for="fCloudQ">جستجو</label>
+      <input id="fCloudQ" class="gn-input" name="q" value="{{ filters.q|default:'' }}" placeholder="نام یا IP...">
+    </div>
+    <div>
+      <label class="gn-label" for="fCloudConn">ارتباط</label>
+      <select id="fCloudConn" class="gn-select" name="conn">
+        <option value="">همه</option>
+        <option value="ONLINE" {% if filters.conn == 'ONLINE' %}selected{% endif %}>آنلاین</option>
+        <option value="OFFLINE" {% if filters.conn == 'OFFLINE' %}selected{% endif %}>آفلاین</option>
+      </select>
+    </div>
+    <div>
+      <label class="gn-label" for="fCloudPower">پاور</label>
+      <select id="fCloudPower" class="gn-select" name="power">
+        <option value="">همه</option>
+        <option value="ON" {% if filters.power == 'ON' %}selected{% endif %}>روشن</option>
+        <option value="OFF" {% if filters.power == 'OFF' %}selected{% endif %}>خاموش</option>
+      </select>
+    </div>
+    <div>
+      <label class="gn-label" for="fCloudKiosk">کیوسک</label>
+      <select id="fCloudKiosk" class="gn-select" name="kiosk">
+        <option value="">همه</option>
+        <option value="LOCKED" {% if filters.kiosk == 'LOCKED' %}selected{% endif %}>قفل</option>
+        <option value="UNLOCKED" {% if filters.kiosk == 'UNLOCKED' %}selected{% endif %}>باز</option>
+        <option value="DISABLED" {% if filters.kiosk == 'DISABLED' %}selected{% endif %}>غیرفعال</option>
+      </select>
+    </div>
+    <div>
+      <label class="gn-label" for="fCloudOcc">اشغال</label>
+      <select id="fCloudOcc" class="gn-select" name="occ">
+        <option value="">همه</option>
+        <option value="FREE" {% if filters.occ == 'FREE' %}selected{% endif %}>آزاد</option>
+        <option value="BUSY" {% if filters.occ == 'BUSY' %}selected{% endif %}>مشغول</option>
+        <option value="MAINTENANCE" {% if filters.occ == 'MAINTENANCE' %}selected{% endif %}>تعمیر</option>
+      </select>
+    </div>
+    <div>
+      <label class="gn-label" for="fCloudHealth">سلامت</label>
+      <select id="fCloudHealth" class="gn-select" name="health">
+        <option value="">همه</option>
+        <option value="HEALTHY" {% if filters.health == 'HEALTHY' %}selected{% endif %}>سالم</option>
+        <option value="ERROR" {% if filters.health == 'ERROR' %}selected{% endif %}>خطا</option>
+      </select>
+    </div>
+    <div class="d-flex gap-2">
+      <button class="gn-btn primary w-100 justify-content-center" type="submit"><i class="ti ti-filter"></i> اعمال</button>
+      {% if filter_qs %}<a href="{% url 'cloud_devices' %}" class="gn-btn"><i class="ti ti-x"></i></a>{% endif %}
+    </div>
+  </form>
+
+  <div class="baz-station-grid mt-3">
+    {% for device in devices %}
+      <div class="baz-station-card {% if device.active_session or device.occupancy_status == 'BUSY' %}is-active{% elif device.kiosk_status == 'LOCKED' and device.connection_status == 'ONLINE' %}is-locked{% elif device.connection_status == 'OFFLINE' %}is-offline{% endif %}"
+           data-card-href="{% if device.active_session %}{% url 'cloud_customer_detail' device.active_session.customer.id %}#wallet{% else %}{% url 'cloud_device_detail' device.id %}{% endif %}"
+           title="{% if device.active_session %}کلیک روی کارت: مدیریت اکانت، شارژ و کسر شارژ {{ device.active_session.customer.full_name }}{% else %}کلیک روی کارت: وضعیت و تنظیمات {{ device.name }}{% endif %}">
+        
+        <!-- Top Row -->
+        <div class="baz-card-top">
+          <span class="baz-station-dot {% if device.active_session or device.occupancy_status == 'BUSY' %}green{% elif device.connection_status == 'OFFLINE' %}gray{% elif device.kiosk_status == 'LOCKED' %}amber{% else %}cyan{% endif %}"></span>
+          <div class="text-end">
+            <div class="baz-station-num-big">{{ device.name|station_num }}</div>
+            <div class="baz-station-sub-type">PC</div>
+          </div>
+        </div>
+
+        <!-- Center Status & Gamer Info -->
+        <div class="baz-card-center">
+          <div class="gn-ortho-row justify-content-center mb-1" style="gap: 3px;">
+            <span class="gn-ortho-pill tone-{{ device.connection_status|conn_tone }}">{{ device.connection_status|conn_fa }}</span>
+            <span class="gn-ortho-pill tone-{{ device.power_status|power_tone }}">{{ device.power_status|power_fa }}</span>
+            {% if device.connection_status == 'ONLINE' %}
+              <span class="gn-ortho-pill tone-{{ device.kiosk_status|kiosk_tone }}">{{ device.kiosk_status|kiosk_fa }}</span>
+            {% endif %}
+            {% if device.has_health_error %}
+              <span class="gn-ortho-pill tone-bad">خطا</span>
+            {% endif %}
+          </div>
+
+          {% if device.active_session %}
+            <div class="baz-status-big green">مشغول{% if device.is_paused %} (متوقف){% endif %}</div>
+            <div class="baz-gamer-name">{{ device.active_session.customer.full_name }}</div>
+            {% if device.active_session.customer.username %}
+              <div class="baz-gamer-user">@{{ device.active_session.customer.username }}</div>
+            {% endif %}
+            <div class="baz-timer-badge" data-elapsed="{{ device.elapsed_seconds }}" data-paused="{% if device.is_paused %}1{% else %}0{% endif %}">
+              <i class="ti ti-clock"></i> {{ device.elapsed_seconds|duration_hms }}
+            </div>
+            <div class="baz-cost-label">{{ device.current_cost|toman }} تومان</div>
+          {% elif device.connection_status == 'ONLINE' and device.occupancy_status == 'FREE' and device.kiosk_status == 'LOCKED' %}
+            <div class="baz-status-big amber">قفل · آزاد</div>
+            <span class="text-muted" style="font-size: 11px; margin-top: 4px;">آماده لاگین گیمر</span>
+          {% elif device.connection_status == 'ONLINE' and device.occupancy_status == 'FREE' %}
+            <div class="baz-status-big green">آنلاین · آزاد</div>
+            <span class="text-muted" style="font-size: 11px; margin-top: 4px;">{% if device.kiosk_status == 'DISABLED' %}حالت ادمین{% else %}آماده شروع{% endif %}</span>
+          {% elif device.is_offline_but_on %}
+            <div class="baz-status-big amber">روشن ولی آفلاین</div>
+            <span class="text-muted" style="font-size: 11px; margin-top: 4px;">سرویس کلاینت قطع است</span>
+          {% else %}
+            <div class="baz-status-big gray">آفلاین · خاموش</div>
+            <span class="text-muted" style="font-size: 11px; margin-top: 4px;">امکان روشن کردن با LAN</span>
+          {% endif %}
+        </div>
+
+        <!-- Card Bottom & Remote Quick Actions -->
+        <div class="baz-card-bottom">
+          <span class="baz-card-hint">
+            {% if device.active_session %}
+              <i class="ti ti-wallet"></i> {{ device.active_session.hourly_rate|toman }} ت/س
+            {% else %}
+              <i class="ti ti-settings"></i> وضعیت و تنظیمات
+            {% endif %}
+          </span>
+
+          <div class="baz-actions-row">
+            <button type="button" class="baz-mini-btn" title="گرفتن اسکرین‌شات زنده از صفحه" data-gn-screenshot="{{ device.id }}" data-device-name="{{ device.name }}">
+              <i class="ti ti-camera"></i>
+            </button>
+            <button type="button" class="baz-mini-btn" title="اتصال و کنترل از راه دور (RDP)" style="color: #0284c7; border-color: rgba(2, 132, 199, 0.3);" data-gn-remote="{{ device.id }}" data-device-name="{{ device.name }}">
+              <i class="ti ti-screen-share"></i>
+            </button>
+
+            {% if device.active_session %}
+              <button type="button" class="baz-mini-btn" style="color: #059669; border-color: rgba(16, 185, 129, 0.35);" title="شارژ شفاف کیف پول" data-gn-quick-deposit data-customer-id="{{ device.active_session.customer.id }}" data-customer-name="{{ device.active_session.customer.full_name }}" data-balance="{{ device.wallet_balance }}" data-operator="{{ operator_label }}">
+                <i class="ti ti-plus"></i>
+              </button>
+              <form method="post" action="{% url 'cloud_manage_session_stop' device.active_session.id %}" class="gn-inline-form">
+                {% csrf_token %}
+                <input type="hidden" name="next" value="{% url 'cloud_devices' %}">
+                <button class="baz-mini-btn" style="color: #fb7185; border-color: rgba(251, 113, 133, 0.3);" title="پایان نشست و قفل">
+                  <i class="ti ti-player-stop"></i>
+                </button>
+              </form>
+            {% else %}
+              <button type="button" class="baz-mini-btn" style="color: #2563eb; border-color: rgba(37, 99, 235, 0.35);" title="شروع دستی نشست با انتخاب تعرفه" data-gn-start-session data-device-id="{{ device.id }}" data-device-name="{{ device.name }}" data-tariff-id="{{ device.metadata.default_tariff_id|default:'' }}">
+                <i class="ti ti-player-play"></i>
+              </button>
+              {% if device.connection_status == 'OFFLINE' %}
+                <form method="post" action="{% url 'cloud_device_action' device.id %}" class="gn-inline-form">
+                  {% csrf_token %}
+                  <input type="hidden" name="next" value="{% url 'cloud_devices' %}">
+                  <input type="hidden" name="action" value="wake">
+                  <button class="baz-mini-btn" style="color: #059669; border-color: rgba(16, 185, 129, 0.4); background: rgba(16, 185, 129, 0.08);" title="روشن کردن سیستم با LAN (Wake-on-LAN)">
+                    <i class="ti ti-power"></i>
+                  </button>
+                </form>
+              {% elif device.kiosk_status == 'LOCKED' %}
+                <form method="post" action="{% url 'cloud_device_action' device.id %}" class="gn-inline-form">
+                  {% csrf_token %}
+                  <input type="hidden" name="next" value="{% url 'cloud_devices' %}">
+                  <input type="hidden" name="action" value="unlock">
+                  <button class="baz-mini-btn" title="باز کردن قفل دستی">
+                    <i class="ti ti-lock-open"></i>
+                  </button>
+                </form>
+              {% else %}
+                <form method="post" action="{% url 'cloud_device_action' device.id %}" class="gn-inline-form">
+                  {% csrf_token %}
+                  <input type="hidden" name="next" value="{% url 'cloud_devices' %}">
+                  <input type="hidden" name="action" value="lock">
+                  <button class="baz-mini-btn" title="قفل کردن">
+                    <i class="ti ti-lock"></i>
+                  </button>
+                </form>
+              {% endif %}
+            {% endif %}
+
+            <form method="post" action="{% url 'cloud_device_action' device.id %}" class="gn-inline-form" data-gn-confirm="آیا از خاموش کردن کامل سیستم {{ device.name }} مطمئن هستید؟">
+              {% csrf_token %}
+              <input type="hidden" name="next" value="{% url 'cloud_devices' %}">
+              <input type="hidden" name="action" value="shutdown">
+              <button class="baz-mini-btn" style="color: #dc2626; border-color: rgba(220, 38, 38, 0.3); background: #fef2f2;" title="خاموش کردن کامل سیستم (Shutdown)">
+                <i class="ti ti-power"></i>
+              </button>
+            </form>
+
+            <a href="{% url 'cloud_device_detail' device.id %}" class="baz-mini-btn" title="تنظیمات سیستم">
+              <i class="ti ti-adjustments"></i>
+            </a>
+          </div>
+        </div>
+
+      </div>
+    {% empty %}
+      <div class="gn-empty" style="grid-column: 1 / -1;">
+        <i class="ti ti-device-desktop-off"></i>
+        سیستمی با فیلترهای انتخابی یافت نشد.
+      </div>
+    {% endfor %}
+  </div>
+
+  <div class="gn-card mt-3">
+    <div class="d-flex flex-wrap align-items-center justify-content-between gap-2 mb-2">
+      <h6 class="mb-0" style="font-weight: 800;"><i class="ti ti-table me-1"></i> نمای جدولی سیستم‌ها</h6>
+      <span class="gn-muted" style="font-size: 11.5px;">همه وضعیت‌ها در یک نگاه — در موبایل جدول را افقی بکشید</span>
+    </div>
+    {% include "cloud/_device_table.html" %}
+  </div>
+</div>
+
+<!-- Cloud Quick Deposit Modal (Transparent Pre-Submit + Tracking Code) -->
+<dialog id="quickDepositModal" class="gn-dialog" closedby="any" aria-labelledby="cloudDepositTitle" style="max-width: 520px; width: 92%; background: #ffffff; color: var(--gn-text); border: 1px solid var(--gn-border); border-radius: 16px; padding: 0;">
+  <div style="padding: 16px 20px; border-bottom: 1px solid var(--gn-border); display: flex; justify-content: space-between; align-items: center;">
+    <h5 id="cloudDepositTitle" class="mb-0" style="font-weight: 700; color: var(--gn-text);"><i class="ti ti-wallet me-1 text-success"></i> شارژ کیف پول با کد پیگیری</h5>
+    <button type="button" class="btn-close" data-gn-dialog-close="quickDepositModal" aria-label="بستن"></button>
+  </div>
+  <form id="quickDepositForm" method="post" action="" data-action-template="/manage/customers/__ID__/wallet" data-gn-transparent-wallet data-operator="{{ operator_label }}" style="padding: 20px;">
+    {% csrf_token %}
+    <input type="hidden" name="next" value="cloud_devices">
+    <input type="hidden" name="action" value="deposit">
+
+    <div class="mb-3 d-flex justify-content-between align-items-center">
+      <span class="gn-muted" style="font-size: 12px;">مشتری: <strong id="depositCustomerName" style="color: var(--gn-text);"></strong></span>
+      <span class="gn-muted" style="font-size: 12px;">موجودی فعلی: <strong id="depositCurrentBalance" class="num text-success"></strong></span>
+    </div>
+
+    <div class="mb-3">
+      <label class="gn-label" for="depositAmountInput">مبلغ شارژ (تومان)</label>
+      <input type="text" name="amount" id="depositAmountInput" class="gn-input w-100 num" inputmode="numeric" placeholder="مثلاً 50,000" required autofocus>
+      <div class="d-flex gap-1 mt-2 flex-wrap">
+        <button type="button" class="gn-btn sm" data-gn-deposit-amount="20000">۲۰,۰۰۰</button>
+        <button type="button" class="gn-btn sm" data-gn-deposit-amount="50000">۵۰,۰۰۰</button>
+        <button type="button" class="gn-btn sm" data-gn-deposit-amount="100000">۱۰۰,۰۰۰</button>
+        <button type="button" class="gn-btn sm" data-gn-deposit-amount="200000">۲۰۰,۰۰۰</button>
+      </div>
+    </div>
+
+    <div class="mb-3">
+      <label class="gn-label" for="depositNoteInput">یادداشت تراکنش (الزامی برای ثبت در سابقه غیرقابل‌حذف)</label>
+      <input type="text" name="reason" id="depositNoteInput" class="gn-input w-100" value="شارژ سریع کیف پول در باجه" required>
+    </div>
+
+    <div class="gn-review-box mb-3" data-gn-wallet-summary>
+      <div class="gn-review-title"><i class="ti ti-receipt text-primary"></i> پیش‌نمایش سند تراکنش قبل از ثبت</div>
+      <div class="gn-review-grid">
+        <div class="gn-review-item"><span class="k">نام مشتری</span><span class="v" data-gn-ws-customer>—</span></div>
+        <div class="gn-review-item"><span class="k">موجودی فعلی</span><span class="v num" data-gn-ws-current>۰ تومان</span></div>
+        <div class="gn-review-item"><span class="k">مبلغ شارژ</span><span class="v num accent" data-gn-ws-amount>+۰ تومان</span></div>
+        <div class="gn-review-item"><span class="k">موجودی پس از شارژ</span><span class="v num" data-gn-ws-after>۰ تومان</span></div>
+        <div class="gn-review-item"><span class="k">اپراتور ثبت‌کننده</span><span class="v" data-gn-ws-operator>{{ operator_label }}</span></div>
+        <div class="gn-review-item"><span class="k">یادداشت تراکنش</span><span class="v" data-gn-ws-note>—</span></div>
+      </div>
+    </div>
+
+    <label class="gn-confirm-check mb-2">
+      <input type="checkbox" checked data-gn-wallet-confirm>
+      <span>اطلاعات فوق بررسی شد و با شماره پیگیری غیرقابل‌حذف ثبت شود.</span>
+    </label>
+    <div class="gn-alert error py-1 px-2 mb-3" style="font-size: 11.5px;" data-gn-wallet-confirm-err hidden>
+      لطفاً تیک تأیید را فعال کنید.
+    </div>
+
+    <div class="d-flex justify-content-end gap-2">
+      <button type="button" class="gn-btn" data-gn-dialog-close="quickDepositModal">انصراف</button>
+      <button type="submit" class="gn-btn success"><i class="ti ti-cash"></i> تأیید و ثبت شارژ</button>
+    </div>
+  </form>
+</dialog>
+
+<!-- Cloud Guided Session Start Modal -->
+<dialog id="startSessionModal" class="gn-dialog" closedby="any" aria-labelledby="cloudStartTitle" style="max-width: 600px; width: 94%; background: #ffffff; color: var(--gn-text); border: 1px solid var(--gn-border); border-radius: 16px; padding: 0; max-height: 92vh; overflow: auto;">
+  <div style="padding: 16px 20px; border-bottom: 1px solid var(--gn-border); display: flex; justify-content: space-between; align-items: center;">
+    <h5 id="cloudStartTitle" class="mb-0" style="font-weight: 700; color: var(--gn-text);"><i class="ti ti-player-play me-1 text-success"></i> شروع دستی نشست از راه دور</h5>
+    <button type="button" class="btn-close" data-gn-dialog-close="startSessionModal" aria-label="بستن"></button>
+  </div>
+  <form method="post" action="" data-action-template="/devices/__ID__/start-session" data-gn-guided-session style="padding: 20px;">
+    {% csrf_token %}
+    <input type="hidden" name="next" value="cloud_devices">
+    <input type="hidden" name="device_id" id="startSessionDeviceId" data-gn-locked-device value="">
+
+    <div class="gn-grid cols-2 mb-3">
+      <div>
+        <label class="gn-label">دستگاه انتخاب‌شده</label>
+        <div id="startSessionDeviceName" class="gn-input w-100 font-weight-bold" style="background: var(--gn-surface-2); color: var(--gn-text);"></div>
+      </div>
+      <div>
+        <label class="gn-label" for="cloudModalCustomer">انتخاب مشتری</label>
+        <select id="cloudModalCustomer" name="customer_id" class="gn-select w-100" data-gn-customer-select required>
+          <option value="">-- یک مشتری انتخاب کنید --</option>
+          {% for c in customers %}
+            <option value="{{ c.id }}">{{ c.full_name }} · {{ c.wallet.balance|default:0|toman }} ت</option>
+          {% endfor %}
+        </select>
+      </div>
+    </div>
+
+    <div class="gn-grid cols-2 mb-3">
+      <div class="gn-review-item"><span class="k">موجودی و اعتبار مشتری</span><span class="v num" data-gn-gs-balance>مشتری انتخاب نشده</span></div>
+      <div class="gn-review-item"><span class="k">قیمت ساعتی</span><span class="v num" data-gn-gs-rate>—</span></div>
+    </div>
+
+    <div class="gn-grid cols-2 mb-3">
+      <div>
+        <label class="gn-label" for="cloudModalRate">انتخاب تعرفه</label>
+        <select id="cloudModalRate" name="rate_choice" class="gn-select w-100" data-gn-rate-select data-gn-dynamic-rates="1">
+          <option value="">پیش‌فرض خودکار</option>
+          {% for t in tariffs %}
+            <option value="tariff:{{ t.id }}" data-hourly-rate="{{ t.hourly_rate }}">{{ t.name }} ({{ t.hourly_rate|toman }} ت)</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div>
+        <label class="gn-label" for="cloudModalPolicy">وضعیت در قطع ارتباط</label>
+        <select id="cloudModalPolicy" name="disconnect_policy" class="gn-select w-100">
+          <option value="PAUSE" selected>توقف موقت شمارنده</option>
+          <option value="AUTO_STOP">پایان خودکار و تسویه</option>
+          <option value="CONTINUE">ادامه زمان‌سنجی</option>
+        </select>
+      </div>
+    </div>
+
+    <fieldset class="mb-3" style="border: 0; padding: 0; margin: 0;">
+      <legend class="gn-label">نوع محاسبه</legend>
+      <div class="gn-radio-pills">
+        <label class="gn-radio-pill"><input type="radio" name="billing_mode" value="CREDIT" checked> <span>اعتبارمحور</span></label>
+        <label class="gn-radio-pill"><input type="radio" name="billing_mode" value="TIMED"> <span>زمانی</span></label>
+      </div>
+    </fieldset>
+
+    <div class="mb-3" data-gn-gs-timed-wrap hidden>
+      <label class="gn-label" for="cloudModalMins">مدت زمان (دقیقه)</label>
+      <div class="d-flex gap-2 align-items-center flex-wrap">
+        <input id="cloudModalMins" type="number" min="5" max="720" step="5" value="60" name="planned_duration_minutes" class="gn-input num" style="max-width: 120px;">
+        <button type="button" class="gn-btn sm" data-gn-gs-duration="30">۳۰د</button>
+        <button type="button" class="gn-btn sm" data-gn-gs-duration="60">۱س</button>
+        <button type="button" class="gn-btn sm" data-gn-gs-duration="120">۲س</button>
+      </div>
+    </div>
+
+    <div class="gn-alert warning mb-3 py-2 px-3" style="font-size: 12px;" data-gn-gs-warn hidden></div>
+
+    <div class="gn-review-box mb-3">
+      <div class="gn-review-title"><i class="ti ti-clipboard-check text-primary"></i> تأیید نهایی پیش از ارسال به هاب سالن</div>
+      <div class="gn-review-grid">
+        <div class="gn-review-item"><span class="k">مشتری</span><span class="v" data-gn-gs-sum-customer>—</span></div>
+        <div class="gn-review-item"><span class="k">دستگاه</span><span class="v" data-gn-gs-sum-device>—</span></div>
+        <div class="gn-review-item"><span class="k">نوع محاسبه</span><span class="v" data-gn-gs-sum-mode>اعتبارمحور</span></div>
+        <div class="gn-review-item"><span class="k">برآورد هزینه</span><span class="v num accent" data-gn-gs-estimate data-gn-gs-sum-cost>—</span></div>
+        <div class="gn-review-item" style="grid-column: 1 / -1;"><span class="k">وضعیت در قطع ارتباط</span><span class="v" data-gn-gs-sum-policy>توقف موقت شمارنده تا اتصال مجدد</span></div>
+      </div>
+    </div>
+
+    <label class="gn-confirm-check mb-2">
+      <input type="checkbox" checked data-gn-gs-confirm>
+      <span>شروع نشست را تأیید می‌کنم؛ فرمان بازگشایی و شمارنده ارسال شود.</span>
+    </label>
+    <div class="gn-alert error py-1 px-2 mb-3" style="font-size: 11.5px;" data-gn-gs-confirm-err hidden>لطفاً تیک تأیید نهایی را فعال کنید.</div>
+
+    <div class="d-flex justify-content-end gap-2">
+      <button type="button" class="gn-btn" data-gn-dialog-close="startSessionModal">انصراف</button>
+      <button type="submit" class="gn-btn success"><i class="ti ti-lock-open"></i> تأیید و ارسال دستور شروع</button>
+    </div>
+  </form>
+</dialog>
+{% endblock %}

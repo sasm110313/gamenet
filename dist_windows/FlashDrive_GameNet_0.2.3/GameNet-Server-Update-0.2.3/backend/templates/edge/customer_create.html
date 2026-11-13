@@ -1,0 +1,101 @@
+{% extends "base.html" %}
+{% load gn %}
+
+{% block title %}ثبت مشتری جدید{% endblock %}
+{% block page_title %}افزودن مشتری و گیمر جدید{% endblock %}
+{% block page_subtitle %}تعریف حساب کاربری گیمر جهت ورود به سیستم‌های بازی و مدیریت کیف پول{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+  <div class="col-lg-8">
+    <div class="gn-card">
+      <div class="d-flex justify-content-between align-items-center mb-4">
+        <div class="d-flex align-items-center gap-2">
+          <div class="d-inline-flex justify-content-center align-items-center rounded-3" style="width: 40px; height: 40px; background: rgba(99, 102, 241, 0.15); color: #818cf8; font-size: 20px;">
+            <i class="ti ti-user-plus"></i>
+          </div>
+          <div>
+            <h5 class="mb-0 fw-bold">اطلاعات حساب کاربری گیمر</h5>
+            <span class="gn-muted" style="font-size: 12px;">مشخصات برای لاگین در کلاینت‌های سالن ذخیره می‌شود</span>
+          </div>
+        </div>
+
+        <a href="{% url 'edge_customers' %}" class="gn-btn sm">
+          <i class="ti ti-arrow-right"></i> بازگشت به لیست
+        </a>
+      </div>
+
+      <form method="post" action="{% url 'edge_customer_create' %}">
+        {% csrf_token %}
+
+        <div class="row g-3 mb-3">
+          <!-- Full Name -->
+          <div class="col-md-6">
+            <label class="gn-label fw-bold">نام و نام خانوادگی <span class="text-danger">*</span></label>
+            <input class="gn-input" name="full_name" placeholder="مثلاً: علی رضایی" required autofocus>
+          </div>
+
+          <!-- Phone -->
+          <div class="col-md-6">
+            <label class="gn-label fw-bold">شماره موبایل <span class="text-danger">*</span></label>
+            <input class="gn-input num" name="phone" placeholder="09123456789" dir="ltr" required>
+            <span class="gn-muted d-block mt-1" style="font-size: 11.5px;">شماره تماس اجباری است و رمز عبور اولیه گیمر خواهد بود.</span>
+          </div>
+
+          <!-- Username for Client -->
+          <div class="col-md-6">
+            <label class="gn-label fw-bold">نام کاربری (جهت ورود در سیستم بازیکن)</label>
+            <input class="gn-input num" name="username" placeholder="مثلاً: ali" dir="ltr">
+            <span class="gn-muted d-block mt-1" style="font-size: 11.5px;">گیمر با این شناسه یا شماره موبایل می‌تواند لاگین کند.</span>
+          </div>
+
+          <!-- Password for Client -->
+          <div class="col-md-6">
+            <label class="gn-label fw-bold">رمز عبور کلاینت (پیش‌فرض: شماره موبایل)</label>
+            <input class="gn-input num" type="password" name="password" placeholder="در صورت خالی بودن، شماره موبایل ثبت می‌شود" dir="ltr">
+            <span class="gn-muted d-block mt-1" style="font-size: 11.5px;">رمز ورود اولیه به صورت خودکار برابر با شماره موبایل ثبت خواهد شد.</span>
+          </div>
+
+          <!-- Customer Group -->
+          <div class="col-md-6">
+            <label class="gn-label">گروه کاربری / تعرفه</label>
+            <select class="gn-select" name="group_id">
+              <option value="">-- تعرفه پیش‌فرض --</option>
+              {% for g in groups %}
+                <option value="{{ g.id }}">{{ g.name }} {% if g.tariff %}({{ g.tariff.hourly_rate|toman }} ت/ساعت){% endif %}</option>
+              {% endfor %}
+            </select>
+          </div>
+
+          <!-- Credit Limit -->
+          <div class="col-md-6">
+            <label class="gn-label">سقف بدهی</label>
+            <input class="gn-input num" name="credit_limit" value="0" readonly>
+            <span class="gn-muted d-block mt-1" style="font-size: 11.5px;">امکان بدهی زدن در سیستم کلاً غیرفعال است (۰ تومان).</span>
+          </div>
+
+          <!-- Initial Deposit -->
+          <div class="col-md-6">
+            <label class="gn-label">شارژ اولیه کیف پول (تومان)</label>
+            <input class="gn-input num" name="initial_deposit" value="0" inputmode="numeric">
+            <span class="gn-muted d-block mt-1" style="font-size: 11.5px;">در صورت دریافت وجه نقدی، موجودی ثبت می‌شود.</span>
+          </div>
+
+          <!-- Notes -->
+          <div class="col-md-6">
+            <label class="gn-label">یادداشت و توضیحات</label>
+            <input class="gn-input" name="notes" placeholder="اختیاری...">
+          </div>
+        </div>
+
+        <div class="d-flex justify-content-end gap-2 pt-3 border-top" style="border-color: var(--gn-border) !important;">
+          <a href="{% url 'edge_customers' %}" class="gn-btn">انصراف</a>
+          <button type="submit" class="gn-btn primary px-4">
+            <i class="ti ti-check"></i> ثبت و ایجاد حساب گیمر
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+{% endblock %}

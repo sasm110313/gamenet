@@ -14,7 +14,7 @@ from django.conf import settings
 from django.db import IntegrityError, transaction
 from django.utils import timezone
 
-from apps.clients.models import ClientDevice, ClientStatus
+from apps.clients.models import ClientDevice, ClientStatus, OccupancyStatus
 from apps.commands.models import (
     CommandStatus,
     DeviceCommand,
@@ -35,22 +35,38 @@ from apps.synchronization.models import EdgeIdentity, EdgeNode
 
 logger = logging.getLogger("gamenet.commands")
 
-DEVICE_COMMAND_TYPES = {"client.lock", "client.unlock", "client.ping", "client.restart"}
+DEVICE_COMMAND_TYPES = {
+    "client.lock",
+    "client.unlock",
+    "client.ping",
+    "client.restart",
+    "client.restart_app",
+    "client.shutdown",
+    "client.admin_unlock",
+    "client.update",
+    "client.unpair",
+    "client.kill_games",
+}
 CATALOG_COMMAND_TYPES = {
     "catalog.customer.upsert",
+    "catalog.customer.delete",
     "catalog.customer_rate.upsert",
     "catalog.customer_rate.deactivate",
     "catalog.group.upsert",
     "catalog.tariff.upsert",
 }
 SESSION_COMMAND_TYPES = {"session.start", "session.stop"}
-WALLET_COMMAND_TYPES = {"wallet.deposit", "wallet.adjust"}
+WALLET_COMMAND_TYPES = {"wallet.deposit", "wallet.adjust", "wallet.settle_debt"}
 EDGE_COMMAND_TYPES = {
     "edge.ping",
     "edge.sync_now",
     "edge.config_refresh",
     "edge.test_event",
     "edge.create_client_code",
+    "edge.update",
+    "edge.update_clients",
+    "device.update",
+    "device.wake",
 } | CATALOG_COMMAND_TYPES | SESSION_COMMAND_TYPES | WALLET_COMMAND_TYPES
 
 
@@ -370,9 +386,15 @@ def _session_result(session: GamingSession) -> dict:
         "status": session.status,
         "hourly_rate": session.hourly_rate,
         "rate_name": session.tariff_name,
+        "tariff_id": str(session.tariff_id) if session.tariff_id else None,
         "customer_rate_id": (
             str(session.customer_rate_id) if session.customer_rate_id else None
         ),
+        "billing_mode": session.billing_mode,
+        "planned_duration_minutes": session.planned_duration_minutes,
+        "estimated_cost": session.estimated_cost,
+        "disconnect_policy": session.disconnect_policy,
+        "paused_seconds": int(session.paused_seconds or 0),
         "started_at": session.started_at.isoformat(),
         "ended_at": session.ended_at.isoformat() if session.ended_at else None,
         "elapsed_seconds": session.elapsed_seconds,
@@ -382,6 +404,24 @@ def _session_result(session: GamingSession) -> dict:
 
 def _dispatch(command_type: str, payload: dict, *, origin: str) -> tuple[dict[str, Any], str]:
     identity = EdgeIdentity.get_solo()
+    if command_type == "catalog.customer.delete":
+        from apps.ledger.models import LedgerEntry
+        from apps.wallets.models import Wallet
+
+        customer = Customer.objects.select_for_update().filter(id=_require(payload, "customer_id")).first()
+        if customer is None:
+            return {"deleted": True}, "succeeded"
+        if customer.edge_id != identity.edge_id:
+            raise ValueError("customer belongs to another edge")
+        if customer.sessions.exists() or LedgerEntry.objects.filter(customer=customer).exists():
+            raise ValueError("customer with financial/session history cannot be deleted")
+        wallet = Wallet.objects.select_for_update().filter(customer=customer).first()
+        if wallet is not None:
+            if wallet.balance:
+                raise ValueError("customer with nonzero balance cannot be deleted")
+            wallet.delete()
+        customer.delete()
+        return {"deleted": True}, "succeeded"
     if command_type == "edge.ping":
         return (
             {"pong": True, "edge_id": str(identity.edge_id), "server_time": timezone.now().isoformat()},
@@ -417,27 +457,154 @@ def _dispatch(command_type: str, payload: dict, *, origin: str) -> tuple[dict[st
         )
         return {"code": reg.code, "label": reg.label, "expires_at": reg.expires_at.isoformat()}, "succeeded"
 
+    if command_type == "edge.update":
+        from apps.synchronization.updater import trigger_edge_update
+        res = trigger_edge_update(
+            version=str(payload.get("version") or "0.2.3"),
+            download_url=str(payload.get("url") or "/static/updates/server/GameNet-Server-Update-0.2.3.zip"),
+            expected_sha256=str(payload.get("sha256") or ""),
+        )
+        return res, "succeeded"
+
+    if command_type == "edge.update_clients":
+        from apps.synchronization.updater import trigger_client_updates
+        res = trigger_client_updates(
+            version=str(payload.get("version") or ""),
+            asar_url=str(payload.get("url") or ""),
+            sha256=str(payload.get("sha256") or ""),
+        )
+        return res, "succeeded"
+
+    if command_type == "device.update":
+        device = ClientDevice.objects.filter(id=_require(payload, "device_id")).first()
+        if device is None:
+            raise ValueError("device does not exist on this edge")
+        if device.edge_id != identity.edge_id:
+            raise ValueError("device belongs to another edge")
+        name = str(payload.get("name") or "").strip()[:80]
+        if name:
+            device.name = name
+        meta = dict(device.metadata or {})
+        if "default_tariff_id" in payload:
+            tid = str(payload.get("default_tariff_id") or "").strip()
+            if tid:
+                meta["default_tariff_id"] = tid
+            else:
+                meta.pop("default_tariff_id", None)
+        if "mac_address" in payload:
+            from apps.devices.wol import normalize_mac
+
+            mac_raw = str(payload.get("mac_address") or "").strip()
+            if mac_raw:
+                meta["mac_address"] = normalize_mac(mac_raw)
+            else:
+                meta.pop("mac_address", None)
+        device.metadata = meta
+        if "is_active" in payload:
+            device.is_active = bool(payload["is_active"])
+        device.save(update_fields=["name", "metadata", "is_active", "updated_at"])
+        emit(
+            "device.updated",
+            aggregate_type="device",
+            aggregate_id=str(device.id),
+            payload={
+                "device_id": str(device.id),
+                "name": device.name,
+                "metadata": device.metadata,
+                "is_active": device.is_active,
+            },
+        )
+        return {
+            "device_id": str(device.id),
+            "name": device.name,
+            "is_active": device.is_active,
+            "mac_address": meta.get("mac_address", ""),
+        }, "succeeded"
+
+    if command_type == "device.wake":
+        from apps.audit.models import AuditLog
+        from apps.devices.wol import send_wol_magic_packet, sync_device_mac
+
+        device = ClientDevice.objects.filter(id=_require(payload, "device_id")).first()
+        if device is None:
+            raise ValueError("device does not exist on this edge")
+        if device.edge_id != identity.edge_id:
+            raise ValueError("device belongs to another edge")
+        mac_hint = str(payload.get("mac_address") or "").strip()
+        ip_hint = device.ip_address or str(payload.get("ip_address") or "").strip() or None
+        mac = sync_device_mac(
+            device,
+            explicit_mac=mac_hint,
+            ip_address=ip_hint,
+            emit_sync=True,
+        )
+        if not mac:
+            raise ValueError(f"آدرس MAC برای دستگاه {device.name} ثبت نشده است")
+        wol_result = send_wol_magic_packet(mac, ip_hint=ip_hint)
+        AuditLog.objects.create(
+            actor=None,
+            actor_label="cloud",
+            action="remote.device.wake",
+            object_type="device",
+            object_id=str(device.id),
+            metadata={
+                "name": device.name,
+                "mac_address": wol_result["mac"],
+                "targets": wol_result["targets"][:6],
+            },
+        )
+        return {
+            "device_id": str(device.id),
+            "name": device.name,
+            "mac_address": wol_result["mac"],
+            "targets": wol_result["targets"],
+        }, "succeeded"
+
     if command_type == "catalog.customer.upsert":
         from apps.customers.services import create_customer, update_customer
 
         customer_id = _require(payload, "customer_id")
         base = _base_revision(payload)
         existing = Customer.objects.filter(id=customer_id).first()
+        if existing is None and payload.get("phone"):
+            existing = Customer.objects.filter(edge_id=identity.edge_id, phone=payload["phone"]).first()
+        if existing is None and payload.get("username"):
+            existing = Customer.objects.filter(edge_id=identity.edge_id, username=payload["username"]).first()
+
         group = None
-        if payload.get("group_id"):
-            group = CustomerGroup.objects.filter(id=payload["group_id"]).first()
-            if group is None:
-                group_name = payload.get("group_name")
-                if group_name:
-                    group = CustomerGroup.objects.filter(edge_id=identity.edge_id, name=group_name).first()
-                if group is None:
-                    group = CustomerGroup.objects.filter(edge_id=identity.edge_id).first()
-            elif group.edge_id != identity.edge_id:
-                raise ValueError("group belongs to another edge")
+        group_name = payload.get("group_name")
+        if group_name:
+            if any(k in group_name for k in ["کادر", "8", "9", "۸", "۹"]):
+                group = CustomerGroup.objects.filter(edge_id=identity.edge_id, name="کادر").first()
+            elif any(k in group_name for k in ["رهرو", "لیگ", "5", "7", "۵", "۷"]):
+                group = CustomerGroup.objects.filter(edge_id=identity.edge_id, name="لیگ رهرو").first()
+            else:
+                group = CustomerGroup.objects.filter(edge_id=identity.edge_id, name=group_name).first()
+
+        if group is None and payload.get("group_id"):
+            group = CustomerGroup.objects.filter(id=payload["group_id"], edge_id=identity.edge_id).first()
+
+        if group is None:
+            notes = str(payload.get("notes") or "")
+            if any(k in notes for k in ["کادر", "۲۰,۰۰۰", "20000"]):
+                group = CustomerGroup.objects.filter(edge_id=identity.edge_id, name="کادر").first()
+            elif any(k in notes for k in ["رهرو", "لیگ", "۴۰,۰۰۰", "40000"]):
+                group = CustomerGroup.objects.filter(edge_id=identity.edge_id, name="لیگ رهرو").first()
+
+        if group is None and existing and existing.group:
+            group = existing.group
+
+        if group is None:
+            group = CustomerGroup.objects.filter(edge_id=identity.edge_id, name="آزاد").first() or CustomerGroup.objects.filter(edge_id=identity.edge_id).first()
 
         credit_limit = (
             _require_int(payload, "credit_limit")
             if payload.get("credit_limit") is not None
+            else None
+        )
+        active_coupons = (
+            int(payload["active_coupons"])
+            if payload.get("active_coupons") is not None
             else None
         )
         if existing is None:
@@ -446,9 +613,11 @@ def _dispatch(command_type: str, payload: dict, *, origin: str) -> tuple[dict[st
                 full_name=_require(payload, "full_name"),
                 username=payload.get("username", ""),
                 password=payload.get("password", ""),
+                password_hash=payload.get("password_hash", ""),
                 phone=payload.get("phone", ""),
                 group=group,
                 credit_limit=credit_limit,
+                active_coupons=active_coupons,
                 notes=payload.get("notes", ""),
             )
             return {**_customer_result(customer), "created": True}, "succeeded"
@@ -460,10 +629,13 @@ def _dispatch(command_type: str, payload: dict, *, origin: str) -> tuple[dict[st
             full_name=_require(payload, "full_name"),
             username=payload.get("username"),
             password=payload.get("password"),
+            password_hash=payload.get("password_hash"),
             phone=payload.get("phone", ""),
             group=group,
-            clear_group=not bool(payload.get("group_id")),
+            clear_group=(group is None and "group_id" in payload and not payload.get("group_id")),
             credit_limit=credit_limit,
+            max_debt_limit=payload.get("max_debt_limit"),
+            active_coupons=active_coupons,
             notes=payload.get("notes", ""),
             is_active=bool(payload.get("is_active", True)),
         )
@@ -594,6 +766,7 @@ def _dispatch(command_type: str, payload: dict, *, origin: str) -> tuple[dict[st
         return {**_tariff_result(tariff), "created": False}, "succeeded"
 
     if command_type == "session.start":
+        from apps.sessions.models import BillingMode, DisconnectPolicy
         from apps.sessions.services import start_session
 
         session_id = _require(payload, "session_id")
@@ -621,8 +794,27 @@ def _dispatch(command_type: str, payload: dict, *, origin: str) -> tuple[dict[st
                 raise ValueError("unknown customer rate")
             if rate.customer_id != customer.id:
                 raise ValueError("customer rate belongs to another customer")
+        tariff = None
+        if payload.get("tariff_id") and rate is None:
+            tariff = Tariff.objects.filter(
+                id=payload["tariff_id"], edge_id=identity.edge_id
+            ).first()
+            if tariff is None:
+                raise ValueError("unknown tariff")
+        billing_mode = str(payload.get("billing_mode") or BillingMode.CREDIT).strip().upper()
+        planned_duration = payload.get("planned_duration_minutes")
+        disconnect_policy = str(
+            payload.get("disconnect_policy") or DisconnectPolicy.PAUSE
+        ).strip().upper()
         session = start_session(
-            customer, device, customer_rate=rate, session_id=session_id
+            customer,
+            device,
+            customer_rate=rate,
+            tariff=tariff,
+            billing_mode=billing_mode,
+            planned_duration_minutes=planned_duration,
+            disconnect_policy=disconnect_policy,
+            session_id=session_id,
         )
         return _session_result(session), "succeeded"
 
@@ -658,15 +850,36 @@ def _dispatch(command_type: str, payload: dict, *, origin: str) -> tuple[dict[st
         reason = str(payload.get("reason") or "").strip()
         if not reason:
             raise ValueError("payload.reason is required")
-        requested_by = str(payload.get("requested_by") or "cloud").strip()[:80]
-        note = f"{reason} (از ابر: {requested_by})"[:255]
+        requested_by = str(payload.get("requested_by") or "cloud").strip()[:120]
+        raw_entry_id = payload.get("entry_id")
+        entry_uuid = uuid.UUID(str(raw_entry_id)) if raw_entry_id else None
+        tracking_code = str(payload.get("tracking_code") or "").strip()[:32] or None
+        operator_label = str(payload.get("operator_label") or requested_by).strip()[:120]
+        note = (reason if entry_uuid else f"{reason} (از ابر: {requested_by})")[:255]
         command_uuid = uuid.UUID(origin)
         if command_type == "wallet.deposit":
+            is_debt = bool(payload.get("is_debt", False))
             entry = deposit(
                 customer,
                 amount,
+                is_debt=is_debt,
                 note=note,
                 source_command_id=command_uuid,
+                entry_id=entry_uuid,
+                tracking_code=tracking_code,
+                operator_label=operator_label,
+            )
+        elif command_type == "wallet.settle_debt":
+            from apps.wallets.services import settle_debt
+
+            paid, entry = settle_debt(
+                customer,
+                amount=amount,
+                note=note,
+                source_command_id=command_uuid,
+                entry_id=entry_uuid,
+                tracking_code=tracking_code,
+                operator_label=operator_label,
             )
         else:
             entry = adjust(
@@ -674,9 +887,14 @@ def _dispatch(command_type: str, payload: dict, *, origin: str) -> tuple[dict[st
                 amount,
                 note=note,
                 source_command_id=command_uuid,
+                entry_id=entry_uuid,
+                tracking_code=tracking_code,
+                operator_label=operator_label,
             )
         return {
             "entry_id": str(entry.id),
+            "tracking_code": entry.tracking_code,
+            "operator_label": entry.operator_label,
             "customer_id": str(customer.id),
             "entry_type": entry.entry_type,
             "amount": entry.amount,
@@ -690,7 +908,10 @@ def _dispatch(command_type: str, payload: dict, *, origin: str) -> tuple[dict[st
         device = ClientDevice.objects.filter(id=device_id, is_active=True).first()
         if device is None:
             raise ValueError(f"unknown or inactive device {device_id}")
-        if device.status == ClientStatus.MAINTENANCE and command_type != "client.restart":
+        if (
+            device.status == ClientStatus.MAINTENANCE
+            or device.occupancy_status == OccupancyStatus.MAINTENANCE
+        ) and command_type not in ("client.restart", "client.shutdown", "client.update"):
             raise ValueError("device is in maintenance")
         with transaction.atomic():
             command = queue_device_command(

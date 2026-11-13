@@ -1,14 +1,16 @@
 {
   "name": "gamenet-client",
   "productName": "GameNet",
-  "version": "0.1.0",
+  "version": "0.2.10",
   "private": true,
   "description": "GameNet gaming PC client (Windows 7 SP1 / Electron 22)",
   "author": "GameNet",
   "license": "UNLICENSED",
   "main": "dist-electron/main.js",
   "scripts": {
+    "test:regressions": "node --test scripts/test-regressions.mjs",
     "build": "npm run build:renderer && npm run build:main",
+    "build:asar": "npm run build && node scripts/pack-asar.mjs",
     "build:renderer": "vite build",
     "build:main": "node scripts/build-main.mjs",
     "start": "npm run build && electron .",

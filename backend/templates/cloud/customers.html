@@ -3,80 +3,228 @@
 
 {% block title %}مشتریان و اعضا{% endblock %}
 {% block page_title %}مشتریان و گیمرها{% endblock %}
-{% block page_subtitle %}لیست مشتریان، موجودی کیف پول و وضعیت اعضا{% endblock %}
+{% block page_subtitle %}لیست مشتریان، موجودی کیف پول، ثبت گیمر جدید و مدیریت یکپارچه از راه دور{% endblock %}
 
 {% block content %}
-<div class="gn-grid cols-4 mb-3">
-  <div class="gn-card gn-kpi">
-    <span class="label">مشتریان فعال</span>
-    <span class="value num">{{ customers_total }}</span>
-    <span class="hint">مجموع گیمرهای سالن</span>
-  </div>
-  <div class="gn-card gn-kpi accent">
-    <span class="label">مجموع موجودی کیف پول</span>
-    <span class="value num">{{ wallet_total|toman }}</span>
-    <span class="hint">تومان</span>
-  </div>
-  <div class="gn-card gn-kpi {% if debt_total %}bad{% endif %}">
-    <span class="label">مجموع بدهی</span>
-    <span class="value num">{{ debt_total|toman }}</span>
-    <span class="hint">تومان</span>
-  </div>
-  <div class="gn-card gn-kpi">
-    <span class="label">نشست‌های فعال</span>
-    <span class="value num">{{ sessions_active }}</span>
-    <span class="hint">در حال بازی</span>
-  </div>
-</div>
+<div class="cd-scope d-flex flex-column gap-3">
 
-<div class="gn-card">
-  <div class="d-flex justify-content-between align-items-center mb-2">
-    <h6 class="mb-0">لیست مشتریان</h6>
-    <div class="d-flex gap-2">
-      <form method="get" class="d-flex gap-2">
-        <input class="gn-input" name="q" value="{{ q }}" placeholder="نام یا شماره تماس">
-        <button class="gn-btn" type="submit"><i class="ti ti-search"></i></button>
-      </form>
-      <a href="{% url 'cloud_manage_customer_create' %}" class="gn-btn primary">
-        <i class="ti ti-plus"></i> ثبت مشتری جدید
-      </a>
+  <!-- ۴ کارت شاخص کلیدی -->
+  <div class="cd-kpi-grid">
+    <div class="cd-kpi-card">
+      <div class="cd-kpi-label"><i class="ti ti-users" style="color: #0f172a;" aria-hidden="true"></i><span>مشتریان فعال</span></div>
+      <div class="cd-kpi-value num">{{ customers_total }}</div>
+      <div class="cd-kpi-hint">کل گیمرهای فعال سالن</div>
+    </div>
+    <div class="cd-kpi-card">
+      <div class="cd-kpi-label"><i class="ti ti-wallet" style="color: #047857;" aria-hidden="true"></i><span>مجموع موجودی کیف پول‌ها</span></div>
+      <div class="cd-kpi-value is-emerald">
+        <span class="num">{{ wallet_total|default:0|toman }}</span>
+        <span style="font-size: 12px; font-weight: 600; color: #475569;">تومان</span>
+      </div>
+      <div class="cd-kpi-hint">جمع اعتبار نقدی مشتریان</div>
+    </div>
+    <div class="cd-kpi-card">
+      <div class="cd-kpi-label"><i class="ti ti-receipt-off" style="color: #0f172a;" aria-hidden="true"></i><span>مجموع بدهی</span></div>
+      <div class="cd-kpi-value">
+        <span class="num">{{ debt_total|default:0|toman }}</span>
+        <span style="font-size: 12px; font-weight: 600; color: #475569;">تومان</span>
+      </div>
+      <div class="cd-kpi-hint">اعتبار منفی</div>
+    </div>
+    <div class="cd-kpi-card">
+      <div class="cd-kpi-label"><i class="ti ti-player-play" style="color: #2563eb;" aria-hidden="true"></i><span>نشست‌های فعال</span></div>
+      <div class="cd-kpi-value is-blue num">{{ sessions_active }}</div>
+      <div class="cd-kpi-hint">در حال بازی روی سیستم‌ها</div>
     </div>
   </div>
-  <table class="gn-table">
-    <thead><tr><th>مشتری</th><th>شماره تماس</th><th>گروه کاربری</th><th>موجودی کیف پول</th><th>سقف اعتبار</th><th>وضعیت</th><th></th></tr></thead>
-    <tbody>
-      {% for customer in customers %}
-        <tr>
-          <td>
-            <a href="{% url 'cloud_customer_detail' customer.id %}" style="color: var(--gn-text); text-decoration: none"><strong>{{ customer.full_name }}</strong></a>
-            {% if customer.username %}
-              <div class="gn-muted" style="font-size: 11px">@{{ customer.username }}</div>
+
+  <!-- فضای کاری تب‌بندی‌شده -->
+  <div class="gn-tabs" data-gn-tabs="cloud-customers">
+    <div role="tablist" aria-label="مدیریت مشتریان" class="gn-tablist" data-gn-tablist>
+      <button type="button" role="tab" id="tab-list" data-tab-panel="panel-list" aria-selected="true" tabindex="0" class="gn-tab" data-tab-hash="list">
+        <i class="ti ti-list-search" aria-hidden="true"></i>
+        <span>لیست و جستجوی مشتریان</span>
+        <span class="gn-tab-count">{{ customers|length }}</span>
+      </button>
+      <button type="button" role="tab" id="tab-create" data-tab-panel="panel-create" aria-selected="false" tabindex="-1" class="gn-tab" data-tab-hash="create">
+        <i class="ti ti-user-plus" aria-hidden="true"></i>
+        <span>ثبت مشتری جدید</span>
+      </button>
+    </div>
+
+    <!-- تب ۱: لیست و جستجو -->
+    <div role="tabpanel" id="panel-list" aria-labelledby="tab-list" class="gn-tabpanel">
+      <div class="gn-tabpanel-inner">
+        <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-3">
+          <form method="get" class="d-flex align-items-center gap-2 flex-grow-1" style="max-width: 520px;">
+            <label for="cloudCustSearchInput" class="visually-hidden">جستجوی مشتری</label>
+            <input id="cloudCustSearchInput" class="cd-input" name="q" value="{{ q }}" placeholder="جستجو بر اساس نام، شماره تماس، کد ورود یا شناسه…">
+            <button class="gn-btn cd-btn-ink" type="submit" style="white-space: nowrap;">
+              <i class="ti ti-search" aria-hidden="true"></i> جستجو
+            </button>
+            {% if q %}
+              <a href="{% url 'cloud_customers' %}" class="gn-btn cd-btn-outline" style="white-space: nowrap;">حذف فیلتر</a>
             {% endif %}
-          </td>
-          <td class="num gn-muted">{{ customer.phone|default:"—" }}</td>
-          <td class="gn-muted">{{ customer.group.name|default:"پیش‌فرض" }}</td>
-          <td class="num {% if customer.wallet.balance < 0 %}text-danger{% endif %}">{{ customer.wallet.balance|toman }} تومان</td>
-          <td class="num gn-muted">{{ customer.credit_limit|toman }} تومان</td>
-          <td>
-            {% if customer.is_active %}
-              <span class="gn-status st-online"><span class="dot"></span>فعال</span>
-            {% else %}
-              <span class="gn-status st-offline"><span class="dot"></span>غیرفعال</span>
+          </form>
+
+          <button type="button" class="gn-btn cd-btn-emerald" style="width: auto;" data-gn-jump-tab="create" data-focus-id="cloudNewCustName">
+            <i class="ti ti-user-plus" aria-hidden="true"></i> ثبت مشتری جدید
+          </button>
+        </div>
+
+        <div class="gn-table-wrap" tabindex="0" role="region" aria-label="فهرست مشتریان">
+          <table class="gn-table">
+            <thead>
+              <tr>
+                <th>نام و کد ورود</th>
+                <th>شماره تماس</th>
+                <th>گروه کاربری</th>
+                <th>موجودی کیف پول</th>
+                <th>وضعیت بدهی</th>
+                <th>وضعیت</th>
+                <th class="text-end">عملیات</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for customer in customers %}
+                <tr>
+                  <td>
+                    <a href="{% url 'cloud_customer_detail' customer.id %}" style="color: #0f172a; text-decoration: none; font-weight: 800;">
+                      {{ customer.full_name }}
+                    </a>
+                    {% if customer.username %}
+                      <span class="cd-pill is-blue ms-1" style="padding: 2px 7px; font-size: 10.5px;">
+                        <span class="num">{{ customer.username }}</span>
+                      </span>
+                    {% endif %}
+                    <div class="gn-muted mono" style="font-size: 10.5px;">{{ customer.id|shortid }}</div>
+                  </td>
+                  <td class="num" style="color: #334155;">{{ customer.phone|default:"—" }}</td>
+                  <td style="color: #475569;">{{ customer.group.name|default:"پیش‌فرض" }}</td>
+                  <td>
+                    <strong class="num" style="color: {% if customer.wallet.balance < 0 %}#0f172a{% else %}#047857{% endif %};">
+                      {{ customer.wallet.balance|default:0|toman }}
+                    </strong>
+                    <span style="font-size: 11px; color: #64748b;">تومان</span>
+                  </td>
+                  <td>
+                    {% if customer.debt_balance > 0 %}
+                      <span class="gn-chip" style="background: #fef2f2; color: #dc2626; border: 1px solid #fca5a5; font-weight: 800; font-size: 11px;">
+                        <i class="ti ti-alert-circle"></i> {{ customer.debt_balance|toman }} ت بدهی
+                      </span>
+                    {% else %}
+                      <span class="gn-muted" style="font-size: 11.5px;">بدون بدهی</span>
+                    {% endif %}
+                  </td>
+                  <td>
+                    {% if customer.is_active %}
+                      <span class="cd-pill is-emerald"><i class="ti ti-circle-check" aria-hidden="true"></i> فعال</span>
+                    {% else %}
+                      <span class="cd-pill"><i class="ti ti-user-off" aria-hidden="true"></i> غیرفعال</span>
+                    {% endif %}
+                  </td>
+                  <td class="text-end">
+                    <div class="d-flex gap-1 justify-content-end">
+                      <a class="gn-btn sm cd-btn-outline" href="{% url 'cloud_customer_detail' customer.id %}#wallet" title="شارژ و کسر شارژ کیف پول">
+                        <i class="ti ti-wallet" aria-hidden="true"></i> شارژ
+                      </a>
+                      <a class="gn-btn sm cd-btn-ink" href="{% url 'cloud_customer_detail' customer.id %}" title="مدیریت کامل پروفایل">
+                        <i class="ti ti-chevron-left" aria-hidden="true"></i>
+                      </a>
+                    </div>
+                  </td>
+                </tr>
+              {% empty %}
+                <tr>
+                  <td colspan="7"><div class="gn-empty"><i class="ti ti-users-off"></i>مشتری‌ای یافت نشد.</div></td>
+                </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- تب ۲: ثبت مشتری جدید -->
+    <div role="tabpanel" id="panel-create" aria-labelledby="tab-create" class="gn-tabpanel" hidden="until-found">
+      <div class="gn-tabpanel-inner">
+        <div class="cd-panel-head">
+          <h5 class="cd-panel-title">
+            <i class="ti ti-user-plus" style="color: #2563eb;" aria-hidden="true"></i>
+            <span>اطلاعات حساب کاربری گیمر جدید</span>
+          </h5>
+          <span style="font-size: 12px; color: #475569;">مشخصات ثبت‌شده بلافاصله با سرور سالن همگام می‌شود</span>
+        </div>
+
+        <form method="post" action="{% url 'cloud_customer_create' %}">
+          {% csrf_token %}
+          {% uuid4 as request_id %}
+          <input type="hidden" name="request_id" value="{{ request_id }}">
+          {% if edges|length == 1 %}
+            <input type="hidden" name="edge_id" value="{{ salon_server.id|default:edges.0.id }}">
+          {% endif %}
+
+          <div class="row g-3 mb-3">
+            {% if edges|length > 1 %}
+              <div class="col-12">
+                <label class="cd-label" for="cloudNewCustEdge">سرور سالن مقصد</label>
+                <select id="cloudNewCustEdge" class="cd-select" name="edge_id" required data-gn-edge-select>
+                  {% for edge in edges %}
+                    <option value="{{ edge.id }}" {% if salon_server and edge.id == salon_server.id %}selected{% endif %}>{{ edge.name }}</option>
+                  {% endfor %}
+                </select>
+              </div>
             {% endif %}
-          </td>
-          <td class="text-end">
-            <div class="d-flex gap-1 justify-content-end">
-              <a class="gn-btn sm" href="{% url 'cloud_manage_wallet' customer.id %}" title="افزایش / کاهش شارژ">
-                <i class="ti ti-wallet"></i> شارژ
-              </a>
-              <a class="gn-btn sm" href="{% url 'cloud_customer_detail' customer.id %}"><i class="ti ti-chevron-left"></i></a>
+
+            <div class="col-md-6">
+              <label class="cd-label" for="cloudNewCustName">نام و نام خانوادگی *</label>
+              <input id="cloudNewCustName" class="cd-input" name="full_name" required maxlength="120" placeholder="مثلاً علی رضایی">
             </div>
-          </td>
-        </tr>
-      {% empty %}
-        <tr><td colspan="7"><div class="gn-empty"><i class="ti ti-users-off"></i>مشتری‌ای ثبت نشده است.</div></td></tr>
-      {% endfor %}
-    </tbody>
-  </table>
+            <div class="col-md-6">
+              <label class="cd-label" for="cloudNewCustPhone">شماره موبایل *</label>
+              <input id="cloudNewCustPhone" class="cd-input num" name="phone" required maxlength="24" dir="ltr" placeholder="09123456789">
+            </div>
+            <div class="col-md-6">
+              <label class="cd-label" for="cloudNewCustUsername">کد ۴ تا ۶ رقمی ورود کلاینت (اختیاری)</label>
+              <input id="cloudNewCustUsername" class="cd-input is-code num" name="username" maxlength="6" inputmode="numeric" dir="ltr" placeholder="مثلاً 12345">
+            </div>
+            <div class="col-md-6">
+              <label class="cd-label" for="cloudNewCustPassword">رمز عبور کلاینت (پیش‌فرض: شماره موبایل)</label>
+              <input id="cloudNewCustPassword" class="cd-input num" type="password" name="password" maxlength="120" dir="ltr" placeholder="در صورت خالی بودن، شماره موبایل ثبت می‌شود">
+            </div>
+            <div class="col-md-4">
+              <label class="cd-label" for="cloudNewCustGroup">گروه کاربری / تعرفه</label>
+              <select id="cloudNewCustGroup" class="cd-select" name="group_id" {% if edges|length > 1 %}data-gn-edge-group-select{% endif %}>
+                <option value="">بدون گروه (تعرفه پیش‌فرض)</option>
+                {% for group in groups %}
+                  <option value="{{ group.id }}" data-edge="{{ group.edge_id }}">{{ group.name }}{% if group.tariff %} — {{ group.tariff.hourly_rate|toman }} تومان/ساعت{% endif %}</option>
+                {% endfor %}
+              </select>
+            </div>
+            <div class="col-md-4">
+              <label class="cd-label" for="cloudNewCustDeposit">شارژ اولیه کیف پول (تومان)</label>
+              <input id="cloudNewCustDeposit" class="cd-input num" name="initial_deposit" inputmode="numeric" value="0">
+            </div>
+            <div class="col-md-4">
+              <label class="cd-label" for="cloudNewCustCredit">سقف بدهی (غیرفعال)</label>
+              <input id="cloudNewCustCredit" class="cd-input num" name="credit_limit" inputmode="numeric" value="0" readonly title="امکان بدهی در سیستم غیرفعال است">
+            </div>
+            <div class="col-12">
+              <label class="cd-label" for="cloudNewCustNotes">یادداشت و توضیحات (اختیاری)</label>
+              <input id="cloudNewCustNotes" class="cd-input" name="notes" maxlength="255" placeholder="توضیحات تکمیلی…">
+            </div>
+          </div>
+
+          <div class="d-flex justify-content-end gap-2 pt-3" style="border-top: 1px solid #e2e8f0;">
+            <button type="button" class="gn-btn cd-btn-outline" data-gn-jump-tab="list">انصراف</button>
+            <button type="submit" class="gn-btn cd-btn-emerald" style="width: auto; padding: 10px 24px;">
+              <i class="ti ti-check" aria-hidden="true"></i> ثبت و همگام‌سازی گیمر
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+
 </div>
 {% endblock %}

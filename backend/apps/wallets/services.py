@@ -8,13 +8,13 @@ ledger entry, and (4) emits the outbox event. No other code path writes
 
 from __future__ import annotations
 
-from django.db import transaction
+from django.db import models, transaction
 from django.utils import timezone
 
-from apps.core.locks import customer_lock
+from apps.core.locks import customer_lock, customer_mutex
 from apps.core.roles import require_edge
 from apps.customers.models import Customer
-from apps.ledger.models import LedgerEntry, LedgerEntryType
+from apps.ledger.models import LedgerEntry, LedgerEntryType, generate_tracking_code
 from apps.synchronization.edge_credentials import ensure_identity
 from apps.synchronization.events import emit
 from apps.wallets.models import Wallet
@@ -42,8 +42,11 @@ def _entry_payload(entry: LedgerEntry) -> dict:
         "entry_type": entry.entry_type,
         "amount": entry.amount,
         "balance_after": entry.balance_after,
+        "is_debt": getattr(entry, "is_debt", False),
         "reverses_id": str(entry.reverses_id) if entry.reverses_id else None,
         "note": entry.note,
+        "tracking_code": entry.tracking_code,
+        "operator_label": entry.operator_label,
         "source_command_id": (
             str(entry.source_command_id) if entry.source_command_id else None
         ),
@@ -62,8 +65,12 @@ def post_entry(
     actor=None,
     reverses: LedgerEntry | None = None,
     allow_over_limit: bool = False,
+    is_debt: bool = False,
     created_at=None,
     source_command_id=None,
+    entry_id=None,
+    tracking_code: str | None = None,
+    operator_label: str = "",
 ) -> LedgerEntry:
     require_edge()
     if isinstance(amount, bool) or not isinstance(amount, int):
@@ -82,54 +89,168 @@ def post_entry(
         if existing is not None:
             return existing
 
-    identity = ensure_identity()
-    customer, wallet = _locked_wallet(customer)
-    new_balance = wallet.balance + amount
-    if not allow_over_limit and new_balance < -customer.credit_limit:
-        raise WalletError("موجودی و سقف اعتبار برای این تراکنش کافی نیست.")
+    if entry_id is not None:
+        existing_by_id = LedgerEntry.objects.filter(id=entry_id).first()
+        if existing_by_id is not None:
+            return existing_by_id
 
-    entry = LedgerEntry.objects.create(
-        edge_id=identity.edge_id,
-        customer=customer,
-        session=session,
-        entry_type=entry_type,
-        amount=amount,
-        balance_after=new_balance,
-        reverses=reverses,
-        note=(note or "")[:255],
-        source_command_id=source_command_id,
-        created_by=actor if getattr(actor, "pk", None) else None,
-        created_at=created_at or timezone.now(),
-    )
-    wallet.balance = new_balance
-    wallet.save(update_fields=["balance", "updated_at"])
-    emit(
-        "ledger.entry_created",
-        aggregate_type="customer",
-        aggregate_id=str(customer.id),
-        payload=_entry_payload(entry),
-    )
-    return entry
+    identity = ensure_identity()
+    with customer_mutex(customer.id):
+        customer, wallet = _locked_wallet(customer)
+        new_balance = wallet.balance + amount
+        # بدهی کلاً غیرمجاز است: سقف اعتبار همواره 0 در نظر گرفته می‌شود
+        effective_limit = min(0, -getattr(customer, "credit_limit", 0)) if getattr(customer, "credit_limit", 0) < 0 else 0
+        if not allow_over_limit and new_balance < effective_limit:
+            raise WalletError("موجودی کیف‌پول کافی نیست. بدهی مجاز نمی‌باشد.")
+
+        op_label = (operator_label or "").strip()[:120]
+        if not op_label and getattr(actor, "pk", None):
+            op_label = str(getattr(actor, "label", "") or getattr(actor, "username", ""))[:120]
+        when = created_at or timezone.now()
+        code = (tracking_code or "").strip()[:32] or generate_tracking_code(when)
+
+        create_kwargs = dict(
+            edge_id=identity.edge_id,
+            customer=customer,
+            session=session,
+            entry_type=entry_type,
+            amount=amount,
+            balance_after=new_balance,
+            reverses=reverses,
+            note=(note or "")[:255],
+            tracking_code=code,
+            operator_label=op_label,
+            is_debt=is_debt,
+            source_command_id=source_command_id,
+            created_by=actor if getattr(actor, "pk", None) else None,
+            created_at=when,
+        )
+        if entry_id is not None:
+            create_kwargs["id"] = entry_id
+
+        entry = LedgerEntry.objects.create(**create_kwargs)
+        wallet.balance = new_balance
+        wallet.save(update_fields=["balance", "updated_at"])
+        emit(
+            "ledger.entry_created",
+            aggregate_type="customer",
+            aggregate_id=str(customer.id),
+            payload=_entry_payload(entry),
+        )
+        return entry
 
 
 def deposit(
     customer: Customer,
     amount: int,
     *,
+    is_debt: bool = False,
     actor=None,
     note: str = "",
     source_command_id=None,
+    entry_id=None,
+    tracking_code: str | None = None,
+    operator_label: str = "",
 ) -> LedgerEntry:
     if isinstance(amount, bool) or not isinstance(amount, int) or amount <= 0:
         raise WalletError("مبلغ شارژ باید عدد صحیح بزرگ‌تر از صفر باشد.")
+    if is_debt:
+        max_limit = getattr(customer, "max_debt_limit", 40_000) or 40_000
+        current_debt = getattr(customer, "debt_balance", 0) or 0
+        if current_debt + amount > max_limit:
+            remaining = max(0, max_limit - current_debt)
+            raise WalletError(
+                f"سقف بدهی این کاربر حداکثر {max_limit:,} تومان است (بدهی فعلی: {current_debt:,} تومان). "
+                f"حداکثر می‌توانید {remaining:,} تومان دیگر به صورت بدهی ثبت کنید."
+            )
+        Customer.objects.filter(pk=customer.pk).update(
+            debt_balance=models.F("debt_balance") + amount,
+            updated_at=timezone.now(),
+        )
     return post_entry(
         customer=customer,
         amount=amount,
         entry_type=LedgerEntryType.DEPOSIT,
-        note=note or "شارژ کیف پول",
+        note=note or ("شارژ به صورت بدهی (نسیه)" if is_debt else "شارژ کیف پول"),
         actor=actor,
+        is_debt=is_debt,
         source_command_id=source_command_id,
+        entry_id=entry_id,
+        tracking_code=tracking_code,
+        operator_label=operator_label,
     )
+
+
+@transaction.atomic
+def settle_debt(
+    customer: Customer,
+    amount: int | None = None,
+    *,
+    actor=None,
+    note: str = "",
+    operator_label: str = "",
+    source_command_id=None,
+    entry_id=None,
+    tracking_code: str | None = None,
+) -> tuple[int, LedgerEntry]:
+    require_edge()
+    with customer_mutex(customer.id):
+        customer = Customer.objects.select_for_update().get(pk=customer.pk)
+        existing = None
+        if source_command_id is not None:
+            existing = LedgerEntry.objects.filter(source_command_id=source_command_id).first()
+        if existing is None and entry_id is not None:
+            existing = LedgerEntry.objects.filter(pk=entry_id).first()
+        if existing is not None:
+            if existing.customer_id != customer.id or existing.entry_type != LedgerEntryType.DEBT_PAYMENT:
+                raise WalletError("شناسه پرداخت با تراکنش مطابقت ندارد.")
+            return existing.amount, existing
+        current_debt = int(getattr(customer, "debt_balance", 0) or 0)
+        if current_debt <= 0:
+            raise WalletError("این مشتری هیچ بدهی پرداخت‌نشده‌ای ندارد.")
+
+        if amount is not None:
+            if isinstance(amount, bool) or not isinstance(amount, int) or amount <= 0:
+                raise WalletError("مبلغ تسویه باید عدد صحیح بزرگ‌تر از صفر باشد.")
+            paid = min(int(amount), current_debt)
+        else:
+            paid = current_debt
+        new_debt = max(0, current_debt - paid)
+        customer.debt_balance = new_debt
+        customer.save(update_fields=["debt_balance", "updated_at"])
+
+        # Register an immutable ledger entry of type DEBT_PAYMENT
+        # Note: balance_after stays the same because cash was paid to salon for the previous debt.
+        identity = ensure_identity()
+        customer, wallet = _locked_wallet(customer)
+        when = timezone.now()
+        code = (tracking_code or "").strip()[:32] or generate_tracking_code(when)
+        op_label = (operator_label or "").strip()[:120]
+        if not op_label and getattr(actor, "pk", None):
+            op_label = str(getattr(actor, "label", "") or getattr(actor, "username", ""))[:120]
+
+        entry = LedgerEntry.objects.create(
+            **({"id": entry_id} if entry_id is not None else {}),
+            source_command_id=source_command_id,
+            edge_id=identity.edge_id,
+            customer=customer,
+            entry_type=LedgerEntryType.DEBT_PAYMENT,
+            amount=paid,
+            balance_after=wallet.balance,
+            is_debt=False,
+            note=note or f"تسویه نقدی بدهی ({paid:,} تومان) - باقیمانده بدهی: {new_debt:,} تومان",
+            tracking_code=code,
+            operator_label=op_label,
+            created_by=actor if getattr(actor, "pk", None) else None,
+            created_at=when,
+        )
+        emit(
+            "ledger.entry_created",
+            aggregate_type="customer",
+            aggregate_id=str(customer.id),
+            payload=_entry_payload(entry),
+        )
+        return paid, entry
 
 
 def adjust(
@@ -139,6 +260,9 @@ def adjust(
     actor=None,
     note: str = "",
     source_command_id=None,
+    entry_id=None,
+    tracking_code: str | None = None,
+    operator_label: str = "",
 ) -> LedgerEntry:
     if isinstance(amount, bool) or not isinstance(amount, int) or amount == 0:
         raise WalletError("مبلغ اصلاح باید عدد صحیح و غیرصفر باشد.")
@@ -149,6 +273,9 @@ def adjust(
         note=note or "اصلاح دستی",
         actor=actor,
         source_command_id=source_command_id,
+        entry_id=entry_id,
+        tracking_code=tracking_code,
+        operator_label=operator_label,
     )
 
 
@@ -181,5 +308,5 @@ def reverse_entry(
 def available_credit(customer: Customer) -> int:
     wallet = Wallet.objects.filter(customer=customer).first()
     if wallet is None:
-        return customer.credit_limit
-    return wallet.balance + customer.credit_limit
+        return 0
+    return max(0, wallet.balance)

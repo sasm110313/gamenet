@@ -1,0 +1,7 @@
+{
+  "version": "0.2.9",
+  "url": "/static/updates/app.asar",
+  "sha256": "f03addf2b76e9204e8a6a71495a042bc6b0f9244a10567230b943b74343ade10",
+  "mandatory": true,
+  "release_notes": "نسخه 0.2.9 — اصلاح تحویل و تکرار فرمان، خروج و بازیابی نشست، قفل موقت، اجرای بازی، Kiosk Guard، دانلود آپدیت و زمان‌سنج monotonic"
+}

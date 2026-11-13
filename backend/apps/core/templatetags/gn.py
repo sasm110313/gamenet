@@ -129,6 +129,14 @@ def toman(value):
 
 
 @register.filter
+def sub(value, arg):
+    try:
+        return int(value or 0) - int(arg or 0)
+    except (ValueError, TypeError):
+        return 0
+
+
+@register.filter
 def duration_hms(seconds):
     if seconds is None:
         return "00:00:00"
@@ -148,3 +156,151 @@ def get_item(mapping, key):
         return mapping.get(key, 0)
     except AttributeError:
         return 0
+
+
+CONN_FA = {
+    "ONLINE": "آنلاین",
+    "OFFLINE": "آفلاین",
+}
+
+CONN_TONE = {
+    "ONLINE": "st-online",
+    "OFFLINE": "st-offline",
+}
+
+POWER_FA = {
+    "ON": "روشن",
+    "OFF": "خاموش",
+    "UNKNOWN": "نامشخص",
+}
+
+POWER_TONE = {
+    "ON": "st-online",
+    "OFF": "st-offline",
+    "UNKNOWN": "st-pending",
+}
+
+KIOSK_FA = {
+    "LOCKED": "قفل کیوسک",
+    "UNLOCKED": "باز",
+    "DISABLED": "خروج از کیوسک",
+}
+
+KIOSK_TONE = {
+    "LOCKED": "st-locked",
+    "UNLOCKED": "st-online",
+    "DISABLED": "st-pending",
+}
+
+OCC_FA = {
+    "FREE": "آزاد",
+    "BUSY": "مشغول",
+    "MAINTENANCE": "تعمیرات",
+}
+
+OCC_TONE = {
+    "FREE": "st-idle",
+    "BUSY": "st-active",
+    "MAINTENANCE": "st-maintenance",
+}
+
+HEALTH_FA = {
+    "HEALTHY": "سالم",
+    "ERROR": "خطا",
+}
+
+HEALTH_TONE = {
+    "HEALTHY": "st-online",
+    "ERROR": "st-error",
+}
+
+BILLING_MODE_FA = {
+    "CREDIT": "اعتبارمحور",
+    "TIMED": "زمانی",
+}
+
+DISCONNECT_POLICY_FA = {
+    "PAUSE": "توقف شمارنده در قطعی",
+    "AUTO_STOP": "توقف خودکار پس از ۶۰ ثانیه قطعی",
+    "CONTINUE": "ادامه شمارنده با هشدار",
+}
+
+
+@register.filter
+def conn_fa(value):
+    return CONN_FA.get(str(value), str(value))
+
+
+@register.filter
+def conn_tone(value):
+    return CONN_TONE.get(str(value), "st-offline")
+
+
+@register.filter
+def power_fa(value):
+    return POWER_FA.get(str(value), str(value))
+
+
+@register.filter
+def power_tone(value):
+    return POWER_TONE.get(str(value), "st-pending")
+
+
+@register.filter
+def kiosk_fa(value):
+    return KIOSK_FA.get(str(value), str(value))
+
+
+@register.filter
+def kiosk_tone(value):
+    return KIOSK_TONE.get(str(value), "st-locked")
+
+
+@register.filter
+def occ_fa(value):
+    return OCC_FA.get(str(value), str(value))
+
+
+@register.filter
+def occ_tone(value):
+    return OCC_TONE.get(str(value), "st-idle")
+
+
+@register.filter
+def health_fa(value):
+    return HEALTH_FA.get(str(value), str(value))
+
+
+@register.filter
+def health_tone(value):
+    return HEALTH_TONE.get(str(value), "st-error")
+
+
+@register.filter
+def billing_mode_fa(value):
+    return BILLING_MODE_FA.get(str(value), str(value))
+
+
+@register.filter
+def disconnect_policy_fa(value):
+    return DISCONNECT_POLICY_FA.get(str(value), str(value))
+
+
+@register.filter
+def os_fa(value):
+    if not value:
+        return "ویندوز"
+    v = str(value).lower()
+    arch = " (32-bit)" if ("ia32" in v or "x86" in v) else (" (64-bit)" if ("x64" in v or "amd64" in v) else "")
+    if "6.1" in v or "windows 7" in v:
+        return f"ویندوز ۷{arch}"
+    if "10.0" in v or "windows 10" in v:
+        return f"ویندوز ۱۰{arch}"
+    if "6.3" in v or "windows 8.1" in v:
+        return f"ویندوز ۸.۱{arch}"
+    if "windows" in v:
+        return f"ویندوز{arch}"
+    if "linux" in v:
+        return "لینوکس"
+    return str(value)
+

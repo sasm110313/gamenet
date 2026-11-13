@@ -1,0 +1,32 @@
+{% extends "base.html" %}
+{% load gn %}
+
+{% block title %}رویدادها{% endblock %}
+{% block page_title %}رویدادهای همگام‌شده{% endblock %}
+{% block page_subtitle %}جریان فقط-افزودنی واقعیت‌های سایت — تکراری‌ها در مبدأ حذف می‌شوند{% endblock %}
+
+{% block content %}
+<div class="gn-card">
+  <div class="gn-scroll" style="max-height: 70vh">
+    <table class="gn-table">
+      <thead><tr><th>Edge</th><th>#</th><th>نوع</th><th>Aggregate</th><th>وضعیت</th><th>زمان وقوع</th><th>دریافت</th><th>Payload</th></tr></thead>
+      <tbody>
+        {% for ev in events %}
+          <tr>
+            <td class="gn-muted" style="font-size: 11.5px">{{ ev.edge.name }}</td>
+            <td class="num">{{ ev.local_sequence }}</td>
+            <td>{{ ev.event_type }}</td>
+            <td class="mono gn-muted">{{ ev.aggregate_type }}:{{ ev.aggregate_id|shortid }}</td>
+            <td><span class="gn-status {{ ev.status|status_tone }}"><span class="dot"></span>{{ ev.status|status_fa }}</span></td>
+            <td class="num gn-muted">{{ ev.occurred_at|date:"m-d H:i:s" }}</td>
+            <td class="num gn-muted">{{ ev.received_at|date:"H:i:s" }}</td>
+            <td class="mono gn-muted" style="font-size: 10.5px; max-width: 360px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap">{{ ev.payload }}</td>
+          </tr>
+        {% empty %}
+          <tr><td colspan="8"><div class="gn-empty"><i class="ti ti-arrows-exchange"></i>رویدادی دریافت نشده است.</div></td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}

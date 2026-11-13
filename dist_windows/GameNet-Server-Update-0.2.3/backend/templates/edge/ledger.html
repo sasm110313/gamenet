@@ -1,0 +1,78 @@
+{% extends "base.html" %}
+{% load gn %}
+
+{% block title %}صندوق{% endblock %}
+{% block page_title %}دفتر مالی{% endblock %}
+{% block page_subtitle %}سابقه غیرقابل‌حذف و فقط‌افزودنی تراکنش‌های کیف پول با شماره پیگیری یکتا{% endblock %}
+
+{% block content %}
+<div class="gn-alert info mb-3 py-2 px-3" style="font-size: 12.5px;">
+  <i class="ti ti-lock-square-rounded"></i>
+  <strong>سابقه مالی غیرقابل‌حذف:</strong> تمام تراکنش‌ها به‌صورت فقط‌افزودنی با شماره پیگیری و نام اپراتور ثبت می‌شوند و هرگونه اصلاح صرفاً از طریق ردیف جدید یا برگشت حسابداری انجام می‌شود.
+</div>
+
+<div class="gn-card mb-3">
+  <form method="get" class="gn-form-row">
+    <div class="flex-grow-1">
+      <label class="gn-label" for="edgeLedgerQ">مشتری / کد پیگیری / اپراتور</label>
+      <input id="edgeLedgerQ" class="gn-input" name="q" value="{{ q }}" placeholder="جستجو نام مشتری، موبایل، کد پیگیری یا اپراتور...">
+    </div>
+    <div>
+      <label class="gn-label" for="edgeLedgerType">نوع</label>
+      <select id="edgeLedgerType" class="gn-select" name="type">
+        <option value="">همه</option>
+        {% for value, label in types.choices %}
+          <option value="{{ value }}" {% if entry_type == value %}selected{% endif %}>{{ label }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <button class="gn-btn" type="submit"><i class="ti ti-filter"></i> اعمال</button>
+    <span class="gn-chip ms-auto">جمع فیلتر: <span class="num">{{ total|toman }}</span> تومان</span>
+  </form>
+</div>
+
+<div class="gn-card">
+  <div class="gn-table-wrap" tabindex="0" role="region" aria-label="دفتر مالی غیرقابل‌حذف">
+    <table class="gn-table">
+      <thead>
+        <tr>
+          <th>زمان</th>
+          <th>کد پیگیری</th>
+          <th>مشتری</th>
+          <th>نوع</th>
+          <th>مبلغ</th>
+          <th>مانده بعد</th>
+          <th>اپراتور</th>
+          <th>توضیح / یادداشت</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for entry in entries %}
+          <tr>
+            <td class="num gn-muted">{{ entry.created_at|date:"Y-m-d H:i:s" }}</td>
+            <td>
+              {% if entry.tracking_code %}
+                <button type="button" class="gn-tracking-pill" data-copy-text="{{ entry.tracking_code }}" title="کلیک برای کپی شماره پیگیری">
+                  <i class="ti ti-copy"></i> {{ entry.tracking_code }}
+                </button>
+              {% else %}
+                <span class="mono gn-muted">{{ entry.id|shortid }}</span>
+              {% endif %}
+            </td>
+            <td>
+              <a href="{% url 'edge_customer_detail' entry.customer.id %}" style="color: var(--gn-text); text-decoration: none; font-weight: 700;">{{ entry.customer.full_name }}</a>
+            </td>
+            <td>{{ entry.get_entry_type_display }}</td>
+            <td class="num {% if entry.amount < 0 %}text-danger{% else %}text-success{% endif %}" style="font-weight: 700;">{{ entry.amount|toman }}</td>
+            <td class="num gn-muted">{{ entry.balance_after|toman }}</td>
+            <td style="font-size: 12px;">{{ entry.operator_label|default:"سیستم" }}</td>
+            <td class="gn-muted" style="font-size: 11.5px">{{ entry.note|default:"—" }}</td>
+          </tr>
+        {% empty %}
+          <tr><td colspan="8"><div class="gn-empty"><i class="ti ti-receipt-off"></i>تراکنشی یافت نشد.</div></td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}

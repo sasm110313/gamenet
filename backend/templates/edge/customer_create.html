@@ -37,22 +37,23 @@
 
           <!-- Phone -->
           <div class="col-md-6">
-            <label class="gn-label">شماره موبایل</label>
-            <input class="gn-input num" name="phone" placeholder="09123456789" dir="ltr">
+            <label class="gn-label fw-bold">شماره موبایل <span class="text-danger">*</span></label>
+            <input class="gn-input num" name="phone" placeholder="09123456789" dir="ltr" required>
+            <span class="gn-muted d-block mt-1" style="font-size: 11.5px;">شماره تماس اجباری است و رمز عبور اولیه گیمر خواهد بود.</span>
           </div>
 
           <!-- Username for Client -->
           <div class="col-md-6">
             <label class="gn-label fw-bold">نام کاربری (جهت ورود در سیستم بازیکن)</label>
             <input class="gn-input num" name="username" placeholder="مثلاً: ali" dir="ltr">
-            <span class="gn-muted d-block mt-1" style="font-size: 11.5px;">گیمر با این شناسه می‌تواند در صفحه قفل کامپیوتر لاگین کند.</span>
+            <span class="gn-muted d-block mt-1" style="font-size: 11.5px;">گیمر با این شناسه یا شماره موبایل می‌تواند لاگین کند.</span>
           </div>
 
           <!-- Password for Client -->
           <div class="col-md-6">
-            <label class="gn-label fw-bold">رمز عبور (جهت ورود در سیستم بازیکن)</label>
-            <input class="gn-input num" type="password" name="password" placeholder="••••" dir="ltr">
-            <span class="gn-muted d-block mt-1" style="font-size: 11.5px;">رمز ورود گیمر در صفحه قفل کامپیوتر</span>
+            <label class="gn-label fw-bold">رمز عبور کلاینت (پیش‌فرض: شماره موبایل)</label>
+            <input class="gn-input num" type="password" name="password" placeholder="در صورت خالی بودن، شماره موبایل ثبت می‌شود" dir="ltr">
+            <span class="gn-muted d-block mt-1" style="font-size: 11.5px;">رمز ورود اولیه به صورت خودکار برابر با شماره موبایل ثبت خواهد شد.</span>
           </div>
 
           <!-- Customer Group -->
@@ -68,9 +69,9 @@
 
           <!-- Credit Limit -->
           <div class="col-md-6">
-            <label class="gn-label">سقف اعتبار مجاز (تومان)</label>
-            <input class="gn-input num" name="credit_limit" value="60000" inputmode="numeric">
-            <span class="gn-muted d-block mt-1" style="font-size: 11.5px;">حداکثر بدهی مجاز گیمر حین بازی</span>
+            <label class="gn-label">سقف بدهی</label>
+            <input class="gn-input num" name="credit_limit" value="0" readonly>
+            <span class="gn-muted d-block mt-1" style="font-size: 11.5px;">امکان بدهی زدن در سیستم کلاً غیرفعال است (۰ تومان).</span>
           </div>
 
           <!-- Initial Deposit -->

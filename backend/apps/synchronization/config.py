@@ -12,9 +12,10 @@ from apps.synchronization.models import AppliedConfig
 DEFAULTS: dict[str, Any] = {
     "device_heartbeat_seconds": 10,
     "device_offline_after_missed": 3,
-    "default_hourly_rate": 40_000,
+    "default_hourly_rate": 60_000,
     "default_credit_limit": 60_000,
     "command_ttl_seconds": 120,
+    "idle_shutdown_minutes": 15,
     "version": 0,
 }
 

@@ -1,0 +1,7 @@
+{
+  "version": "0.2.5",
+  "url": "/static/updates/app.asar",
+  "sha256": "14f9a5442b1c079947b8dc29483a089026967e61afd3aae68cbe98c35ef5d274",
+  "mandatory": true,
+  "release_notes": "نسخه 0.2.5 کلاینت — رفع خطای به‌روزرسانی (UAC/کپی app.asar)، پایداری کیوسک و بهبود پیام‌های خطا"
+}

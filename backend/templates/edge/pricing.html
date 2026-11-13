@@ -1,105 +1,240 @@
 {% extends "base.html" %}
 {% load gn %}
 
-{% block title %}تعرفه‌ها{% endblock %}
-{% block page_title %}تعرفه‌ها و گروه‌ها{% endblock %}
-{% block page_subtitle %}نرخ ساعتی و گروه‌بندی مشتریان؛ تغییر نرخ روی نشست فعال اثر ندارد{% endblock %}
+{% block title %}مدیریت تعرفه‌ها و گروه‌ها{% endblock %}
+{% block page_title %}تعرفه‌ها و گروه‌های کاربری{% endblock %}
+{% block page_subtitle %}تعیین نرخ ساعتی بازی، تخفیف‌ها و گروه‌بندی مشتریان سالن{% endblock %}
 
 {% block content %}
-<div class="gn-grid cols-2 mb-3">
-  <div class="gn-card">
-    <h6>تعرفه جدید</h6>
-    <form method="post" action="{% url 'edge_tariff_create' %}" class="gn-form-row">
-      {% csrf_token %}
-      <div class="flex-grow-1">
-        <label class="gn-label">نام تعرفه</label>
-        <input class="gn-input" name="name" required maxlength="80" placeholder="استاندارد">
+{% include "edge/_tabs_finance.html" with active='pricing' %}
+<div class="cd-scope d-flex flex-column gap-3">
+
+  <!-- راهنمای شفاف و سریع برای مدیر -->
+  <div class="gn-card p-3" style="background: #ffffff; border: 1px solid #e2e8f0; border-radius: 12px;">
+    <div class="d-flex align-items-center gap-3">
+      <div style="width: 44px; height: 44px; border-radius: 10px; background: #f0fdf4; color: #059669; display: grid; place-items: center; font-size: 22px; flex-shrink: 0;">
+        <i class="ti ti-help"></i>
       </div>
       <div>
-        <label class="gn-label">نرخ ساعتی (تومان)</label>
-        <input class="gn-input num" name="hourly_rate" inputmode="numeric" required value="40000">
+        <h5 style="margin: 0 0 4px; font-size: 14.5px; font-weight: 800; color: #0f172a;">چگونه تعرفه‌ها در بازی سرای رهرو کار می‌کنند؟</h5>
+        <p style="margin: 0; font-size: 12.5px; color: #475569; line-height: 1.6;">
+          <strong>تعرفه:</strong> نرخ هر ساعت بازی است (مثلاً عادی: ساعتی ۴۰,۰۰۰ تومان).<br>
+          <strong>گروه کاربری:</strong> مشتریان را به یک تعرفه متصل می‌کند (مثلاً گروه VIP که از تعرفه اختصاصی استفاده می‌کند). اگر مشتری گروهی نداشته باشد، با تعرفه پیش‌فرض یا آزاد محاسبه می‌شود.
+        </p>
       </div>
-      <button class="gn-btn primary" type="submit"><i class="ti ti-plus"></i> ثبت</button>
-    </form>
+    </div>
   </div>
-  <div class="gn-card">
-    <h6>گروه جدید</h6>
-    <form method="post" action="{% url 'edge_group_create' %}" class="gn-form-row">
-      {% csrf_token %}
-      <div class="flex-grow-1">
-        <label class="gn-label">نام گروه</label>
-        <input class="gn-input" name="name" required maxlength="80" placeholder="مثلاً VIP">
-      </div>
-      <div>
-        <label class="gn-label">تعرفه</label>
-        <select class="gn-select" name="tariff_id" required>
+
+  <!-- تب‌های مدیریت -->
+  <div class="gn-tabs" data-gn-tabs="edge-pricing">
+    <div role="tablist" aria-label="مدیریت تعرفه‌ها و گروه‌ها" class="gn-tablist" data-gn-tablist>
+      <button type="button" role="tab" id="tab-tariffs" data-tab-panel="panel-tariffs" aria-selected="true" tabindex="0" class="gn-tab" data-tab-hash="tariffs">
+        <i class="ti ti-tags" aria-hidden="true"></i>
+        <span>تعرفه‌های ساعتی</span>
+        <span class="gn-tab-count">{{ tariffs|length }}</span>
+      </button>
+      <button type="button" role="tab" id="tab-groups" data-tab-panel="panel-groups" aria-selected="false" tabindex="-1" class="gn-tab" data-tab-hash="groups">
+        <i class="ti ti-users-group" aria-hidden="true"></i>
+        <span>گروه‌های کاربری</span>
+        <span class="gn-tab-count">{{ groups|length }}</span>
+      </button>
+    </div>
+
+    <!-- تب ۱: تعرفه‌های ساعتی -->
+    <div role="tabpanel" id="panel-tariffs" aria-labelledby="tab-tariffs" class="gn-tabpanel">
+      <div class="gn-tabpanel-inner d-flex flex-column gap-3">
+
+        <!-- فرم ثبت تعرفه جدید -->
+        <div class="gn-card p-3" style="background: #ffffff; border: 1.5px solid #cbd5e1; border-radius: 12px;">
+          <div class="d-flex align-items-center gap-2 mb-3 pb-2" style="border-bottom: 1px solid #f1f5f9;">
+            <i class="ti ti-plus" style="font-size: 18px; color: #059669;"></i>
+            <h5 style="margin: 0; font-size: 14.5px; font-weight: 800; color: #0f172a;">تعریف تعرفه جدید</h5>
+          </div>
+          <form method="post" action="{% url 'edge_tariff_create' %}" class="row g-2 align-items-end">
+            {% csrf_token %}
+            <div class="col-md-5 col-12">
+              <label class="cd-label" for="edgeTariffName">نام تعرفه</label>
+              <input id="edgeTariffName" class="cd-input" name="name" required maxlength="80" placeholder="مثلاً: عادی / VIP / شبانه" style="height: 42px;">
+            </div>
+            <div class="col-md-4 col-12">
+              <label class="cd-label" for="edgeTariffRate">نرخ هر ساعت (تومان)</label>
+              <div style="position: relative;">
+                <input id="edgeTariffRate" class="cd-input num text-center" name="hourly_rate" inputmode="numeric" dir="ltr" required value="40000" style="height: 42px; font-weight: 800; font-size: 16px; padding-inline-end: 45px;">
+                <span style="position: absolute; left: 12px; top: 50%; transform: translateY(-50%); font-size: 12px; color: #64748b; font-weight: 700; pointer-events: none;">تومان</span>
+              </div>
+            </div>
+            <div class="col-md-3 col-12">
+              <button class="gn-btn cd-btn-emerald w-100 justify-content-center" type="submit" style="height: 42px; font-weight: 700; background: #059669; color: #ffffff;">
+                <i class="ti ti-check" aria-hidden="true"></i> ثبت تعرفه
+              </button>
+            </div>
+          </form>
+        </div>
+
+        <!-- کارت‌های تعرفه ساعتی -->
+        <div class="row g-3">
           {% for tariff in tariffs %}
-            <option value="{{ tariff.id }}">{{ tariff.name }} — {{ tariff.hourly_rate|toman }}</option>
+            <div class="col-lg-6 col-12">
+              <div class="gn-card p-3 h-100 d-flex flex-column justify-content-between" style="background: #ffffff; border: 1.5px solid {% if tariff.is_active %}#86efac{% else %}#e2e8f0{% endif %}; border-radius: 12px;">
+                <div>
+                  <div class="d-flex justify-content-between align-items-center mb-2 pb-2" style="border-bottom: 1px solid #f1f5f9;">
+                    <div class="d-flex align-items-center gap-2">
+                      <span style="width: 32px; height: 32px; border-radius: 8px; background: #f8fafc; display: grid; place-items: center; color: #0f172a; font-weight: 800;">
+                        <i class="ti ti-tag"></i>
+                      </span>
+                      <strong style="font-size: 15px; color: #0f172a;">{{ tariff.name }}</strong>
+                    </div>
+                    {% if tariff.is_active %}
+                      <span class="gn-chip" style="background: #ecfdf5; color: #047857; border: 1px solid #a7f3d0; font-weight: 700;">
+                        <span class="dot" style="background: #059669;"></span> فعال
+                      </span>
+                    {% else %}
+                      <span class="gn-chip" style="background: #f8fafc; color: #64748b; border: 1px solid #cbd5e1;">
+                        غیرفعال
+                      </span>
+                    {% endif %}
+                  </div>
+
+                  <div class="d-flex align-items-baseline gap-2 my-3 p-2.5 rounded" style="background: #f8fafc; border: 1px solid #e2e8f0;">
+                    <span style="font-size: 12px; color: #64748b;">نرخ هر ساعت:</span>
+                    <strong class="num" style="font-size: 22px; color: #059669; font-weight: 900;">{{ tariff.hourly_rate|toman }}</strong>
+                    <span style="font-size: 13px; color: #334155; font-weight: 700;">تومان / ساعت</span>
+                  </div>
+                </div>
+
+                <form method="post" action="{% url 'edge_tariff_update' tariff.id %}" class="mt-2 pt-2" style="border-top: 1px dashed #e2e8f0;">
+                  {% csrf_token %}
+                  <input type="hidden" name="expected_revision" value="{{ tariff.revision }}">
+                  <div class="row g-2 align-items-end">
+                    <div class="col-5">
+                      <label class="cd-label" style="font-size: 11px;">نام تعرفه</label>
+                      <input class="cd-input" name="name" value="{{ tariff.name }}" maxlength="80" style="height: 36px; font-size: 12.5px;">
+                    </div>
+                    <div class="col-4">
+                      <label class="cd-label" style="font-size: 11px;">نرخ (تومان)</label>
+                      <input class="cd-input num" name="hourly_rate" value="{{ tariff.hourly_rate }}" inputmode="numeric" dir="ltr" style="height: 36px; font-size: 12.5px; font-weight: 700;">
+                    </div>
+                    <div class="col-3 text-end">
+                      <label class="d-inline-flex align-items-center gap-1 mb-2" style="font-size: 11.5px; cursor: pointer;">
+                        <input type="checkbox" name="is_active" value="1" {% if tariff.is_active %}checked{% endif %} style="accent-color: #059669;">
+                        <span>فعال</span>
+                      </label>
+                      <button class="gn-btn sm w-100 justify-content-center" type="submit" style="background: #0f172a; color: #ffffff; height: 32px; font-size: 12px;">
+                        <i class="ti ti-device-floppy"></i> ذخیره
+                      </button>
+                    </div>
+                  </div>
+                </form>
+              </div>
+            </div>
+          {% empty %}
+            <div class="col-12"><div class="gn-empty">تعرفه‌ای ثبت نشده است. از فرم بالا اولین تعرفه را اضافه کنید.</div></div>
           {% endfor %}
-        </select>
+        </div>
+
       </div>
-      <button class="gn-btn primary" type="submit"><i class="ti ti-plus"></i> ثبت</button>
-    </form>
-  </div>
-</div>
+    </div>
 
-<div class="gn-grid cols-2">
-  <div class="gn-card">
-    <h6>تعرفه‌ها</h6>
-    <table class="gn-table">
-      <thead><tr><th>نام</th><th>نرخ</th><th>وضعیت</th><th></th></tr></thead>
-      <tbody>
-        {% for tariff in tariffs %}
-          <tr>
-            <td>
-              <form id="tariff-{{ tariff.id }}" method="post" action="{% url 'edge_tariff_update' tariff.id %}">{% csrf_token %}<input type="hidden" name="expected_revision" value="{{ tariff.revision }}"></form>
-              <input class="gn-input" form="tariff-{{ tariff.id }}" name="name" value="{{ tariff.name }}" maxlength="80" style="min-width: 130px">
-            </td>
-            <td><input class="gn-input num" form="tariff-{{ tariff.id }}" name="hourly_rate" value="{{ tariff.hourly_rate }}" inputmode="numeric" style="min-width: 100px"></td>
-            <td>
-              <label class="d-flex align-items-center gap-1" style="font-size: 12px">
-                <input form="tariff-{{ tariff.id }}" type="checkbox" name="is_active" value="1" {% if tariff.is_active %}checked{% endif %}> فعال
-              </label>
-            </td>
-            <td class="text-end"><button class="gn-btn sm" form="tariff-{{ tariff.id }}" type="submit"><i class="ti ti-device-floppy"></i></button></td>
-          </tr>
-        {% empty %}
-          <tr><td colspan="4"><div class="gn-empty">تعرفه‌ای ثبت نشده است.</div></td></tr>
-        {% endfor %}
-      </tbody>
-    </table>
-  </div>
+    <!-- تب ۲: گروه‌های کاربری -->
+    <div role="tabpanel" id="panel-groups" aria-labelledby="tab-groups" class="gn-tabpanel" hidden="until-found">
+      <div class="gn-tabpanel-inner d-flex flex-column gap-3">
 
-  <div class="gn-card">
-    <h6>گروه‌ها</h6>
-    <table class="gn-table">
-      <thead><tr><th>نام</th><th>تعرفه</th><th>وضعیت</th><th></th></tr></thead>
-      <tbody>
-        {% for group in groups %}
-          <tr>
-            <td>
-              <form id="group-{{ group.id }}" method="post" action="{% url 'edge_group_update' group.id %}">{% csrf_token %}<input type="hidden" name="expected_revision" value="{{ group.revision }}"></form>
-              <input class="gn-input" form="group-{{ group.id }}" name="name" value="{{ group.name }}" maxlength="80" style="min-width: 120px">
-            </td>
-            <td>
-              <select class="gn-select" form="group-{{ group.id }}" name="tariff_id">
+        <!-- فرم ثبت گروه کاربری جدید -->
+        <div class="gn-card p-3" style="background: #ffffff; border: 1.5px solid #cbd5e1; border-radius: 12px;">
+          <div class="d-flex align-items-center gap-2 mb-3 pb-2" style="border-bottom: 1px solid #f1f5f9;">
+            <i class="ti ti-plus" style="font-size: 18px; color: #059669;"></i>
+            <h5 style="margin: 0; font-size: 14.5px; font-weight: 800; color: #0f172a;">تعریف گروه کاربری جدید</h5>
+          </div>
+          <form method="post" action="{% url 'edge_group_create' %}" class="row g-2 align-items-end">
+            {% csrf_token %}
+            <div class="col-md-5 col-12">
+              <label class="cd-label" for="edgeGroupName">نام گروه</label>
+              <input id="edgeGroupName" class="cd-input" name="name" required maxlength="80" placeholder="مثلاً: اعضای VIP / لیگ نوجوانان" style="height: 42px;">
+            </div>
+            <div class="col-md-4 col-12">
+              <label class="cd-label" for="edgeGroupTariff">تعرفه متصل (نرخ بازی این گروه)</label>
+              <select id="edgeGroupTariff" class="cd-select" name="tariff_id" required style="height: 42px;">
                 {% for tariff in tariffs %}
-                  <option value="{{ tariff.id }}" {% if group.tariff_id == tariff.id %}selected{% endif %}>{{ tariff.name }}</option>
+                  <option value="{{ tariff.id }}">{{ tariff.name }} ({{ tariff.hourly_rate|toman }} ت/ساعت)</option>
                 {% endfor %}
               </select>
-            </td>
-            <td>
-              <label class="d-flex align-items-center gap-1" style="font-size: 12px">
-                <input form="group-{{ group.id }}" type="checkbox" name="is_active" value="1" {% if group.is_active %}checked{% endif %}> فعال
-              </label>
-            </td>
-            <td class="text-end"><button class="gn-btn sm" form="group-{{ group.id }}" type="submit"><i class="ti ti-device-floppy"></i></button></td>
-          </tr>
-        {% empty %}
-          <tr><td colspan="4"><div class="gn-empty">گروهی ثبت نشده است.</div></td></tr>
-        {% endfor %}
-      </tbody>
-    </table>
+            </div>
+            <div class="col-md-3 col-12">
+              <button class="gn-btn cd-btn-emerald w-100 justify-content-center" type="submit" style="height: 42px; font-weight: 700; background: #059669; color: #ffffff;">
+                <i class="ti ti-check" aria-hidden="true"></i> ثبت گروه
+              </button>
+            </div>
+          </form>
+        </div>
+
+        <!-- لیست گروه‌های کاربری -->
+        <div class="row g-3">
+          {% for group in groups %}
+            <div class="col-lg-6 col-12">
+              <div class="gn-card p-3 h-100 d-flex flex-column justify-content-between" style="background: #ffffff; border: 1.5px solid {% if group.is_active %}#bfdbfe{% else %}#e2e8f0{% endif %}; border-radius: 12px;">
+                <div>
+                  <div class="d-flex justify-content-between align-items-center mb-2 pb-2" style="border-bottom: 1px solid #f1f5f9;">
+                    <div class="d-flex align-items-center gap-2">
+                      <span style="width: 32px; height: 32px; border-radius: 8px; background: #eff6ff; display: grid; place-items: center; color: #2563eb; font-weight: 800;">
+                        <i class="ti ti-users"></i>
+                      </span>
+                      <strong style="font-size: 15px; color: #0f172a;">{{ group.name }}</strong>
+                    </div>
+                    {% if group.is_active %}
+                      <span class="gn-chip" style="background: #eff6ff; color: #1e40af; border: 1px solid #bfdbfe; font-weight: 700;">
+                        <span class="dot" style="background: #2563eb;"></span> فعال
+                      </span>
+                    {% else %}
+                      <span class="gn-chip" style="background: #f8fafc; color: #64748b; border: 1px solid #cbd5e1;">
+                        غیرفعال
+                      </span>
+                    {% endif %}
+                  </div>
+
+                  <div class="d-flex align-items-baseline gap-2 my-3 p-2.5 rounded" style="background: #f8fafc; border: 1px solid #e2e8f0;">
+                    <span style="font-size: 12px; color: #64748b;">تعرفه اعمالی:</span>
+                    <strong style="font-size: 15px; color: #1e40af; font-weight: 800;">{{ group.tariff.name }}</strong>
+                    <span class="num" style="font-size: 14px; color: #059669; font-weight: 700;">({{ group.tariff.hourly_rate|toman }} تومان/ساعت)</span>
+                  </div>
+                </div>
+
+                <form method="post" action="{% url 'edge_group_update' group.id %}" class="mt-2 pt-2" style="border-top: 1px dashed #e2e8f0;">
+                  {% csrf_token %}
+                  <input type="hidden" name="expected_revision" value="{{ group.revision }}">
+                  <div class="row g-2 align-items-end">
+                    <div class="col-5">
+                      <label class="cd-label" style="font-size: 11px;">نام گروه</label>
+                      <input class="cd-input" name="name" value="{{ group.name }}" maxlength="80" style="height: 36px; font-size: 12.5px;">
+                    </div>
+                    <div class="col-4">
+                      <label class="cd-label" style="font-size: 11px;">تعرفه متصل</label>
+                      <select class="cd-select" name="tariff_id" style="height: 36px; font-size: 12px;">
+                        {% for tariff in tariffs %}
+                          <option value="{{ tariff.id }}" {% if group.tariff_id == tariff.id %}selected{% endif %}>{{ tariff.name }} ({{ tariff.hourly_rate|toman }} ت)</option>
+                        {% endfor %}
+                      </select>
+                    </div>
+                    <div class="col-3 text-end">
+                      <label class="d-inline-flex align-items-center gap-1 mb-2" style="font-size: 11.5px; cursor: pointer;">
+                        <input type="checkbox" name="is_active" value="1" {% if group.is_active %}checked{% endif %} style="accent-color: #059669;">
+                        <span>فعال</span>
+                      </label>
+                      <button class="gn-btn sm w-100 justify-content-center" type="submit" style="background: #0f172a; color: #ffffff; height: 32px; font-size: 12px;">
+                        <i class="ti ti-device-floppy"></i> ذخیره
+                      </button>
+                    </div>
+                  </div>
+                </form>
+              </div>
+            </div>
+          {% empty %}
+            <div class="col-12"><div class="gn-empty">گروهی ثبت نشده است. از فرم بالا اولین گروه را اضافه کنید.</div></div>
+          {% endfor %}
+        </div>
+
+      </div>
+    </div>
   </div>
+
 </div>
 {% endblock %}

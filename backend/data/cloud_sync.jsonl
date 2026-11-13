@@ -1,0 +1,125 @@
+{"at": "2026-11-11 15:40:13", "level": "INFO", "stage": "daemon", "message": "سرویس همگام‌سازی ابر شروع به کار کرد (مقصد: https://gamenet.hammasjedy.ir)"}
+{"at": "2026-11-11 15:40:13", "level": "ERROR", "stage": "daemon", "message": "خطای پیش‌بینی‌نشده در سرویس همگام‌سازی: connection failed: connection to server at \"127.0.0.1\", port 55432 failed: Connection refused\n\tIs the server running on that host and accepting TCP/IP connections?"}
+{"at": "2026-11-11 15:41:11", "level": "INFO", "stage": "daemon", "message": "سرویس همگام‌سازی ابر شروع به کار کرد (مقصد: https://gamenet.hammasjedy.ir)"}
+{"at": "2026-11-11 15:41:11", "level": "ERROR", "stage": "daemon", "message": "خطای پیش‌بینی‌نشده در سرویس همگام‌سازی: no such table: synchronization_edgeidentity"}
+{"at": "2026-11-11 15:41:44", "level": "INFO", "stage": "daemon", "message": "سرویس همگام‌سازی ابر شروع به کار کرد (مقصد: https://gamenet.hammasjedy.ir)"}
+{"at": "2026-11-11 15:41:44", "level": "WARNING", "stage": "register", "message": "این سرور محلی هنوز در سرور آنلاین ثبت نشده است (فایل credential موجود نیست). از پنل محلی بخش «همگام‌سازی ابر» کد ثبت را وارد کنید."}
+{"at": "2026-11-11 15:42:57", "level": "INFO", "stage": "daemon", "message": "سرویس همگام‌سازی ابر شروع به کار کرد (مقصد: https://gamenet.hammasjedy.ir)"}
+{"at": "2026-11-11 15:42:57", "level": "WARNING", "stage": "register", "message": "این سرور محلی هنوز در سرور آنلاین ثبت نشده است (فایل credential موجود نیست). از پنل محلی بخش «همگام‌سازی ابر» کد ثبت را وارد کنید."}
+{"at": "2026-11-11 15:43:25", "level": "INFO", "stage": "daemon", "message": "سرویس همگام‌سازی ابر شروع به کار کرد (مقصد: https://gamenet.hammasjedy.ir)"}
+{"at": "2026-11-11 15:43:25", "level": "WARNING", "stage": "register", "message": "این سرور محلی هنوز در سرور آنلاین ثبت نشده است (فایل credential موجود نیست). از پنل محلی بخش «همگام‌سازی ابر» کد ثبت را وارد کنید."}
+{"at": "2026-11-11 15:55:51", "level": "INFO", "stage": "daemon", "message": "سرویس همگام‌سازی ابر شروع به کار کرد (مقصد: https://gamenet.hammasjedy.ir)"}
+{"at": "2026-11-11 15:55:51", "level": "WARNING", "stage": "register", "message": "این سرور محلی هنوز در سرور آنلاین ثبت نشده است (فایل credential موجود نیست). از پنل محلی بخش «همگام‌سازی ابر» کد ثبت را وارد کنید."}
+{"at": "2026-11-12 16:42:05", "level": "INFO", "stage": "daemon", "message": "سرویس همگام‌سازی ابر شروع به کار کرد (مقصد: https://gamenet.hammasjedy.ir)"}
+{"at": "2026-11-12 16:42:05", "level": "ERROR", "stage": "daemon", "message": "خطای پیش‌بینی‌نشده در سرویس همگام‌سازی: connection failed: connection to server at \"127.0.0.1\", port 55432 failed: Connection refused\n\tIs the server running on that host and accepting TCP/IP connections?"}
+{"at": "2026-11-12 18:17:58", "level": "INFO", "stage": "daemon", "message": "سرویس همگام‌سازی ابر شروع به کار کرد (مقصد: https://gamenet.hammasjedy.ir)"}
+{"at": "2026-11-12 18:17:58", "level": "ERROR", "stage": "daemon", "message": "خطای پیش‌بینی‌نشده در سرویس همگام‌سازی: connection failed: connection to server at \"127.0.0.1\", port 55432 failed: Connection refused\n\tIs the server running on that host and accepting TCP/IP connections?"}
+{"at": "2026-11-12 18:21:23", "level": "INFO", "stage": "daemon", "message": "سرویس همگام‌سازی ابر شروع به کار کرد (مقصد: https://gamenet.hammasjedy.ir)"}
+{"at": "2026-11-12 18:21:23", "level": "ERROR", "stage": "daemon", "message": "خطای پیش‌بینی‌نشده در سرویس همگام‌سازی: connection failed: connection to server at \"127.0.0.1\", port 55432 failed: Connection refused\n\tIs the server running on that host and accepting TCP/IP connections?"}
+{"at": "2026-11-12 18:22:58", "level": "INFO", "stage": "daemon", "message": "سرویس همگام‌سازی ابر شروع به کار کرد (مقصد: https://gamenet.hammasjedy.ir)"}
+{"at": "2026-11-12 18:22:58", "level": "ERROR", "stage": "daemon", "message": "خطای پیش‌بینی‌نشده در سرویس همگام‌سازی: connection failed: connection to server at \"127.0.0.1\", port 55432 failed: Connection refused\n\tIs the server running on that host and accepting TCP/IP connections?"}
+{"at": "2026-11-12 18:45:50", "level": "INFO", "stage": "daemon", "message": "سرویس همگام‌سازی ابر شروع به کار کرد (مقصد: https://gamenet.hammasjedy.ir)"}
+{"at": "2026-11-12 18:45:50", "level": "ERROR", "stage": "daemon", "message": "خطای پیش‌بینی‌نشده در سرویس همگام‌سازی: connection failed: connection to server at \"127.0.0.1\", port 55432 failed: Connection refused\n\tIs the server running on that host and accepting TCP/IP connections?"}
+{"at": "2026-11-12 18:47:20", "level": "INFO", "stage": "daemon", "message": "سرویس همگام‌سازی ابر شروع به کار کرد (مقصد: https://gamenet.hammasjedy.ir)"}
+{"at": "2026-11-12 18:47:20", "level": "ERROR", "stage": "daemon", "message": "خطای پیش‌بینی‌نشده در سرویس همگام‌سازی: connection failed: connection to server at \"127.0.0.1\", port 55432 failed: Connection refused\n\tIs the server running on that host and accepting TCP/IP connections?"}
+{"at": "2026-11-12 18:49:35", "level": "INFO", "stage": "daemon", "message": "سرویس همگام‌سازی ابر شروع به کار کرد (مقصد: https://gamenet.hammasjedy.ir)"}
+{"at": "2026-11-12 18:49:35", "level": "ERROR", "stage": "daemon", "message": "خطای پیش‌بینی‌نشده در سرویس همگام‌سازی: connection failed: connection to server at \"127.0.0.1\", port 55432 failed: Connection refused\n\tIs the server running on that host and accepting TCP/IP connections?"}
+{"at": "2026-11-12 19:49:12", "level": "INFO", "stage": "daemon", "message": "سرویس همگام‌سازی ابر شروع به کار کرد (مقصد: https://gamenet.hammasjedy.ir)"}
+{"at": "2026-11-12 19:49:12", "level": "WARNING", "stage": "register", "message": "این سرور محلی هنوز در سرور آنلاین ثبت نشده است (فایل credential موجود نیست). از پنل محلی بخش «همگام‌سازی ابر» کد ثبت را وارد کنید."}
+{"at": "2026-11-12 21:25:53", "level": "INFO", "stage": "daemon", "message": "سرویس همگام‌سازی ابر شروع به کار کرد (مقصد: https://gamenet.hammasjedy.ir)"}
+{"at": "2026-11-12 21:25:53", "level": "ERROR", "stage": "daemon", "message": "خطای پیش‌بینی‌نشده در سرویس همگام‌سازی: connection failed: connection to server at \"127.0.0.1\", port 55432 failed: Connection refused\n\tIs the server running on that host and accepting TCP/IP connections?"}
+{"at": "2026-11-12 21:26:03", "level": "INFO", "stage": "daemon", "message": "سرویس همگام‌سازی ابر شروع به کار کرد (مقصد: https://gamenet.hammasjedy.ir)"}
+{"at": "2026-11-12 21:26:03", "level": "ERROR", "stage": "daemon", "message": "خطای پیش‌بینی‌نشده در سرویس همگام‌سازی: connection failed: connection to server at \"127.0.0.1\", port 55432 failed: Connection refused\n\tIs the server running on that host and accepting TCP/IP connections?"}
+{"at": "2026-11-12 21:26:10", "level": "INFO", "stage": "daemon", "message": "سرویس همگام‌سازی ابر شروع به کار کرد (مقصد: https://gamenet.hammasjedy.ir)"}
+{"at": "2026-11-12 21:26:10", "level": "ERROR", "stage": "daemon", "message": "خطای پیش‌بینی‌نشده در سرویس همگام‌سازی: connection failed: connection to server at \"127.0.0.1\", port 55432 failed: Connection refused\n\tIs the server running on that host and accepting TCP/IP connections?"}
+{"at": "2026-11-12 22:52:16", "level": "INFO", "stage": "daemon", "message": "سرویس همگام‌سازی ابر شروع به کار کرد (مقصد: https://gamenet.hammasjedy.ir)"}
+{"at": "2026-11-12 22:52:16", "level": "ERROR", "stage": "daemon", "message": "خطای پیش‌بینی‌نشده در سرویس همگام‌سازی: connection failed: connection to server at \"127.0.0.1\", port 55432 failed: Connection refused\n\tIs the server running on that host and accepting TCP/IP connections?"}
+{"at": "2026-11-12 22:59:02", "level": "INFO", "stage": "daemon", "message": "سرویس همگام‌سازی ابر شروع به کار کرد (مقصد: https://gamenet.hammasjedy.ir)"}
+{"at": "2026-11-12 22:59:02", "level": "WARNING", "stage": "register", "message": "این سرور محلی هنوز در سرور آنلاین ثبت نشده است (فایل credential موجود نیست). از پنل محلی بخش «همگام‌سازی ابر» کد ثبت را وارد کنید."}
+{"at": "2026-11-12 22:59:56", "level": "INFO", "stage": "daemon", "message": "سرویس همگام‌سازی ابر شروع به کار کرد (مقصد: https://gamenet.hammasjedy.ir)"}
+{"at": "2026-11-12 22:59:56", "level": "WARNING", "stage": "register", "message": "این سرور محلی هنوز در سرور آنلاین ثبت نشده است (فایل credential موجود نیست). از پنل محلی بخش «همگام‌سازی ابر» کد ثبت را وارد کنید."}
+{"at": "2026-11-12 23:11:57", "level": "INFO", "stage": "daemon", "message": "سرویس همگام‌سازی ابر شروع به کار کرد (مقصد: https://gamenet.hammasjedy.ir)"}
+{"at": "2026-11-12 23:11:57", "level": "WARNING", "stage": "register", "message": "این سرور محلی هنوز در سرور آنلاین ثبت نشده است (فایل credential موجود نیست). از پنل محلی بخش «همگام‌سازی ابر» کد ثبت را وارد کنید."}
+{"at": "2026-11-12 23:12:17", "level": "INFO", "stage": "daemon", "message": "سرویس همگام‌سازی ابر شروع به کار کرد (مقصد: https://gamenet.hammasjedy.ir)"}
+{"at": "2026-11-12 23:12:17", "level": "WARNING", "stage": "register", "message": "این سرور محلی هنوز در سرور آنلاین ثبت نشده است (فایل credential موجود نیست). از پنل محلی بخش «همگام‌سازی ابر» کد ثبت را وارد کنید."}
+{"at": "2026-11-12 23:12:48", "level": "INFO", "stage": "daemon", "message": "سرویس همگام‌سازی ابر شروع به کار کرد (مقصد: https://gamenet.hammasjedy.ir)"}
+{"at": "2026-11-12 23:12:48", "level": "WARNING", "stage": "register", "message": "این سرور محلی هنوز در سرور آنلاین ثبت نشده است (فایل credential موجود نیست). از پنل محلی بخش «همگام‌سازی ابر» کد ثبت را وارد کنید."}
+{"at": "2026-11-12 23:13:39", "level": "INFO", "stage": "daemon", "message": "سرویس همگام‌سازی ابر شروع به کار کرد (مقصد: https://gamenet.hammasjedy.ir)"}
+{"at": "2026-11-12 23:13:39", "level": "WARNING", "stage": "sessions", "message": "1 نشست رهاشده پس از راه‌اندازی مجدد سرور بسته و تسویه شد."}
+{"at": "2026-11-12 23:13:39", "level": "WARNING", "stage": "register", "message": "این سرور محلی هنوز در سرور آنلاین ثبت نشده است (فایل credential موجود نیست). از پنل محلی بخش «همگام‌سازی ابر» کد ثبت را وارد کنید."}
+{"at": "2026-11-12 23:14:33", "level": "INFO", "stage": "daemon", "message": "سرویس همگام‌سازی ابر شروع به کار کرد (مقصد: https://gamenet.hammasjedy.ir)"}
+{"at": "2026-11-12 23:14:33", "level": "WARNING", "stage": "register", "message": "این سرور محلی هنوز در سرور آنلاین ثبت نشده است (فایل credential موجود نیست). از پنل محلی بخش «همگام‌سازی ابر» کد ثبت را وارد کنید."}
+{"at": "2026-11-12 23:14:45", "level": "INFO", "stage": "daemon", "message": "سرویس همگام‌سازی ابر شروع به کار کرد (مقصد: https://gamenet.hammasjedy.ir)"}
+{"at": "2026-11-12 23:14:45", "level": "WARNING", "stage": "register", "message": "این سرور محلی هنوز در سرور آنلاین ثبت نشده است (فایل credential موجود نیست). از پنل محلی بخش «همگام‌سازی ابر» کد ثبت را وارد کنید."}
+{"at": "2026-11-13 14:09:15", "level": "INFO", "stage": "daemon", "message": "سرویس همگام‌سازی ابر شروع به کار کرد (مقصد: https://gamenet.hammasjedy.ir)"}
+{"at": "2026-11-13 14:09:15", "level": "WARNING", "stage": "register", "message": "این سرور محلی هنوز در سرور آنلاین ثبت نشده است (فایل credential موجود نیست). از پنل محلی بخش «همگام‌سازی ابر» کد ثبت را وارد کنید."}
+{"at": "2026-11-13 14:09:35", "level": "INFO", "stage": "daemon", "message": "سرویس همگام‌سازی ابر شروع به کار کرد (مقصد: https://gamenet.hammasjedy.ir)"}
+{"at": "2026-11-13 14:09:35", "level": "WARNING", "stage": "register", "message": "این سرور محلی هنوز در سرور آنلاین ثبت نشده است (فایل credential موجود نیست). از پنل محلی بخش «همگام‌سازی ابر» کد ثبت را وارد کنید."}
+{"at": "2026-11-13 14:10:44", "level": "INFO", "stage": "daemon", "message": "سرویس همگام‌سازی ابر شروع به کار کرد (مقصد: https://gamenet.hammasjedy.ir)"}
+{"at": "2026-11-13 14:10:44", "level": "WARNING", "stage": "register", "message": "این سرور محلی هنوز در سرور آنلاین ثبت نشده است (فایل credential موجود نیست). از پنل محلی بخش «همگام‌سازی ابر» کد ثبت را وارد کنید."}
+{"at": "2026-11-13 14:11:04", "level": "INFO", "stage": "daemon", "message": "سرویس همگام‌سازی ابر شروع به کار کرد (مقصد: https://gamenet.hammasjedy.ir)"}
+{"at": "2026-11-13 14:11:05", "level": "WARNING", "stage": "register", "message": "این سرور محلی هنوز در سرور آنلاین ثبت نشده است (فایل credential موجود نیست). از پنل محلی بخش «همگام‌سازی ابر» کد ثبت را وارد کنید."}
+{"at": "2026-11-13 14:22:06", "level": "INFO", "stage": "daemon", "message": "سرویس همگام‌سازی ابر شروع به کار کرد (مقصد: http://cloud.test)"}
+{"at": "2026-11-13 14:22:06", "level": "ERROR", "stage": "daemon", "message": "خطای پیش‌بینی‌نشده در سرویس همگام‌سازی: Database access not allowed, use the \"django_db\" mark, or the \"db\" or \"transactional_db\" fixtures to enable it."}
+{"at": "2026-11-13 14:22:53", "level": "INFO", "stage": "daemon", "message": "سرویس همگام‌سازی ابر شروع به کار کرد (مقصد: http://cloud.test)"}
+{"at": "2026-11-13 14:22:53", "level": "ERROR", "stage": "daemon", "message": "خطای پیش‌بینی‌نشده در سرویس همگام‌سازی: Database access not allowed, use the \"django_db\" mark, or the \"db\" or \"transactional_db\" fixtures to enable it."}
+{"at": "2026-11-13 14:23:00", "level": "INFO", "stage": "daemon", "message": "سرویس همگام‌سازی ابر شروع به کار کرد (مقصد: http://cloud.test)"}
+{"at": "2026-11-13 14:23:00", "level": "ERROR", "stage": "daemon", "message": "خطای پیش‌بینی‌نشده در سرویس همگام‌سازی: Database access not allowed, use the \"django_db\" mark, or the \"db\" or \"transactional_db\" fixtures to enable it."}
+{"at": "2026-11-13 14:35:50", "level": "INFO", "stage": "daemon", "message": "سرویس همگام‌سازی ابر شروع به کار کرد (مقصد: https://gamenet.hammasjedy.ir)"}
+{"at": "2026-11-13 14:35:50", "level": "WARNING", "stage": "register", "message": "این سرور محلی هنوز در سرور آنلاین ثبت نشده است (فایل credential موجود نیست). از پنل محلی بخش «همگام‌سازی ابر» کد ثبت را وارد کنید."}
+{"at": "2026-11-13 14:36:04", "level": "INFO", "stage": "daemon", "message": "سرویس همگام‌سازی ابر شروع به کار کرد (مقصد: https://gamenet.hammasjedy.ir)"}
+{"at": "2026-11-13 14:36:05", "level": "WARNING", "stage": "register", "message": "این سرور محلی هنوز در سرور آنلاین ثبت نشده است (فایل credential موجود نیست). از پنل محلی بخش «همگام‌سازی ابر» کد ثبت را وارد کنید."}
+{"at": "2026-11-13 14:36:09", "level": "INFO", "stage": "daemon", "message": "سرویس همگام‌سازی ابر شروع به کار کرد (مقصد: https://gamenet.hammasjedy.ir)"}
+{"at": "2026-11-13 14:36:09", "level": "WARNING", "stage": "register", "message": "این سرور محلی هنوز در سرور آنلاین ثبت نشده است (فایل credential موجود نیست). از پنل محلی بخش «همگام‌سازی ابر» کد ثبت را وارد کنید."}
+{"at": "2026-11-13 14:36:16", "level": "INFO", "stage": "daemon", "message": "سرویس همگام‌سازی ابر شروع به کار کرد (مقصد: https://gamenet.hammasjedy.ir)"}
+{"at": "2026-11-13 14:36:16", "level": "WARNING", "stage": "register", "message": "این سرور محلی هنوز در سرور آنلاین ثبت نشده است (فایل credential موجود نیست). از پنل محلی بخش «همگام‌سازی ابر» کد ثبت را وارد کنید."}
+{"at": "2026-11-13 14:36:25", "level": "INFO", "stage": "daemon", "message": "سرویس همگام‌سازی ابر شروع به کار کرد (مقصد: https://gamenet.hammasjedy.ir)"}
+{"at": "2026-11-13 14:36:25", "level": "WARNING", "stage": "register", "message": "این سرور محلی هنوز در سرور آنلاین ثبت نشده است (فایل credential موجود نیست). از پنل محلی بخش «همگام‌سازی ابر» کد ثبت را وارد کنید."}
+{"at": "2026-11-13 14:36:29", "level": "INFO", "stage": "daemon", "message": "سرویس همگام‌سازی ابر شروع به کار کرد (مقصد: https://gamenet.hammasjedy.ir)"}
+{"at": "2026-11-13 14:36:29", "level": "WARNING", "stage": "register", "message": "این سرور محلی هنوز در سرور آنلاین ثبت نشده است (فایل credential موجود نیست). از پنل محلی بخش «همگام‌سازی ابر» کد ثبت را وارد کنید."}
+{"at": "2026-11-13 14:36:38", "level": "INFO", "stage": "daemon", "message": "سرویس همگام‌سازی ابر شروع به کار کرد (مقصد: https://gamenet.hammasjedy.ir)"}
+{"at": "2026-11-13 14:36:38", "level": "WARNING", "stage": "register", "message": "این سرور محلی هنوز در سرور آنلاین ثبت نشده است (فایل credential موجود نیست). از پنل محلی بخش «همگام‌سازی ابر» کد ثبت را وارد کنید."}
+{"at": "2026-11-13 14:37:25", "level": "INFO", "stage": "daemon", "message": "سرویس همگام‌سازی ابر شروع به کار کرد (مقصد: https://gamenet.hammasjedy.ir)"}
+{"at": "2026-11-13 14:37:25", "level": "WARNING", "stage": "register", "message": "این سرور محلی هنوز در سرور آنلاین ثبت نشده است (فایل credential موجود نیست). از پنل محلی بخش «همگام‌سازی ابر» کد ثبت را وارد کنید."}
+{"at": "2026-11-13 14:37:30", "level": "INFO", "stage": "daemon", "message": "سرویس همگام‌سازی ابر شروع به کار کرد (مقصد: https://gamenet.hammasjedy.ir)"}
+{"at": "2026-11-13 14:37:30", "level": "WARNING", "stage": "register", "message": "این سرور محلی هنوز در سرور آنلاین ثبت نشده است (فایل credential موجود نیست). از پنل محلی بخش «همگام‌سازی ابر» کد ثبت را وارد کنید."}
+{"at": "2026-11-13 14:37:56", "level": "INFO", "stage": "daemon", "message": "سرویس همگام‌سازی ابر شروع به کار کرد (مقصد: http://cloud.test)"}
+{"at": "2026-11-13 14:37:56", "level": "ERROR", "stage": "daemon", "message": "خطای پیش‌بینی‌نشده در سرویس همگام‌سازی: Database access not allowed, use the \"django_db\" mark, or the \"db\" or \"transactional_db\" fixtures to enable it."}
+{"at": "2026-11-13 14:38:03", "level": "INFO", "stage": "daemon", "message": "سرویس همگام‌سازی ابر شروع به کار کرد (مقصد: https://gamenet.hammasjedy.ir)"}
+{"at": "2026-11-13 14:38:03", "level": "WARNING", "stage": "register", "message": "این سرور محلی هنوز در سرور آنلاین ثبت نشده است (فایل credential موجود نیست). از پنل محلی بخش «همگام‌سازی ابر» کد ثبت را وارد کنید."}
+{"at": "2026-11-13 14:38:07", "level": "INFO", "stage": "daemon", "message": "سرویس همگام‌سازی ابر شروع به کار کرد (مقصد: https://gamenet.hammasjedy.ir)"}
+{"at": "2026-11-13 14:38:07", "level": "WARNING", "stage": "register", "message": "این سرور محلی هنوز در سرور آنلاین ثبت نشده است (فایل credential موجود نیست). از پنل محلی بخش «همگام‌سازی ابر» کد ثبت را وارد کنید."}
+{"at": "2026-11-13 14:38:20", "level": "INFO", "stage": "daemon", "message": "سرویس همگام‌سازی ابر شروع به کار کرد (مقصد: https://gamenet.hammasjedy.ir)"}
+{"at": "2026-11-13 14:38:20", "level": "WARNING", "stage": "register", "message": "این سرور محلی هنوز در سرور آنلاین ثبت نشده است (فایل credential موجود نیست). از پنل محلی بخش «همگام‌سازی ابر» کد ثبت را وارد کنید."}
+{"at": "2026-11-13 14:39:48", "level": "INFO", "stage": "daemon", "message": "سرویس همگام‌سازی ابر شروع به کار کرد (مقصد: https://gamenet.hammasjedy.ir)"}
+{"at": "2026-11-13 14:39:48", "level": "WARNING", "stage": "register", "message": "این سرور محلی هنوز در سرور آنلاین ثبت نشده است (فایل credential موجود نیست). از پنل محلی بخش «همگام‌سازی ابر» کد ثبت را وارد کنید."}
+{"at": "2026-11-13 14:40:12", "level": "INFO", "stage": "daemon", "message": "سرویس همگام‌سازی ابر شروع به کار کرد (مقصد: https://gamenet.hammasjedy.ir)"}
+{"at": "2026-11-13 14:40:12", "level": "WARNING", "stage": "register", "message": "این سرور محلی هنوز در سرور آنلاین ثبت نشده است (فایل credential موجود نیست). از پنل محلی بخش «همگام‌سازی ابر» کد ثبت را وارد کنید."}
+{"at": "2026-11-13 14:40:18", "level": "INFO", "stage": "daemon", "message": "سرویس همگام‌سازی ابر شروع به کار کرد (مقصد: https://gamenet.hammasjedy.ir)"}
+{"at": "2026-11-13 14:40:19", "level": "WARNING", "stage": "register", "message": "این سرور محلی هنوز در سرور آنلاین ثبت نشده است (فایل credential موجود نیست). از پنل محلی بخش «همگام‌سازی ابر» کد ثبت را وارد کنید."}
+{"at": "2026-11-13 14:42:20", "level": "INFO", "stage": "daemon", "message": "سرویس همگام‌سازی ابر شروع به کار کرد (مقصد: https://gamenet.hammasjedy.ir)"}
+{"at": "2026-11-13 14:42:20", "level": "WARNING", "stage": "register", "message": "این سرور محلی هنوز در سرور آنلاین ثبت نشده است (فایل credential موجود نیست). از پنل محلی بخش «همگام‌سازی ابر» کد ثبت را وارد کنید."}
+{"at": "2026-11-13 14:42:27", "level": "INFO", "stage": "daemon", "message": "سرویس همگام‌سازی ابر شروع به کار کرد (مقصد: https://gamenet.hammasjedy.ir)"}
+{"at": "2026-11-13 14:42:27", "level": "WARNING", "stage": "register", "message": "این سرور محلی هنوز در سرور آنلاین ثبت نشده است (فایل credential موجود نیست). از پنل محلی بخش «همگام‌سازی ابر» کد ثبت را وارد کنید."}
+{"at": "2026-11-13 14:42:37", "level": "INFO", "stage": "daemon", "message": "سرویس همگام‌سازی ابر شروع به کار کرد (مقصد: https://gamenet.hammasjedy.ir)"}
+{"at": "2026-11-13 14:42:37", "level": "WARNING", "stage": "register", "message": "این سرور محلی هنوز در سرور آنلاین ثبت نشده است (فایل credential موجود نیست). از پنل محلی بخش «همگام‌سازی ابر» کد ثبت را وارد کنید."}
+{"at": "2026-11-13 14:52:40", "level": "INFO", "stage": "daemon", "message": "سرویس همگام‌سازی ابر شروع به کار کرد (مقصد: https://gamenet.hammasjedy.ir)"}
+{"at": "2026-11-13 14:52:40", "level": "WARNING", "stage": "register", "message": "این سرور محلی هنوز در سرور آنلاین ثبت نشده است (فایل credential موجود نیست). از پنل محلی بخش «همگام‌سازی ابر» کد ثبت را وارد کنید."}
+{"at": "2026-11-13 14:52:46", "level": "INFO", "stage": "daemon", "message": "سرویس همگام‌سازی ابر شروع به کار کرد (مقصد: https://gamenet.hammasjedy.ir)"}
+{"at": "2026-11-13 14:52:46", "level": "WARNING", "stage": "register", "message": "این سرور محلی هنوز در سرور آنلاین ثبت نشده است (فایل credential موجود نیست). از پنل محلی بخش «همگام‌سازی ابر» کد ثبت را وارد کنید."}
+{"at": "2026-11-13 14:52:52", "level": "INFO", "stage": "daemon", "message": "سرویس همگام‌سازی ابر شروع به کار کرد (مقصد: https://gamenet.hammasjedy.ir)"}
+{"at": "2026-11-13 14:52:52", "level": "WARNING", "stage": "register", "message": "این سرور محلی هنوز در سرور آنلاین ثبت نشده است (فایل credential موجود نیست). از پنل محلی بخش «همگام‌سازی ابر» کد ثبت را وارد کنید."}
+{"at": "2026-11-13 14:53:20", "level": "INFO", "stage": "daemon", "message": "سرویس همگام‌سازی ابر شروع به کار کرد (مقصد: https://gamenet.hammasjedy.ir)"}
+{"at": "2026-11-13 14:53:20", "level": "WARNING", "stage": "register", "message": "این سرور محلی هنوز در سرور آنلاین ثبت نشده است (فایل credential موجود نیست). از پنل محلی بخش «همگام‌سازی ابر» کد ثبت را وارد کنید."}
+{"at": "2026-11-13 14:53:33", "level": "INFO", "stage": "daemon", "message": "سرویس همگام‌سازی ابر شروع به کار کرد (مقصد: https://gamenet.hammasjedy.ir)"}
+{"at": "2026-11-13 14:53:33", "level": "WARNING", "stage": "register", "message": "این سرور محلی هنوز در سرور آنلاین ثبت نشده است (فایل credential موجود نیست). از پنل محلی بخش «همگام‌سازی ابر» کد ثبت را وارد کنید."}
+{"at": "2026-11-13 14:53:40", "level": "INFO", "stage": "daemon", "message": "سرویس همگام‌سازی ابر شروع به کار کرد (مقصد: https://gamenet.hammasjedy.ir)"}
+{"at": "2026-11-13 14:53:41", "level": "WARNING", "stage": "register", "message": "این سرور محلی هنوز در سرور آنلاین ثبت نشده است (فایل credential موجود نیست). از پنل محلی بخش «همگام‌سازی ابر» کد ثبت را وارد کنید."}
+{"at": "2026-11-13 14:54:54", "level": "INFO", "stage": "daemon", "message": "سرویس همگام‌سازی ابر شروع به کار کرد (مقصد: https://gamenet.hammasjedy.ir)"}
+{"at": "2026-11-13 14:54:54", "level": "WARNING", "stage": "register", "message": "این سرور محلی هنوز در سرور آنلاین ثبت نشده است (فایل credential موجود نیست). از پنل محلی بخش «همگام‌سازی ابر» کد ثبت را وارد کنید."}
+{"at": "2026-11-13 14:55:34", "level": "INFO", "stage": "daemon", "message": "سرویس همگام‌سازی ابر شروع به کار کرد (مقصد: https://gamenet.hammasjedy.ir)"}
+{"at": "2026-11-13 14:55:34", "level": "WARNING", "stage": "register", "message": "این سرور محلی هنوز در سرور آنلاین ثبت نشده است (فایل credential موجود نیست). از پنل محلی بخش «همگام‌سازی ابر» کد ثبت را وارد کنید."}
+{"at": "2026-11-13 14:56:04", "level": "INFO", "stage": "daemon", "message": "سرویس همگام‌سازی ابر شروع به کار کرد (مقصد: https://gamenet.hammasjedy.ir)"}
+{"at": "2026-11-13 14:56:04", "level": "WARNING", "stage": "register", "message": "این سرور محلی هنوز در سرور آنلاین ثبت نشده است (فایل credential موجود نیست). از پنل محلی بخش «همگام‌سازی ابر» کد ثبت را وارد کنید."}
+{"at": "2026-11-13 14:56:05", "level": "INFO", "stage": "daemon", "message": "سرویس همگام‌سازی ابر شروع به کار کرد (مقصد: https://gamenet.hammasjedy.ir)"}
+{"at": "2026-11-13 14:56:05", "level": "WARNING", "stage": "register", "message": "این سرور محلی هنوز در سرور آنلاین ثبت نشده است (فایل credential موجود نیست). از پنل محلی بخش «همگام‌سازی ابر» کد ثبت را وارد کنید."}

@@ -1,6 +1,25 @@
+import os from "node:os";
+import fs from "node:fs";
+import path from "node:path";
 import WebSocket from "ws";
-import type { CommandKind, ConnectionPhase, EdgeCommand } from "../shared/ipc";
-import { PinnedHttpsAgent, type PairingTarget } from "./pinned-agent";
+import type { AnnouncementItem, CommandKind, ConnectionPhase, EdgeCommand } from "../shared/ipc";
+import { getPinnedHttpsAgent, type PairingTarget } from "./pinned-agent";
+
+function primaryLanMac(): string {
+  const nets = os.networkInterfaces();
+  let fallback = "";
+  for (const entries of Object.values(nets)) {
+    if (!entries) continue;
+    for (const entry of entries) {
+      if (entry.internal) continue;
+      const mac = (entry.mac || "").trim().toUpperCase();
+      if (!mac || mac === "00:00:00:00:00:00") continue;
+      if (entry.family === "IPv4") return mac;
+      if (!fallback) fallback = mac;
+    }
+  }
+  return fallback;
+}
 
 /**
  * The client side of the edge WebSocket protocol. It authenticates in the first
@@ -14,8 +33,14 @@ const ALLOWED_COMMANDS: ReadonlySet<string> = new Set<CommandKind>([
   "client.unlock",
   "client.ping",
   "client.restart",
+  "client.shutdown",
+  "client.admin_unlock",
+  "client.update",
+  "client.unpair",
+  "client.kill_games",
+  "client.restart_app",
 ]);
-const MAX_PAYLOAD_BYTES = 256 * 1024;
+const MAX_PAYLOAD_BYTES = 4 * 1024 * 1024;
 const AUTH_TIMEOUT_MS = 10_000;
 const COMPLETED_MEMORY = 200;
 
@@ -30,6 +55,21 @@ interface WelcomeMessage {
   config_version?: number;
   server_time?: string;
   pending_commands?: EdgeCommand[];
+  games?: unknown[];
+  games_hash?: string;
+  announcements?: AnnouncementItem[];
+  announcements_hash?: string;
+  client_update?: ClientUpdatePayload;
+  idle_shutdown_minutes?: number;
+  session?: Record<string, unknown>;
+}
+
+export interface ClientUpdatePayload {
+  version: string;
+  url: string;
+  sha256?: string;
+  installer_url?: string;
+  notes?: string;
 }
 
 export interface WelcomeDetails {
@@ -40,6 +80,13 @@ export interface WelcomeDetails {
   configVersion: number;
   pendingCommands: number;
   serverTime: string;
+  games?: unknown[];
+  gamesHash?: string;
+  announcements?: AnnouncementItem[];
+  announcementsHash?: string;
+  clientUpdate?: ClientUpdatePayload;
+  idleShutdownMinutes?: number;
+  session?: Record<string, unknown>;
 }
 
 export interface CommandAck {
@@ -47,6 +94,16 @@ export interface CommandAck {
   result?: Record<string, unknown>;
   error?: string;
   state?: "LOCKED" | "ONLINE";
+  kiosk_state?: "LOCKED" | "UNLOCKED" | "DISABLED";
+  health_status?: "HEALTHY" | "ERROR";
+  health_message?: string;
+}
+
+export interface OrthogonalClientState {
+  kiosk_state: "LOCKED" | "UNLOCKED" | "DISABLED";
+  power_state: "ON" | "OFF";
+  health_status: "HEALTHY" | "ERROR";
+  health_message?: string;
 }
 
 export interface ConnectionCallbacks {
@@ -54,8 +111,10 @@ export interface ConnectionCallbacks {
   onWelcome(details: WelcomeDetails): void;
   onDisconnect(detail: string): void;
   onAuthFailure(detail: string): void;
-  onCommand(command: EdgeCommand): CommandAck;
+  onCommand(command: EdgeCommand): CommandAck | Promise<CommandAck>;
   onHeartbeatAck?(data: Record<string, unknown>): void;
+  onAnnouncementsUpdated?(announcements: AnnouncementItem[]): void;
+  onRemoteControl?(message: Record<string, unknown>): void;
 }
 
 type AckPayload = CommandAck;
@@ -76,6 +135,8 @@ export class EdgeConnection {
   private readonly appVersion: string;
   private readonly callbacks: ConnectionCallbacks;
   private readonly getState: () => "LOCKED" | "ONLINE";
+  private readonly getOrthogonalState?: () => OrthogonalClientState;
+  private readonly getGamesHash?: () => string;
 
   private socket: WebSocket | null = null;
   private reconnectTimer: NodeJS.Timeout | null = null;
@@ -87,8 +148,15 @@ export class EdgeConnection {
   private welcomed = false;
   private lastError = "";
   private heartbeatSeconds = 10;
+  /** Hub clock minus local clock: salon PCs often drift, so command TTLs must be compared in hub time. */
+  private serverSkewMs = 0;
   private readonly pendingAcks = new Map<string, AckPayload>();
   private readonly completed = new Map<string, AckPayload>();
+  private readonly journalPath?: string;
+  private readonly journal = new Map<string, { ack: AckPayload; expiresAt: number }>();
+  private readonly inFlight = new Set<string>();
+  private commandQueue: Promise<void> = Promise.resolve();
+  private journalUnreadable = false;
 
   constructor(options: {
     target: PairingTarget;
@@ -96,14 +164,57 @@ export class EdgeConnection {
     deviceId: string;
     appVersion: string;
     getState: () => "LOCKED" | "ONLINE";
+    getOrthogonalState?: () => OrthogonalClientState;
+    getGamesHash?: () => string;
     callbacks: ConnectionCallbacks;
+    journalPath?: string;
   }) {
     this.target = options.target;
     this.token = options.token;
     this.deviceId = options.deviceId;
     this.appVersion = options.appVersion;
     this.getState = options.getState;
+    this.getOrthogonalState = options.getOrthogonalState;
+    this.getGamesHash = options.getGamesHash;
     this.callbacks = options.callbacks;
+    this.journalPath = options.journalPath;
+    if (this.journalPath && fs.existsSync(this.journalPath)) {
+      try {
+        const records = JSON.parse(fs.readFileSync(this.journalPath, "utf8")) as [string, { ack: AckPayload; expiresAt: number }][];
+        for (const [id, record] of records) {
+          this.journal.set(id, record);
+          this.completed.set(id, record.ack);
+        }
+      } catch {
+        this.journalUnreadable = true;
+      }
+    }
+  }
+
+  private orthogonalFields(): Record<string, unknown> {
+    if (!this.getOrthogonalState) return {};
+    const ortho = this.getOrthogonalState();
+    return {
+      kiosk_state: ortho.kiosk_state,
+      power_state: ortho.power_state,
+      health_status: ortho.health_status,
+      ...(ortho.health_message ? { health_message: ortho.health_message } : {}),
+    };
+  }
+
+  /** Inform Edge before terminating about whether OS is shutting down vs app closing. */
+  sendGoodbye(
+    reason: string,
+    options?: { powerState?: "ON" | "OFF"; kioskState?: "LOCKED" | "UNLOCKED" | "DISABLED" },
+  ): void {
+    if (!this.isOpen()) return;
+    const ortho = this.getOrthogonalState?.();
+    this.send({
+      type: "goodbye",
+      reason,
+      power_state: options?.powerState ?? ortho?.power_state ?? "ON",
+      kiosk_state: options?.kioskState ?? ortho?.kiosk_state ?? "DISABLED",
+    });
   }
 
   start(): void {
@@ -129,7 +240,17 @@ export class EdgeConnection {
   /** Tell the edge that the screen was locked or unlocked locally. */
   notifyState(): void {
     if (!this.isOpen()) return;
-    this.send({ type: "state", state: this.getState() });
+    this.send({ type: "state", state: this.getState(), ...this.orthogonalFields() });
+  }
+
+  /** Push a captured screen frame back to the edge server. */
+  sendRemoteFrame(frame: Record<string, unknown>): boolean {
+    if (!this.isOpen() || !this.welcomed) return false;
+    return this.send({ type: "remote_frame", ...frame });
+  }
+
+  public getTarget(): PairingTarget {
+    return this.target;
   }
 
   private open(): void {
@@ -140,7 +261,7 @@ export class EdgeConnection {
 
     const host = this.target.host.includes(":") ? `[${this.target.host}]` : this.target.host;
     const url = `wss://${host}:${this.target.port}/ws/device/`;
-    const agent = new PinnedHttpsAgent(this.target.fingerprint);
+    const agent = getPinnedHttpsAgent(this.target.fingerprint);
     let socket: WebSocket;
 
     try {
@@ -165,6 +286,9 @@ export class EdgeConnection {
         token: this.token,
         state: this.getState(),
         app_version: this.appVersion,
+        mac_address: primaryLanMac(),
+        ...(this.getGamesHash ? { games_hash: this.getGamesHash() } : {}),
+        ...this.orthogonalFields(),
       });
       this.authTimer = setTimeout(() => {
         if (!this.welcomed) {
@@ -175,6 +299,7 @@ export class EdgeConnection {
     });
 
     socket.on("message", (data: WebSocket.RawData, isBinary: boolean) => {
+      if (this.socket !== socket || this.stopped) return;
       if (isBinary) {
         this.lastError = "هاب پیام دوتایی غیرمنتظره فرستاد";
         socket.terminate();
@@ -209,6 +334,7 @@ export class EdgeConnection {
     });
 
     socket.on("close", (code, reasonBuffer) => {
+      if (this.socket !== socket) return;
       const reason = reasonBuffer?.toString("utf8") || "";
       this.welcomed = false;
       this.clearTimers();
@@ -232,13 +358,21 @@ export class EdgeConnection {
 
   private dispatch(message: Record<string, unknown>): void {
     const kind = message.type;
+    const serverTime = typeof message.server_time === "string" ? Date.parse(message.server_time) : NaN;
+    if (Number.isFinite(serverTime)) {
+      const skew = serverTime - Date.now();
+      // Ignore absurd values (bad frame / broken hub clock) so we never mask real expiry.
+      if (Math.abs(skew) < 24 * 3600 * 1000) this.serverSkewMs = skew;
+    }
     if (kind === "welcome") {
       this.handleWelcome(message as unknown as WelcomeMessage);
       return;
     }
-    if (kind === "heartbeat_ack") {
+    if (kind === "heartbeat_ack" || kind === "games_updated") {
       this.callbacks.onHeartbeatAck?.(message);
-      this.processCommands(message.pending_commands);
+      if (kind === "heartbeat_ack") {
+        this.processCommands(message.pending_commands);
+      }
       return;
     }
     if (kind === "command") {
@@ -246,6 +380,15 @@ export class EdgeConnection {
       if (command && typeof command === "object") {
         this.deliver(command as EdgeCommand);
       }
+      return;
+    }
+    if (kind === "announcements_updated") {
+      const list = Array.isArray(message.announcements) ? (message.announcements as AnnouncementItem[]) : [];
+      this.callbacks.onAnnouncementsUpdated?.(list);
+      return;
+    }
+    if (kind === "remote_control") {
+      this.callbacks.onRemoteControl?.(message);
       return;
     }
     // pong / state_ack are liveness only; unknown types are ignored so a newer
@@ -279,6 +422,13 @@ export class EdgeConnection {
         ? message.pending_commands.length
         : 0,
       serverTime: String(message.server_time || ""),
+      games: Array.isArray(message.games) ? message.games : undefined,
+      gamesHash: typeof message.games_hash === "string" ? message.games_hash : undefined,
+      announcements: Array.isArray(message.announcements) ? (message.announcements as AnnouncementItem[]) : undefined,
+      announcementsHash: typeof message.announcements_hash === "string" ? message.announcements_hash : undefined,
+      clientUpdate: message.client_update,
+      idleShutdownMinutes: typeof message.idle_shutdown_minutes === "number" ? message.idle_shutdown_minutes : undefined,
+      session: message.session,
     });
 
     this.processCommands(message.pending_commands);
@@ -293,6 +443,9 @@ export class EdgeConnection {
         type: "heartbeat",
         state: this.getState(),
         app_version: this.appVersion,
+        mac_address: primaryLanMac(),
+        ...(this.getGamesHash ? { games_hash: this.getGamesHash() } : {}),
+        ...this.orthogonalFields(),
       });
     }, this.heartbeatSeconds * 1000);
     this.armWatchdog();
@@ -314,9 +467,37 @@ export class EdgeConnection {
   }
 
   private deliver(command: EdgeCommand): void {
+    const id = command.command_id;
+    if (this.inFlight.has(id)) return;
+    this.inFlight.add(id);
+    this.commandQueue = this.commandQueue.then(() => this.executeCommand(command)).catch(() => {
+      this.queueAck(id, { status: "error", error: "ثبت پایدار فرمان ناموفق بود" });
+    }).finally(() => this.inFlight.delete(id));
+  }
+
+  private persistCommand(id: string, ack: AckPayload, expiresAt: number): void {
+    if (!this.journalPath) return;
+    this.journal.set(id, { ack, expiresAt });
+    const hubNow = Date.now() + this.serverSkewMs;
+    for (const [key, record] of this.journal) {
+      if (record.expiresAt + 2000 < hubNow) this.journal.delete(key);
+    }
+    fs.mkdirSync(path.dirname(this.journalPath), { recursive: true });
+    const temp = `${this.journalPath}.tmp`;
+    fs.writeFileSync(temp, JSON.stringify([...this.journal]), { mode: 0o600, flag: "w" });
+    const fd = fs.openSync(temp, "r");
+    try { fs.fsyncSync(fd); } finally { fs.closeSync(fd); }
+    fs.renameSync(temp, this.journalPath);
+  }
+
+  private async executeCommand(command: EdgeCommand): Promise<void> {
     const commandId = typeof command.command_id === "string" ? command.command_id : "";
     const commandType = typeof command.command_type === "string" ? command.command_type : "";
     if (!commandId || commandId.length > 64 || !commandType) return;
+    if (this.journalUnreadable) {
+      this.queueAck(commandId, { status: "error", error: "سابقهٔ پایدار فرمان‌ها قابل خواندن نیست؛ بررسی مدیر لازم است" });
+      return;
+    }
 
     // Redelivery after a lost ack: never apply twice, but always re-ack.
     const already = this.completed.get(commandId);
@@ -330,13 +511,19 @@ export class EdgeConnection {
       ack = { status: "error", error: "نوع فرمان برای این نسخه پشتیبانی نمی‌شود" };
     } else {
       const expiresAt = Date.parse(String(command.expires_at || ""));
+      // Translate the hub deadline into local time before comparing, otherwise a
+      // PC whose clock is a few minutes fast silently drops every command.
+      const localDeadline = expiresAt - this.serverSkewMs;
       if (!Number.isFinite(expiresAt)) {
         ack = { status: "error", error: "زمان انقضای فرمان نامعتبر است" };
-      } else if (expiresAt <= Date.now()) {
+      } else if (localDeadline + 2000 < Date.now()) {
         ack = { status: "error", error: "فرمان پیش از رسیدن منقضی شده بود" };
       } else {
         try {
-          ack = this.callbacks.onCommand({
+          if (["client.restart_app", "client.restart", "client.shutdown", "client.unpair"].includes(commandType)) {
+            this.persistCommand(commandId, { status: "ok", result: { accepted: true } }, expiresAt);
+          }
+          ack = await this.callbacks.onCommand({
             ...command,
             payload:
               command.payload && typeof command.payload === "object" && !Array.isArray(command.payload)
@@ -353,6 +540,7 @@ export class EdgeConnection {
     }
 
     this.completed.set(commandId, ack);
+    this.persistCommand(commandId, ack, Date.parse(command.expires_at));
     if (this.completed.size > COMPLETED_MEMORY) {
       const oldest = this.completed.keys().next().value;
       if (oldest) this.completed.delete(oldest);
@@ -375,6 +563,9 @@ export class EdgeConnection {
         result: ack.result,
         error: ack.error || "",
         state: ack.state,
+        ...(ack.kiosk_state ? { kiosk_state: ack.kiosk_state } : {}),
+        ...(ack.health_status ? { health_status: ack.health_status } : {}),
+        ...(ack.health_message ? { health_message: ack.health_message } : {}),
       });
       if (!sent) return; // keep the rest queued for the next connection
       this.pendingAcks.delete(commandId);

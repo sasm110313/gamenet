@@ -4,21 +4,23 @@ module.exports = {
   theme: {
     extend: {
       colors: {
-        ink: "#070b10",
-        panel: "#0d141d",
-        raised: "#121c27",
-        line: "#223140",
-        mist: "#8ba3b8",
-        paper: "#e8f2f8",
-        neon: "#5eead4",
-        amber: "#fbbf24",
-        danger: "#fb7185",
+        ink: "#f8fafc",        // Crisp Cool Slate-50 Canvas
+        panel: "#ffffff",      // Pure Crisp White Panel
+        raised: "#f1f5f9",     // Slate-100 Level 2
+        line: "#e2e8f0",       // Clean Hairline Slate Border
+        mist: "#64748b",       // Slate-500 Muted Text
+        paper: "#0f172a",      // High-Contrast Slate-900 Text
+        neon: "#2563eb",       // Modern Tech Blue Accent
+        gold: "#2563eb",       // Tech Blue
+        goldBright: "#3b82f6", // Vivid Blue Accent
+        amber: "#d97706",      // Status Amber
+        danger: "#ef4444",     // Status Red
       },
       fontFamily: {
         sans: ["Vazirmatn", "Tahoma", "sans-serif"],
       },
       boxShadow: {
-        glow: "0 0 60px -18px rgba(94, 234, 212, 0.55)",
+        glow: "0 0 35px -8px rgba(15, 23, 42, 0.08)",
       },
     },
   },

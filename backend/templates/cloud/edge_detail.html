@@ -30,6 +30,8 @@
         <button class="gn-btn" name="action" value="ping"><i class="ti ti-activity"></i> Ping</button>
         <button class="gn-btn" name="action" value="sync"><i class="ti ti-refresh"></i> همگام‌سازی فوری</button>
         <button class="gn-btn primary" name="action" value="test_event"><i class="ti ti-send"></i> رویداد آزمایشی سرتاسری</button>
+        <button class="gn-btn" style="background: #2563eb; color: #fff;" name="action" value="update_edge" onclick="return confirm('آیا از صدور دستور به‌روزرسانی خودکار سرور سالن اطمینان دارید؟');"><i class="ti ti-download"></i> 🚀 به‌روزرسانی خودکار سرور سالن</button>
+        <button class="gn-btn" style="background: #059669; color: #fff;" name="action" value="update_clients" onclick="return confirm('آیا از صدور دستور به‌روزرسانی همه کلاینت‌های سالن اطمینان دارید؟');"><i class="ti ti-devices"></i> 💻 به‌روزرسانی همه کلاینت‌ها</button>
       </div>
     </form>
   </div>
@@ -59,9 +61,10 @@
             <form method="post" action="{% url 'cloud_device_action' device.id %}" class="gn-inline-form">
               {% csrf_token %}
                 <input type="hidden" name="next" value="{% url 'cloud_edge_detail' edge.id %}">
-              <button class="gn-btn sm" name="action" value="lock"><i class="ti ti-lock"></i></button>
-              <button class="gn-btn sm" name="action" value="unlock"><i class="ti ti-lock-open"></i></button>
-              <button class="gn-btn sm" name="action" value="ping"><i class="ti ti-activity"></i></button>
+              <button class="gn-btn sm success" name="action" value="wake" title="روشن کردن با LAN (WoL)"><i class="ti ti-power"></i></button>
+              <button class="gn-btn sm" name="action" value="lock" title="قفل کردن"><i class="ti ti-lock"></i></button>
+              <button class="gn-btn sm" name="action" value="unlock" title="باز کردن قفل"><i class="ti ti-lock-open"></i></button>
+              <button class="gn-btn sm" name="action" value="ping" title="پینگ"><i class="ti ti-activity"></i></button>
             </form>
           </td>
         </tr>

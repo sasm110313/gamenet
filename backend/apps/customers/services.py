@@ -28,13 +28,15 @@ def _clean(
         raise CustomerError("نام مشتری الزامی است.")
     if len(full_name) > 120:
         raise CustomerError("نام مشتری حداکثر ۱۲۰ کاراکتر است.")
-    phone = (phone or "").strip()
-    if len(phone) > 24:
-        raise CustomerError("شماره تماس حداکثر ۲۴ کاراکتر است.")
-    if isinstance(credit_limit, bool) or not isinstance(credit_limit, int):
-        raise CustomerError("سقف اعتبار باید عدد صحیح باشد.")
-    if credit_limit < 0:
-        raise CustomerError("سقف اعتبار نمی‌تواند منفی باشد.")
+    persian_arabic = "۰۱۲۳۴۵۶۷۸۹٠١٢٣٤٥٦٧٨٩"
+    english = "01234567890123456789"
+    phone = (phone or "").translate(str.maketrans(persian_arabic, english)).strip()
+    if not phone:
+        raise CustomerError("شماره موبایل الزامی است.")
+    if len(phone) < 10 or len(phone) > 24:
+        raise CustomerError("شماره موبایل باید حداقل ۱۰ رقم باشد.")
+    # بدهی کلاً غیرمجاز است: سقف اعتبار همواره صفر است
+    credit_limit = 0
     if len(notes or "") > 255:
         raise CustomerError("یادداشت حداکثر ۲۵۵ کاراکتر است.")
     return full_name, phone, credit_limit, (notes or "").strip()
@@ -45,11 +47,16 @@ def _payload(customer: Customer, wallet: Wallet) -> dict:
         "customer_id": str(customer.id),
         "full_name": customer.full_name,
         "username": customer.username,
+        "password_hash": customer.password_hash or "",
         "phone": customer.phone,
         "group_id": str(customer.group_id) if customer.group_id else None,
+        "group_name": customer.group.name if customer.group else None,
         "credit_limit": customer.credit_limit,
         "is_active": customer.is_active,
         "notes": customer.notes,
+        "debt_balance": customer.debt_balance,
+        "max_debt_limit": customer.max_debt_limit,
+        "active_coupons": getattr(customer, "active_coupons", 0),
         "wallet_balance": wallet.balance,
         "revision": customer.revision,
     }
@@ -72,8 +79,10 @@ def create_customer(
     phone: str = "",
     username: str = "",
     password: str = "",
+    password_hash: str = "",
     group: CustomerGroup | None = None,
     credit_limit: int | None = None,
+    active_coupons: int | None = None,
     notes: str = "",
     customer_id=None,
     actor=None,
@@ -119,11 +128,18 @@ def create_customer(
                 phone=phone,
                 group=group,
                 credit_limit=limit,
+                active_coupons=max(0, int(active_coupons)) if active_coupons is not None else 0,
                 notes=notes,
             )
-            if password:
-                customer.set_password(password)
-                customer.save(update_fields=["password_hash"])
+            # رمز عبور الزامی است؛ در صورت عدم تعیین، ابتدا همان شماره موبایل ثبت می‌شود
+            initial_password = (password or "").strip() or phone
+            if password_hash:
+                if not isinstance(password_hash, str) or len(password_hash) > 255:
+                    raise CustomerError("هش رمز عبور نامعتبر است.")
+                customer.password_hash = password_hash
+            else:
+                customer.set_password(initial_password)
+            customer.save(update_fields=["password_hash"])
     except IntegrityError as exc:
         # A concurrent create won the unique keys. Return the winner for a
         # retried remote command, otherwise surface a friendly error.
@@ -163,10 +179,13 @@ def update_customer(
     full_name: str | None = None,
     username: str | None = None,
     password: str | None = None,
+    password_hash: str | None = None,
     phone: str | None = None,
     group: CustomerGroup | None = None,
     clear_group: bool = False,
     credit_limit: int | None = None,
+    max_debt_limit: int | None = None,
+    active_coupons: int | None = None,
     notes: str | None = None,
     is_active: bool | None = None,
     expected_revision: int | None = None,
@@ -176,7 +195,7 @@ def update_customer(
     customer = Customer.objects.select_for_update().get(pk=customer.pk)
     if expected_revision is not None and customer.revision != expected_revision:
         raise CustomerError("نسخه مشتری تغییر کرده است؛ صفحه را تازه کنید و دوباره تلاش کنید.")
-    wallet = Wallet.objects.select_for_update().get(customer=customer)
+    wallet, _ = Wallet.objects.select_for_update().get_or_create(customer=customer, defaults={"balance": 0})
 
     full_name = customer.full_name if full_name is None else full_name
     phone = customer.phone if phone is None else phone
@@ -192,8 +211,12 @@ def update_customer(
             raise CustomerError("مشتری دیگری با این نام کاربری ثبت شده است.")
         customer.username = username
 
-    if password:
-        customer.set_password(password)
+    if password is not None and str(password).strip():
+        customer.set_password(str(password).strip())
+    elif password_hash:
+        if not isinstance(password_hash, str) or len(password_hash) > 255:
+            raise CustomerError("هش رمز عبور نامعتبر است.")
+        customer.password_hash = password_hash
 
     if clear_group:
         new_group = None
@@ -228,15 +251,22 @@ def update_customer(
     customer.phone = phone
     customer.group = new_group
     customer.credit_limit = limit
+    if max_debt_limit is not None:
+        customer.max_debt_limit = max(0, int(max_debt_limit))
+    if active_coupons is not None:
+        customer.active_coupons = max(0, int(active_coupons))
     customer.notes = notes
     customer.is_active = will_be_active
     customer.revision += 1
-    customer.save(
-        update_fields=[
-            "full_name", "username", "password_hash", "phone", "group", "credit_limit", "notes", "is_active",
-            "revision", "updated_at",
-        ]
-    )
+    update_flds = [
+        "full_name", "username", "password_hash", "phone", "group", "credit_limit", "notes", "is_active",
+        "revision", "updated_at",
+    ]
+    if max_debt_limit is not None:
+        update_flds.append("max_debt_limit")
+    if active_coupons is not None:
+        update_flds.append("active_coupons")
+    customer.save(update_fields=update_flds)
     emit(
         "customer.updated",
         aggregate_type="customer",

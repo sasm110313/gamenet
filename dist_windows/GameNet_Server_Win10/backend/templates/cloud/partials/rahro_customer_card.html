@@ -1,0 +1,333 @@
+{% load gn %}
+<div class="gn-card mb-3" style="background: linear-gradient(135deg, rgba(45, 212, 191, 0.05) 0%, rgba(30, 64, 175, 0.07) 100%); border: 1px solid rgba(45, 212, 191, 0.28); border-radius: var(--gn-radius); box-shadow: 0 4px 20px rgba(0, 0, 0, 0.16); position: relative; overflow: hidden;">
+  
+  <!-- ردیف بالای کارت: عنوان، وضعیت اتصال و رده عضویت -->
+  <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2 pb-2" style="border-bottom: 1px solid rgba(255, 255, 255, 0.08);">
+    <div class="d-flex align-items-center gap-3">
+      <div style="width: 44px; height: 44px; border-radius: 12px; background: linear-gradient(135deg, rgba(45, 212, 191, 0.22), rgba(59, 130, 246, 0.28)); border: 1px solid rgba(45, 212, 191, 0.45); display: flex; align-items: center; justify-content: center; font-size: 22px; flex-shrink: 0;">
+        🎮
+      </div>
+      <div>
+        <div class="d-flex align-items-center gap-2">
+          <h5 style="margin: 0; font-weight: 800; font-size: 15.5px; color: var(--gn-text);">وضعیت عضویت و تعرفه بازی</h5>
+          {% if rahro_status and rahro_status.found %}
+            <span class="gn-chip" style="background: rgba(16, 185, 129, 0.15); color: #34d399; border: 1px solid rgba(52, 211, 153, 0.35); font-size: 11px; font-weight: 700;">
+              ✓ عضو رسمی رهرو
+            </span>
+          {% else %}
+            <span class="gn-chip" style="background: rgba(148, 163, 184, 0.15); color: #94a3b8; border: 1px solid rgba(148, 163, 184, 0.3); font-size: 11px;">
+              کاربر عادی
+            </span>
+          {% endif %}
+        </div>
+        <span style="font-size: 11.5px; color: var(--gn-muted);">تعرفه هوشمند سه‌گانه، سهمیه‌ها و شارژ سریع بر مبنای ساعت بازی</span>
+      </div>
+    </div>
+
+    <!-- نشان‌های تعرفه و کد لاگین کلاینت -->
+    <div class="d-flex align-items-center gap-2 flex-wrap">
+      {% if rahro_status and rahro_status.found %}
+        {% if rahro_status.pricing_tier == 'CADRE_SENIOR' %}
+          <span class="gn-chip" style="background: rgba(139, 92, 246, 0.16); color: #c084fc; border: 1px solid rgba(192, 132, 252, 0.4); font-size: 12px; font-weight: 700; padding: 5px 12px;">
+            <i class="ti ti-shield-check"></i> کادر و پایه ۸ و ۹ (ساعتی ۲۰,۰۰۰ ت)
+          </span>
+        {% else %}
+          <span class="gn-chip" style="background: rgba(16, 185, 129, 0.14); color: #34d399; border: 1px solid rgba(52, 211, 153, 0.35); font-size: 12px; font-weight: 700; padding: 5px 12px;">
+            <i class="ti ti-school"></i> اعضای رهرو - پایه ۵ تا ۷ (ساعتی ۴۰,۰۰۰ ت)
+          </span>
+        {% endif %}
+
+        {% if customer.username and customer.username|length >= 4 and customer.username|length <= 6 %}
+          <span class="gn-chip" style="background: rgba(245, 165, 36, 0.14); color: #fbbf24; border: 1px solid rgba(245, 165, 36, 0.35); font-size: 12px; font-weight: 700; padding: 5px 12px;" title="کد اختصاصی ۴ تا ۶ رقمی برای لاگین در سالن">
+            <i class="ti ti-key"></i> کد لاگین: <strong class="num font-bold">{{ customer.username }}</strong>
+          </span>
+        {% else %}
+          <a href="{% if is_edge %}{% url 'edge_customer_detail' customer.id %}{% else %}{% url 'cloud_customer_detail' customer.id %}{% endif %}" class="gn-chip" style="background: rgba(245, 165, 36, 0.08); color: #fbbf24; border: 1px dashed rgba(245, 165, 36, 0.4); font-size: 12px; font-weight: 700; padding: 5px 12px; text-decoration: none;" title="کد ۴ تا ۶ رقمی جهت لاگین به سیستم‌های بازی هنوز تعیین نشده است. برای ثبت کلیک کنید.">
+            <i class="ti ti-key"></i> کد لاگین: <span style="text-decoration: underline;">تنظیم‌نشده (ویرایش)</span>
+          </a>
+        {% endif %}
+      {% else %}
+        <span class="gn-chip" style="background: rgba(148, 163, 184, 0.12); color: #cbd5e1; border: 1px solid rgba(148, 163, 184, 0.25); font-size: 12px; padding: 5px 12px;">
+          <i class="ti ti-user"></i> کاربر عادی (تعرفه آزاد ۶۰,۰۰۰ ت)
+        </span>
+        {% if customer.username and customer.username|length >= 4 and customer.username|length <= 6 %}
+          <span class="gn-chip" style="background: rgba(245, 165, 36, 0.14); color: #fbbf24; border: 1px solid rgba(245, 165, 36, 0.35); font-size: 12px; font-weight: 700; padding: 5px 12px;">
+            <i class="ti ti-key"></i> کد لاگین: <strong class="num font-bold">{{ customer.username }}</strong>
+          </span>
+        {% endif %}
+      {% endif %}
+    </div>
+  </div>
+
+  <!-- کارت‌های ۴ شاخص کلیدی -->
+  <div class="gn-grid cols-4 mb-3" style="gap: 12px;">
+    <!-- ۱. موجودی کیف پول -->
+    <div class="p-3 rounded" style="background: var(--gn-surface-2); border: 1px solid var(--gn-border);">
+      <div class="d-flex align-items-center justify-content-between mb-1" style="font-size: 11.5px; color: var(--gn-muted);">
+        <div class="d-flex align-items-center gap-1.5">
+          <i class="ti ti-wallet" style="color: #2dd4bf; font-size: 16px;"></i>
+          <span>موجودی کیف پول:</span>
+        </div>
+      </div>
+      <div style="font-weight: 900; font-size: 18px; color: #2dd4bf;">
+        <span class="num">{{ customer.wallet.balance|default:0|toman }}</span>
+      </div>
+      <div class="gn-subtitle mt-1" style="font-size: 11px; color: var(--gn-muted);">
+        اعتبار نقدی ثبت‌شده سالن
+      </div>
+    </div>
+
+    <!-- ۲. سهمیه ماهانه رهرو -->
+    <div class="p-3 rounded" style="background: var(--gn-surface-2); border: 1px solid var(--gn-border);">
+      <div class="d-flex align-items-center gap-1.5 mb-1" style="font-size: 11.5px; color: var(--gn-muted);">
+        <i class="ti ti-gift" style="color: #38bdf8; font-size: 16px;"></i>
+        <span>سهمیه رایگان این ماه:</span>
+      </div>
+      <div>
+        {% if rahro_status and rahro_status.has_free_monthly_quota %}
+          <span class="num" style="font-weight: 800; font-size: 18px; color: #38bdf8;">{{ rahro_status.remaining_monthly_quotas }}</span>
+          <span style="font-size: 12px; color: #7dd3fc; font-weight: 700;">سهمیه ۵۰٪</span>
+        {% elif rahro_status and rahro_status.found %}
+          <span style="font-size: 13px; color: var(--gn-muted); font-weight: 700;">۰ سهمیه (کسر از امتیاز)</span>
+        {% else %}
+          <span style="font-size: 13px; color: var(--gn-muted); font-weight: 700;">ندارد (کاربر آزاد)</span>
+        {% endif %}
+      </div>
+      <div class="gn-subtitle mt-1" style="font-size: 11px; color: var(--gn-muted);">
+        {% if rahro_status and rahro_status.has_free_monthly_quota %}بدون کسر امتیاز رهرو{% else %}تعرفه مطابق عضویت{% endif %}
+      </div>
+    </div>
+
+    <!-- ۳. کل مدت بازی -->
+    <div class="p-3 rounded" style="background: var(--gn-surface-2); border: 1px solid var(--gn-border);">
+      <div class="d-flex align-items-center gap-1.5 mb-1" style="font-size: 11.5px; color: var(--gn-muted);">
+        <i class="ti ti-clock-play" style="color: #f5a524; font-size: 16px;"></i>
+        <span>کل مدت بازی:</span>
+      </div>
+      <div style="font-weight: 800; font-size: 18px; color: #f5a524;">
+        <span class="num">{{ rahro_status.total_gaming_minutes|default:0 }}</span>
+        <span style="font-size: 12px; font-weight: 500; color: var(--gn-muted);">دقیقه</span>
+      </div>
+      <div class="gn-subtitle mt-1" style="font-size: 11px; color: var(--gn-muted);">تردد خودکار سالن</div>
+    </div>
+
+    <!-- ۴. امتیاز رهرو / سطح -->
+    <div class="p-3 rounded" style="background: var(--gn-surface-2); border: 1px solid var(--gn-border);">
+      <div class="d-flex align-items-center gap-1.5 mb-1" style="font-size: 11.5px; color: var(--gn-muted);">
+        <i class="ti ti-coins" style="color: #34d399; font-size: 16px;"></i>
+        <span>امتیاز / سطح رهرو:</span>
+      </div>
+      {% if rahro_status and rahro_status.found %}
+        <div style="font-weight: 800; font-size: 18px; color: #34d399;">
+          <span class="num">{{ rahro_status.current_balance }}</span>
+          <span style="font-size: 12px; font-weight: 500; color: var(--gn-muted);">امتیاز</span>
+        </div>
+        <div class="gn-subtitle mt-1" style="font-size: 11px; color: #a5b4fc; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;" title="{{ rahro_status.level_name }}">
+          {{ rahro_status.level_name }}
+        </div>
+      {% else %}
+        <div style="font-weight: 700; font-size: 14px; color: var(--gn-muted);">
+          کاربر آزاد
+        </div>
+        <div class="gn-subtitle mt-1" style="font-size: 11px; color: var(--gn-muted);">خارج از مجموعه رهرو</div>
+      {% endif %}
+    </div>
+  </div>
+
+  <!-- نوار اصلی عملیات: باز کردن پنجره شارژ -->
+  <div class="d-flex align-items-center justify-content-between flex-wrap gap-3 p-3 rounded" style="background: rgba(0, 0, 0, 0.22); border: 1px solid rgba(255, 255, 255, 0.08);">
+    <div>
+      <span style="font-weight: 800; font-size: 13.5px; color: var(--gn-text);">شارژ حساب و تنظیم زمان بازی:</span>
+      <span class="d-block" style="font-size: 11.5px; color: var(--gn-muted); margin-top: 2px;">
+        با کلیک روی دکمه شارژ، پنجره محاسبه سریع زمان و دریافت وجه نقد/پوز باز می‌شود. نرخ ساعتی متناسب با عضویت (۲۰,۰۰۰ / ۴۰,۰۰۰ / ۶۰,۰۰۰ ت) اعمال می‌گردد.
+      </span>
+    </div>
+    
+    <div class="d-flex align-items-center gap-2">
+      <a href="{% if is_edge %}{% url 'edge_customer_detail' customer.id %}#wallet{% else %}{% url 'cloud_customer_detail' customer.id %}#wallet{% endif %}" class="gn-btn primary" style="padding: 10px 24px; font-weight: 800; font-size: 13.5px; background: linear-gradient(135deg, #059669, #10b981); border-color: #34d399; color: #ffffff; box-shadow: 0 4px 14px rgba(16, 185, 129, 0.3); text-decoration: none;">
+        <i class="ti ti-bolt"></i> شارژ کیف پول و زمان بازی
+      </a>
+    </div>
+  </div>
+
+  <!-- بخش اطلاع‌رسانی و تسویه نشست فعال (در صورت وجود) -->
+  {% if active_sessions %}
+    <div class="mt-3 p-3 rounded d-flex align-items-center justify-content-between flex-wrap gap-2" style="background: rgba(16, 185, 129, 0.08); border: 1px solid rgba(16, 185, 129, 0.3);">
+      <div class="d-flex align-items-center gap-2">
+        <span class="gn-status st-active"><span class="dot"></span>نشست فعال در حال اجرا</span>
+        <span style="font-size: 12.5px; font-weight: 700;">
+          {% for s in active_sessions %}
+            ایستگاه {{ s.device.name }} (شروع: {{ s.started_at|date:"H:i" }}){% if not forloop.last %} و {% endif %}
+          {% endfor %}
+        </span>
+      </div>
+      <form method="post" action="{% if is_edge %}{% url 'edge_customer_rahro_discount' customer.id %}{% else %}{% url 'cloud_customer_rahro_discount' customer.id %}{% endif %}" style="margin: 0;">
+        {% csrf_token %}
+        <input type="hidden" name="action_type" value="settle_active">
+        {% with s=active_sessions.first %}
+          <input type="hidden" name="session_id" value="{{ s.id }}">
+        {% endwith %}
+        <input type="hidden" name="discount_percent" value="{% if rahro_status.has_free_monthly_quota %}50{% else %}0{% endif %}">
+        <button type="submit" class="gn-btn" style="padding: 6px 14px; font-size: 12px; font-weight: 700; background: rgba(239, 68, 68, 0.15); color: #f87171; border: 1px solid rgba(239, 68, 68, 0.35);" data-gn-confirm="آیا از توقف و تسویه این نشست مطمئن هستید؟">
+          <i class="ti ti-player-stop"></i> توقف و تسویه نشست فعال
+        </button>
+      </form>
+    </div>
+  {% endif %}
+</div>
+
+<!-- ============================================================== -->
+<!-- پنجره مودال شارژ کیف پول و محاسبه خودکار زمان بازی -->
+<!-- ============================================================== -->
+<div id="rechargeModal-{{ customer.id }}" class="recharge-modal-overlay" data-gn-modal-recharge data-tier="{% if rahro_status and rahro_status.found %}{{ rahro_status.pricing_tier }}{% else %}REGULAR{% endif %}" data-has-quota="{% if rahro_status and rahro_status.has_free_monthly_quota %}1{% else %}0{% endif %}" data-remaining-quotas="{{ rahro_status.remaining_monthly_quotas|default:0 }}" style="display: none; position: fixed; inset: 0; z-index: 9999; background: rgba(0, 0, 0, 0.78); backdrop-filter: blur(5px); align-items: center; justify-content: center; padding: 16px; overflow-y: auto;">
+  <div class="gn-card" style="width: 100%; max-width: 530px; background: #0f172a; border: 1px solid rgba(45, 212, 191, 0.35); border-radius: 16px; box-shadow: 0 10px 40px rgba(0, 0, 0, 0.6); padding: 22px; position: relative;">
+    
+    <!-- هدر مودال -->
+    <div class="d-flex align-items-center justify-content-between pb-3 mb-3" style="border-bottom: 1px solid rgba(255, 255, 255, 0.1);">
+      <div class="d-flex align-items-center gap-2">
+        <div style="width: 38px; height: 38px; border-radius: 10px; background: rgba(45, 212, 191, 0.15); color: #2dd4bf; display: flex; align-items: center; justify-content: center; font-size: 20px;">
+          ⚡
+        </div>
+        <div>
+          <h4 style="margin: 0; font-weight: 800; font-size: 16px; color: #f8fafc;">شارژ حساب و زمان بازی</h4>
+          <span style="font-size: 12px; color: #94a3b8;">گیمر: <strong style="color: #f1f5f9;">{{ customer.full_name }}</strong> (موجودی فعلی: {{ customer.wallet.balance|default:0|toman }})</span>
+        </div>
+      </div>
+      <button type="button" data-gn-modal-close="rechargeModal-{{ customer.id }}" style="background: none; border: none; color: #94a3b8; font-size: 22px; cursor: pointer; padding: 4px;" title="بستن">
+        ✕
+      </button>
+    </div>
+
+    <!-- بنر تعرفه و وضعیت عضویت -->
+    <div class="p-3 rounded mb-3" style="background: rgba(30, 41, 59, 0.85); border: 1px solid rgba(255, 255, 255, 0.08); font-size: 12.5px;">
+      {% if rahro_status and rahro_status.found %}
+        {% if rahro_status.pricing_tier == 'CADRE_SENIOR' %}
+          <div class="d-flex align-items-center gap-2" style="color: #c084fc; font-weight: 700;">
+            <i class="ti ti-shield-check" style="font-size: 17px;"></i>
+            <span>عضو کادر و پایه ۸ و ۹ — تعرفه اختصاصی: ۲۰,۰۰۰ تومان در ساعت</span>
+          </div>
+        {% else %}
+          <div class="d-flex align-items-center gap-2" style="color: #34d399; font-weight: 700;">
+            <i class="ti ti-school" style="font-size: 17px;"></i>
+            <span>عضو رهرو (پایه ۵ تا ۷) — تعرفه پایه: ۴۰,۰۰۰ تومان در ساعت</span>
+          </div>
+          {% if rahro_status.has_free_monthly_quota %}
+            <div class="mt-1" style="color: #38bdf8; font-size: 11.5px;">
+              🎁 شما <strong>{{ rahro_status.remaining_monthly_quotas }} سهمیه ماهانه ۵۰٪</strong> دارید (هر ساعت بازی با سهمیه = ۲۰,۰۰۰ تومان).
+            </div>
+          {% else %}
+            <div class="mt-1" style="color: #94a3b8; font-size: 11.5px;">
+              سهمیه ۵۰٪ این ماه پایان یافته است (شارژ با تعرفه پایه ۴۰,۰۰۰ ت انجام می‌شود).
+            </div>
+          {% endif %}
+        {% endif %}
+      {% else %}
+        <div class="d-flex align-items-center gap-2" style="color: #cbd5e1; font-weight: 700;">
+          <i class="ti ti-user" style="font-size: 17px;"></i>
+          <span>کاربر عادی (خارج از مجموعه) — تعرفه آزاد: ۶۰,۰۰۰ تومان در ساعت</span>
+        </div>
+      {% endif %}
+    </div>
+
+    <form method="post" action="{% if is_edge %}{% url 'edge_customer_rahro_recharge' customer.id %}{% else %}{% url 'cloud_customer_rahro_recharge' customer.id %}{% endif %}" id="recharge-form-{{ customer.id }}">
+      {% csrf_token %}
+      
+      <!-- ۱. دکمه‌های سریع انتخاب مدت بازی -->
+      <label class="gn-label mb-2" style="font-size: 12.5px; font-weight: 700; color: #f1f5f9;">
+        انتخاب سریع مدت بازی:
+      </label>
+      <div class="d-flex align-items-center gap-2 flex-wrap mb-3" id="quick-hour-btns-{{ customer.id }}" data-gn-hours-wrap>
+        <button type="button" class="gn-btn quick-hour-btn primary" data-hours="1" data-gn-recharge-hour="1" style="flex: 1; padding: 9px 10px; font-size: 12.5px; font-weight: 700;">
+          ۱ ساعت بازی
+        </button>
+        <button type="button" class="gn-btn quick-hour-btn" data-hours="2" data-gn-recharge-hour="2" style="flex: 1; padding: 9px 10px; font-size: 12.5px; font-weight: 700;">
+          ۲ ساعت بازی
+        </button>
+        <button type="button" class="gn-btn quick-hour-btn" data-hours="3" data-gn-recharge-hour="3" style="flex: 1; padding: 9px 10px; font-size: 12.5px; font-weight: 700;">
+          ۳ ساعت بازی
+        </button>
+        <button type="button" class="gn-btn quick-hour-btn" data-hours="custom" data-gn-recharge-hour="custom" style="padding: 9px 14px; font-size: 12.5px; font-weight: 700;">
+          مبلغ دلخواه
+        </button>
+      </div>
+
+      <input type="hidden" name="hours" id="input-hours-{{ customer.id }}" data-gn-hours-input value="1">
+      <input type="hidden" name="use_coupon" id="input-coupon-{{ customer.id }}" data-gn-coupon-input value="{% if rahro_status.has_free_monthly_quota %}50{% else %}{% endif %}">
+
+      <!-- فیلد مبلغ شارژ و روش دریافت -->
+      <div class="mb-3">
+        <label class="gn-label mb-1" style="font-size: 12px; font-weight: 700; color: #f1f5f9;">
+          مبلغ شارژ نقدی / کارتخوان (تومان):
+        </label>
+        <div style="position: relative;">
+          <input type="text" inputmode="numeric" dir="ltr" name="amount" id="input-amount-{{ customer.id }}" data-gn-recharge-amount class="gn-input num text-center" value="{% if rahro_status and rahro_status.found %}{% if rahro_status.pricing_tier == 'CADRE_SENIOR' or rahro_status.has_free_monthly_quota %}20000{% else %}40000{% endif %}{% else %}60000{% endif %}" style="background: #0b1329 !important; border: 1px solid #334155 !important; color: #2dd4bf !important; font-size: 18px; font-weight: 900; padding-inline-end: 45px; height: 46px;" placeholder="مثلاً ۲۰۰۰۰" required>
+          <span style="position: absolute; left: 12px; top: 50%; transform: translateY(-50%); color: #94a3b8; font-size: 13px; font-weight: 700; pointer-events: none;">تومان</span>
+        </div>
+      </div>
+
+      <!-- اگر عضو رهرو پایه ۵ تا ۷ باشد و سهمیه داشته باشد -->
+      {% if rahro_status and rahro_status.found and rahro_status.pricing_tier != 'CADRE_SENIOR' %}
+        {% if rahro_status.has_free_monthly_quota %}
+          <div class="p-2.5 rounded mb-3" style="background: rgba(56, 189, 248, 0.08); border: 1px solid rgba(56, 189, 248, 0.25);">
+            <label class="d-flex align-items-center gap-2" style="font-size: 12px; color: #e2e8f0; cursor: pointer; margin: 0;">
+              <input type="checkbox" id="chk-use-coupon-{{ customer.id }}" data-gn-recharge-coupon checked style="width: 17px; height: 17px; accent-color: #0284c7; cursor: pointer;">
+              <span>استفاده از ۱ سهمیه ماهانه ۵۰٪ رهرو (نرخ ۱ ساعت: ۲۰,۰۰۰ ت بدون کسر امتیاز)</span>
+            </label>
+          </div>
+        {% endif %}
+      {% endif %}
+
+      <!-- روش دریافت وجه -->
+      <div class="mb-3">
+        <label class="gn-label mb-1" style="font-size: 12px; font-weight: 700; color: #f1f5f9;">
+          روش دریافت وجه:
+        </label>
+        <div class="d-flex align-items-center gap-2">
+          <label class="d-flex align-items-center gap-2 px-3 py-2 rounded" style="background: #0b1329; border: 1px solid #334155; cursor: pointer; flex: 1; font-size: 12.5px; color: #cbd5e1;">
+            <input type="radio" name="payment_method" value="pos" checked style="accent-color: #10b981;">
+            <span><i class="ti ti-credit-card"></i> کارتخوان باجه (پوز)</span>
+          </label>
+          <label class="d-flex align-items-center gap-2 px-3 py-2 rounded" style="background: #0b1329; border: 1px solid #334155; cursor: pointer; flex: 1; font-size: 12.5px; color: #cbd5e1;">
+            <input type="radio" name="payment_method" value="cash" style="accent-color: #10b981;">
+            <span><i class="ti ti-cash"></i> پرداخت نقدی</span>
+          </label>
+        </div>
+      </div>
+
+      <!-- کادر زنده شفاف‌سازی شارژ -->
+      <div id="modal-explain-{{ customer.id }}" class="p-3 rounded mb-3" style="background: rgba(45, 212, 191, 0.08); border: 1px solid rgba(45, 212, 191, 0.28); font-size: 12.5px; line-height: 1.8; color: #e2e8f0;">
+        <div class="d-flex align-items-center gap-2 mb-1" style="font-weight: 800; color: #2dd4bf;">
+          <i class="ti ti-calculator"></i>
+          <span>محاسبه پرداخت و زمان بازی:</span>
+        </div>
+        <div id="modal-explain-text-{{ customer.id }}" data-gn-explain-text>
+          {% if rahro_status and rahro_status.found %}
+            {% if rahro_status.pricing_tier == 'CADRE_SENIOR' %}
+              تعرفه کادر و پایه ۸ و ۹: <strong>ساعتی ۲۰,۰۰۰ ت</strong> | مدت بازی: <strong>۱ ساعت</strong><br>
+              مبلغ پرداختی نقد / کارتخوان: <strong style="color: #2dd4bf; font-size: 14px;">۲۰,۰۰۰ تومان</strong>
+            {% elif rahro_status.has_free_monthly_quota %}
+              🎁 <strong>۱ سهمیه ماهانه ۵۰٪ رهرو</strong> اعمال می‌شود.<br>
+              نرخ کلاینت برای ۱ ساعت روی <strong style="color: #38bdf8;">۲۰,۰۰۰ ت</strong> تنظیم شده و مبلغ <strong style="color: #2dd4bf; font-size: 14px;">۲۰,۰۰۰ تومان</strong> به کیف پول افزوده می‌شود.
+            {% else %}
+              تعرفه اعضای رهرو: <strong>ساعتی ۴۰,۰۰۰ ت</strong> | مدت بازی: <strong>۱ ساعت</strong><br>
+              مبلغ پرداختی نقد / کارتخوان: <strong style="color: #2dd4bf; font-size: 14px;">۴۰,۰۰۰ تومان</strong>
+            {% endif %}
+          {% else %}
+            تعرفه آزاد کاربر عادی: <strong>ساعتی ۶۰,۰۰۰ ت</strong> | مدت بازی: <strong>۱ ساعت</strong><br>
+            مبلغ پرداختی نقد / کارتخوان: <strong style="color: #2dd4bf; font-size: 14px;">۶۰,۰۰۰ تومان</strong>
+          {% endif %}
+        </div>
+      </div>
+
+      <!-- دکمه نهایی ثبت شارژ -->
+      <div class="d-flex align-items-center justify-content-between gap-2 pt-2">
+        <button type="button" class="gn-btn" data-gn-modal-close="rechargeModal-{{ customer.id }}" style="padding: 10px 18px; font-weight: 700; font-size: 12.5px;">
+          انصراف
+        </button>
+        <button type="submit" class="gn-btn primary" style="flex: 1; padding: 11px 20px; font-weight: 800; font-size: 13.5px; background: linear-gradient(135deg, #059669, #10b981); border-color: #34d399; color: #ffffff;">
+          <i class="ti ti-check"></i> تایید دریافت وجه و افزایش موجودی
+        </button>
+      </div>
+    </form>
+  </div>
+</div>

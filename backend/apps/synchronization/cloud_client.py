@@ -44,6 +44,19 @@ class CloudClient:
         )
         self.verify: str | bool = settings.CLOUD_CA_BUNDLE or True
 
+    def close(self) -> None:
+        self.session.close()
+
+    @staticmethod
+    def _json_response(resp) -> dict:
+        try:
+            body = resp.json()
+        except ValueError as exc:
+            raise CloudUnavailable("cloud returned invalid JSON") from exc
+        if not isinstance(body, dict):
+            raise CloudUnavailable("cloud returned a non-object response")
+        return body
+
     # -- low level ---------------------------------------------------------
     def _request(self, method: str, path: str, **kwargs) -> dict:
         url = f"{self.base}{path}"
@@ -61,7 +74,7 @@ class CloudClient:
             raise CloudRejected(resp.status_code, body)
         if resp.status_code == 204:
             return {}
-        return resp.json()
+        return self._json_response(resp)
 
     # -- protocol ----------------------------------------------------------
     @classmethod
@@ -80,9 +93,13 @@ class CloudClient:
             )
         except requests.RequestException as exc:
             raise CloudUnavailable(str(exc)) from exc
+        finally:
+            session.close()
+        if resp.status_code >= 500:
+            raise CloudUnavailable(f"HTTP {resp.status_code}")
         if resp.status_code >= 400:
             raise CloudRejected(resp.status_code, resp.text[:500])
-        return resp.json()
+        return cls._json_response(resp)
 
     def heartbeat(self, payload: dict) -> dict:
         return self._request("POST", "/api/v1/edge/heartbeat", json=payload)
@@ -95,6 +112,9 @@ class CloudClient:
 
     def fetch_config(self, *, after: int = 0) -> dict:
         return self._request("GET", "/api/v1/edge/config", params={"after": after})
+
+    def fetch_seed_catalog(self) -> dict:
+        return self._request("GET", "/api/v1/edge/seed-catalog")
 
     def ack_command(self, command_id: str, *, status: str, result: Any = None,
                     error: str = "") -> dict:

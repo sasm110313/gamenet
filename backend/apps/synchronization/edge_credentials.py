@@ -63,7 +63,7 @@ def load_credentials() -> EdgeCredentials:
     return EdgeCredentials(
         edge_id=str(identity.edge_id),
         secret=data["secret"],
-        base_url=settings.CLOUD_BASE_URL,
+        base_url=identity.cloud_base_url or data.get("base_url") or settings.CLOUD_BASE_URL,
         command_public_key=identity.command_public_key,
     )
 

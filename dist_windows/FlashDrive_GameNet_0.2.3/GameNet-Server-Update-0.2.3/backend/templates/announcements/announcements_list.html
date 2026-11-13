@@ -1,0 +1,214 @@
+{% extends "base.html" %}
+{% load gn %}
+
+{% block title %}مدیریت اطلاعیه‌ها و پیام‌های سالن{% endblock %}
+{% block page_title %}تابلو اعلانات و اطلاعیه‌های سالن{% endblock %}
+{% block page_subtitle %}ارسال پیام‌های مدیریت، قوانین سالن، تورنمنت‌ها و هشدارهای مهم به صفحه کلاینت‌های بازی سرای رهرو{% endblock %}
+
+{% block content %}
+<!-- KPI cards -->
+<div class="gn-grid cols-3 mb-3">
+  <div class="gn-card gn-kpi">
+    <span class="label">تعداد کل پیام‌ها</span>
+    <span class="value num">{{ announcements_total }}</span>
+    <span class="hint">مجموع پیام‌های ثبت‌شده در سامانه</span>
+  </div>
+  <div class="gn-card gn-kpi accent">
+    <span class="label">پیام‌های فعال روی کیوسک‌ها</span>
+    <span class="value num">{{ announcements_active }}</span>
+    <span class="hint">در حال نمایش در صفحه ورود و منوی بازی‌ها</span>
+  </div>
+  <div class="gn-card gn-kpi">
+    <span class="label">پخش زنده به سیستم‌ها</span>
+    <span class="value" style="font-size: 20px; color: var(--gn-primary); font-weight: 800;">لحظه‌ای (WebSocket)</span>
+    <span class="hint">انتشار بی‌درنگ روی تمام کلاینت‌های آنلاین سالن</span>
+  </div>
+</div>
+
+<!-- Main Table Card -->
+<div class="gn-card">
+  <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-3">
+    <div class="d-flex align-items-center gap-2">
+      <i class="ti ti-speakerphone text-primary" style="font-size: 22px;"></i>
+      <h6 id="ann-table-title" class="mb-0" style="font-weight: 800; font-size: 15px;">لیست پیام‌ها و اطلاعیه‌های سالن</h6>
+    </div>
+    <div class="d-flex gap-2">
+      <button type="button" class="gn-btn primary" data-gn-ann-add>
+        <i class="ti ti-plus"></i> ثبت اطلاعیه جدید
+      </button>
+      <form method="post" class="gn-inline-form">
+        {% csrf_token %}
+        <input type="hidden" name="action" value="reset">
+        <button type="submit" class="gn-btn" data-gn-confirm="آیا از بازنشانی پیام‌ها به پیام خوش‌آمدگویی پیش‌فرض بازی سرای رهرو مطمئنید؟" title="بازنشانی به متن اولیه">
+          <i class="ti ti-reload"></i> بازنشانی پیش‌فرض
+        </button>
+      </form>
+    </div>
+  </div>
+
+  <div class="gn-table-wrap" tabindex="0" role="region" aria-labelledby="ann-table-title">
+    <table class="gn-table">
+      <thead>
+        <tr>
+          <th style="width: 50px;">نوع</th>
+          <th>عنوان اطلاعیه</th>
+          <th>متن پیام</th>
+          <th>اولویت</th>
+          <th>وضعیت</th>
+          <th>ثبت‌کننده</th>
+          <th style="text-align: left;">عملیات</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for ann in announcements %}
+          <tr>
+            <td style="text-align: center;">
+              {% if ann.type == 'warning' %}
+                <span title="هشدار" style="font-size: 18px;">⚠️</span>
+              {% elif ann.type == 'success' %}
+                <span title="رویداد / مسابقات" style="font-size: 18px;">🏆</span>
+              {% elif ann.type == 'danger' %}
+                <span title="فوری / اخطار" style="font-size: 18px;">🚨</span>
+              {% else %}
+                <span title="اطلاع‌رسانی" style="font-size: 18px;">📢</span>
+              {% endif %}
+            </td>
+            <td>
+              <strong style="color: var(--gn-text); font-size: 14px;">{{ ann.title }}</strong>
+            </td>
+            <td style="max-width: 380px;">
+              <div style="font-size: 12.5px; color: var(--gn-text); line-height: 1.6; word-break: break-word;">
+                {{ ann.content|linebreaksbr }}
+              </div>
+            </td>
+            <td>
+              <span class="gn-chip num" style="font-size: 11.5px; font-weight: 700;">
+                {{ ann.priority|default:1 }}
+              </span>
+            </td>
+            <td>
+              {% if ann.is_active %}
+                <span class="gn-chip" style="background: rgba(16, 185, 129, 0.1); color: #059669; border-color: rgba(16, 185, 129, 0.3);">
+                  <span class="dot" style="background: #10b981;"></span>در حال نمایش
+                </span>
+              {% else %}
+                <span class="gn-chip" style="background: rgba(100, 116, 139, 0.1); color: #64748b; border-color: rgba(100, 116, 139, 0.3);">
+                  غیرفعال
+                </span>
+              {% endif %}
+            </td>
+            <td style="font-size: 12px; color: var(--gn-muted);">
+              {{ ann.author|default:"مدیریت" }}
+            </td>
+            <td style="text-align: left;">
+              <div class="d-flex justify-content-end align-items-center gap-1.5">
+                <!-- Toggle Form -->
+                <form method="post" class="gn-inline-form">
+                  {% csrf_token %}
+                  <input type="hidden" name="action" value="toggle">
+                  <input type="hidden" name="ann_id" value="{{ ann.id }}">
+                  <button type="submit" class="gn-btn sm {% if ann.is_active %}secondary{% else %}primary{% endif %}" title="تغییر وضعیت فعال/غیرفعال">
+                    {% if ann.is_active %}
+                      <i class="ti ti-eye-off"></i> عدم نمایش
+                    {% else %}
+                      <i class="ti ti-eye"></i> نمایش در سالن
+                    {% endif %}
+                  </button>
+                </form>
+
+                <!-- Edit Button -->
+                <button
+                  type="button"
+                  class="gn-btn sm"
+                  data-gn-ann-edit
+                  data-ann-id="{{ ann.id }}"
+                  data-ann-title="{{ ann.title }}"
+                  data-ann-content="{{ ann.content }}"
+                  data-ann-type="{{ ann.type|default:'info' }}"
+                  data-ann-priority="{{ ann.priority|default:1 }}"
+                  data-ann-active="{% if ann.is_active %}1{% else %}0{% endif %}"
+                  title="ویرایش اطلاعیه"
+                >
+                  <i class="ti ti-edit"></i> ویرایش
+                </button>
+
+                <!-- Delete Form -->
+                <form method="post" class="gn-inline-form">
+                  {% csrf_token %}
+                  <input type="hidden" name="action" value="delete">
+                  <input type="hidden" name="ann_id" value="{{ ann.id }}">
+                  <button type="submit" class="gn-btn sm danger" data-gn-confirm="آیا از حذف کامل اطلاعیه «{{ ann.title }}» مطمئن هستید؟" title="حذف اطلاعیه">
+                    <i class="ti ti-trash"></i>
+                  </button>
+                </form>
+              </div>
+            </td>
+          </tr>
+        {% empty %}
+          <tr>
+            <td colspan="7" class="text-center py-4 gn-muted">
+              هیچ اطلاعیه‌ای ثبت نشده است. با کلیک بر روی «ثبت اطلاعیه جدید» اولین پیام سالن را بنویسید.
+            </td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<!-- Add/Edit Announcement Modal -->
+<dialog id="ann-modal" class="gn-dialog" closedby="any" aria-modal="true" aria-labelledby="ann-modal-title" style="max-width: 580px; width: 92%; background: #ffffff; color: var(--gn-text); border: 1px solid var(--gn-border); border-radius: 16px; padding: 0;">
+  <div style="padding: 16px 20px; border-bottom: 1px solid var(--gn-border); display: flex; justify-content: space-between; align-items: center;">
+    <h6 id="ann-modal-title" class="mb-0" style="font-weight: 800; font-size: 16px;">ثبت اطلاعیه جدید سالن</h6>
+    <button type="button" class="btn-close" data-gn-dialog-close="ann-modal" aria-label="بستن"></button>
+  </div>
+  <form method="post" id="ann-form">
+    {% csrf_token %}
+    <input type="hidden" name="action" id="ann-action" value="add">
+    <input type="hidden" name="ann_id" id="ann-id" value="">
+
+    <div class="p-3">
+      <div class="mb-3">
+        <label class="form-label" for="ann-title-input" style="font-size: 13px; font-weight: 700;">عنوان اطلاعیه <span class="text-danger">*</span></label>
+        <input type="text" name="title" id="ann-title-input" class="gn-input w-100" placeholder="مثال: قوانین بازی سرای رهرو، مسابقات آخر هفته..." required>
+      </div>
+
+      <div class="mb-3">
+        <label class="form-label" for="ann-content-input" style="font-size: 13px; font-weight: 700;">متن پیام برای گیمرها <span class="text-danger">*</span></label>
+        <textarea name="content" id="ann-content-input" rows="4" class="gn-input w-100" style="resize: vertical; font-size: 13px; line-height: 1.6;" placeholder="متن کامل پیام یا دستورالعمل سالن را اینجا بنویسید..." required></textarea>
+      </div>
+
+      <div class="row g-2 mb-3">
+        <div class="col-sm-6 col-12">
+          <label class="form-label" for="ann-type-select" style="font-size: 13px; font-weight: 700;">نوع و رنگ کادر</label>
+          <select name="type" id="ann-type-select" class="gn-input w-100">
+            <option value="info">📢 اطلاع‌رسانی عمومی (آبی / خنثی)</option>
+            <option value="success">🏆 مسابقات و رویداد ویژه (سبز / طلایی)</option>
+            <option value="warning">⚠️ تذکر و هشدار سالن (زرد)</option>
+            <option value="danger">🚨 فوری / اخطار انضباطی (قرمز)</option>
+          </select>
+        </div>
+        <div class="col-sm-6 col-12">
+          <label class="form-label" for="ann-priority-input" style="font-size: 13px; font-weight: 700;">اولویت نمایش (۱ تا ۱۰)</label>
+          <input type="number" name="priority" id="ann-priority-input" class="gn-input w-100" min="1" max="10" value="1">
+          <small class="gn-muted" style="font-size: 11px;">پیام‌های با اولویت بالاتر اول نمایش داده می‌شوند.</small>
+        </div>
+      </div>
+
+      <div class="form-check form-switch mt-2">
+        <input class="form-check-input" type="checkbox" name="is_active" id="ann-active-input" checked>
+        <label class="form-check-label" for="ann-active-input" style="font-size: 13px; font-weight: 700;">
+          انتشار فوری روی صفحه کلاینت‌ها (فعال)
+        </label>
+      </div>
+    </div>
+
+    <div class="d-flex justify-content-end gap-2 p-3" style="border-top: 1px solid var(--gn-border);">
+      <button type="button" class="gn-btn" data-gn-dialog-close="ann-modal">انصراف</button>
+      <button type="submit" class="gn-btn primary" id="ann-submit-btn">
+        <i class="ti ti-check"></i> ذخیره و انتشار پیام
+      </button>
+    </div>
+  </form>
+</dialog>
+{% endblock %}

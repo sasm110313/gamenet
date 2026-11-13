@@ -1,0 +1,202 @@
+<!DOCTYPE html>
+<html lang="fa" dir="rtl">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>خطای داخلی سرور (۵۰۰) · بازی سرای رهرو</title>
+  <style>
+    :root {
+      --bg: #090d16;
+      --card-bg: #111827;
+      --border: #1f2937;
+      --text: #f3f4f6;
+      --text-muted: #9ca3af;
+      --danger: #ef4444;
+      --danger-bg: rgba(239, 68, 68, 0.12);
+      --btn-bg: #2563eb;
+      --btn-hover: #1d4ed8;
+      --code-bg: #030712;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      padding: 24px;
+      background: var(--bg);
+      color: var(--text);
+      font-family: system-ui, -apple-system, "Segoe UI", Tahoma, sans-serif;
+      line-height: 1.6;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      min-height: 100vh;
+    }
+    .error-card {
+      background: var(--card-bg);
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      max-width: 900px;
+      width: 100%;
+      padding: 32px;
+      box-shadow: 0 20px 40px rgba(0,0,0,0.5);
+    }
+    .header {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      margin-bottom: 20px;
+      border-bottom: 1px solid var(--border);
+      padding-bottom: 18px;
+    }
+    .badge {
+      background: var(--danger-bg);
+      color: var(--danger);
+      padding: 6px 14px;
+      border-radius: 8px;
+      font-weight: 800;
+      font-size: 14px;
+      border: 1px solid rgba(239, 68, 68, 0.3);
+    }
+    h1 {
+      margin: 0;
+      font-size: 20px;
+      font-weight: 800;
+      color: #fff;
+    }
+    .desc {
+      color: var(--text-muted);
+      font-size: 14px;
+      margin-bottom: 20px;
+    }
+    .alert-box {
+      background: var(--danger-bg);
+      border: 1px solid rgba(239, 68, 68, 0.3);
+      border-radius: 10px;
+      padding: 16px;
+      margin-bottom: 20px;
+      color: #fca5a5;
+      font-size: 14px;
+      font-weight: 700;
+    }
+    .tb-container {
+      position: relative;
+      margin-bottom: 24px;
+    }
+    .tb-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      background: #1e293b;
+      padding: 10px 16px;
+      border-top-left-radius: 10px;
+      border-top-right-radius: 10px;
+      font-size: 12.5px;
+      color: #cbd5e1;
+      font-weight: 700;
+    }
+    pre {
+      margin: 0;
+      background: var(--code-bg);
+      border: 1px solid var(--border);
+      border-top: none;
+      border-bottom-left-radius: 10px;
+      border-bottom-right-radius: 10px;
+      padding: 18px;
+      color: #f1f5f9;
+      font-family: Consolas, "Courier New", monospace;
+      font-size: 12.5px;
+      line-height: 1.5;
+      overflow-x: auto;
+      max-height: 380px;
+      direction: ltr;
+      text-align: left;
+      white-space: pre-wrap;
+      word-break: break-all;
+    }
+    .actions {
+      display: flex;
+      gap: 12px;
+      flex-wrap: wrap;
+    }
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 10px 20px;
+      border-radius: 8px;
+      font-weight: 700;
+      font-size: 14px;
+      cursor: pointer;
+      text-decoration: none;
+      transition: all 0.15s ease;
+      border: none;
+    }
+    .btn-copy {
+      background: #10b981;
+      color: #fff;
+    }
+    .btn-copy:hover {
+      background: #059669;
+    }
+    .btn-back {
+      background: #374151;
+      color: #fff;
+    }
+    .btn-back:hover {
+      background: #4b5563;
+    }
+  </style>
+</head>
+<body>
+  <div class="error-card">
+    <div class="header">
+      <div class="badge">خطای ۵۰۰</div>
+      <div>
+        <h1>خطای پیش‌بینی‌نشده در سرور گیم‌نت</h1>
+        <div style="font-size: 12px; color: #94a3b8; margin-top: 4px;">کد پیگیری: <span style="font-family: monospace;">{{ error_id|default:"ERR-GENERIC" }}</span></div>
+      </div>
+    </div>
+
+    <div class="desc">
+      متأسفانه در پردازش این عملیات خطایی در سرور رخ داد. جزئیات کامل خطا و ردیابی فنی (Traceback) در زیر ثبت شده است تا بتوانید آن را با یک کلیک کپی کرده و گزارش دهید.
+    </div>
+
+    {% if error_message %}
+    <div class="alert-box">
+      <strong>نوع خطا:</strong> {{ error_type|default:"Exception" }}<br>
+      <strong>پیام:</strong> {{ error_message }}
+    </div>
+    {% endif %}
+
+    <div class="tb-container">
+      <div class="tb-header">
+        <span>متن کامل ردگیری خطا (Python Traceback):</span>
+        <button class="btn btn-copy" style="padding: 4px 12px; font-size: 12px;" onclick="copyTraceback()">📋 کپی متن خطا</button>
+      </div>
+      <pre id="traceback-content">{{ traceback|default:"No traceback available." }}</pre>
+    </div>
+
+    <div class="actions">
+      <button class="btn btn-copy" onclick="copyTraceback()">📋 کپی متن کامل خطا برای پشتیبانی</button>
+      <a class="btn btn-back" href="/">بازگشت به صفحه اصلی سالن</a>
+    </div>
+  </div>
+
+  <script>
+    function copyTraceback() {
+      const text = document.getElementById('traceback-content').innerText;
+      const fullText = `=== گزارش خطای سرور گیم‌نت ===\nکد: {{ error_id }}\nپیام: {{ error_message }}\n\n${text}`;
+      navigator.clipboard.writeText(fullText).then(function() {
+        alert('متن خطا با موفقیت در کلیپ‌بورد کپی شد.');
+      }).catch(function() {
+        const ta = document.createElement('textarea');
+        ta.value = fullText;
+        document.body.appendChild(ta);
+        ta.select();
+        document.execCommand('copy');
+        document.body.removeChild(ta);
+        alert('متن خطا در کلیپ‌بورد کپی شد.');
+      });
+    }
+  </script>
+</body>
+</html>

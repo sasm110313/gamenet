@@ -1,0 +1,242 @@
+{% load static gn %}<!doctype html>
+<html dir="rtl" lang="fa" data-bs-theme="light">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light">
+  <title>{% block title %}GameNet{% endblock %} · {% if is_edge %}سرور بازی سرای رهرو{% else %}پنل آنلاین بازی سرای رهرو{% endif %}</title>
+  <link rel="stylesheet" href="{% static 'vendor/css/tabler.rtl.min.css' %}?v={{ gamenet_version|default:'0.2.0' }}-20261111a">
+  <link rel="stylesheet" href="{% static 'vendor/css/tabler-icons.min.css' %}?v={{ gamenet_version|default:'0.2.0' }}-20261111a">
+  <link rel="stylesheet" href="{% static 'css/app.css' %}?v={{ gamenet_version|default:'0.2.0' }}-20261111a">
+  <script src="{% static 'vendor/js/htmx.min.js' %}?v={{ gamenet_version|default:'0.2.0' }}-20261111a" defer></script>
+  <script src="{% static 'js/app.js' %}?v={{ gamenet_version|default:'0.2.0' }}-20261111a" defer></script>
+</head>
+<body>
+<div class="gn-shell">
+  <aside class="gn-sidebar">
+    <div class="gn-brand">
+      <div class="gn-brand-mark">G</div>
+      <div>
+        <div class="gn-brand-name">GameNet</div>
+        <div class="gn-brand-sub">مدیریت هوشمند بازی سرای رهرو {% if is_edge %}(سرور سالن){% else %}(پنل آنلاین){% endif %}</div>
+      </div>
+    </div>
+
+    <nav class="gn-nav">
+      {% with n=request.resolver_match.url_name %}
+      {% if is_edge %}
+        <div class="gn-nav-section-title">عملیات</div>
+        <a href="{% url 'edge_overview' %}" class="{% if n == 'edge_overview' %}active{% endif %}">
+          <i class="ti ti-layout-dashboard"></i><span>داشبورد</span>
+        </a>
+        <a href="{% url 'edge_devices' %}" class="{% if n|slice:':12' == 'edge_device_' or n == 'edge_devices' %}active{% endif %}">
+          <i class="ti ti-device-desktop"></i><span>ایستگاه‌های بازی</span>
+        </a>
+        <a href="{% url 'edge_customers' %}" class="{% if n|slice:':14' == 'edge_customer_' or n == 'edge_customers' %}active{% endif %}">
+          <i class="ti ti-users"></i><span>مشتریان و اعضا</span>
+        </a>
+        <a href="{% url 'edge_sessions' %}" class="{% if n|slice:':13' == 'edge_session_' or n == 'edge_sessions' %}active{% endif %}">
+          <i class="ti ti-clock-play"></i><span>نشست‌های بازی</span>
+        </a>
+        <a href="{% url 'edge_games' %}" class="{% if n == 'edge_games' %}active{% endif %}">
+          <i class="ti ti-device-gamepad-2"></i><span>بازی‌ها و برنامه‌ها</span>
+        </a>
+        <a href="{% url 'edge_announcements' %}" class="{% if n == 'edge_announcements' %}active{% endif %}">
+          <i class="ti ti-speakerphone"></i><span>اطلاعیه‌ها و پیام‌ها</span>
+        </a>
+
+        <div class="gn-nav-section-title mt-3">کسب‌وکار</div>
+        <a href="{% url 'edge_ledger' %}" class="{% if n == 'edge_ledger' %}active{% endif %}">
+          <i class="ti ti-wallet"></i><span>امور مالی و صندوق</span>
+        </a>
+        <a href="{% url 'edge_pricing' %}" class="{% if n|slice:':11' == 'edge_tariff' or n|slice:':10' == 'edge_group' or n == 'edge_pricing' %}active{% endif %}">
+          <i class="ti ti-tags"></i><span>تعرفه‌ها و گروه‌ها</span>
+        </a>
+        <a href="{% url 'server_errors_page' %}" class="{% if n == 'server_errors_page' %}active{% endif %}">
+          <i class="ti ti-bug"></i><span>گزارش خطاهای سرور</span>
+        </a>
+      {% else %}
+        <div class="gn-nav-section-title">عملیات</div>
+        <a href="{% url 'cloud_overview' %}" class="{% if n == 'cloud_overview' %}active{% endif %}">
+          <i class="ti ti-layout-dashboard"></i><span>داشبورد</span>
+        </a>
+        <a href="{% url 'cloud_devices' %}" class="{% if n|slice:':13' == 'cloud_device_' or n == 'cloud_devices' %}active{% endif %}">
+          <i class="ti ti-device-desktop"></i><span>ایستگاه‌های بازی</span>
+        </a>
+        <a href="{% url 'cloud_customers' %}" class="{% if n|slice:':15' == 'cloud_customer_' or n == 'cloud_customers' or n|slice:':22' == 'cloud_manage_customer' %}active{% endif %}">
+          <i class="ti ti-users"></i><span>مشتریان و اعضا</span>
+        </a>
+        <a href="{% url 'cloud_sessions' %}" class="{% if n == 'cloud_sessions' %}active{% endif %}">
+          <i class="ti ti-clock-play"></i><span>نشست‌های بازی</span>
+        </a>
+        <a href="{% url 'cloud_games' %}" class="{% if n == 'cloud_games' %}active{% endif %}">
+          <i class="ti ti-device-gamepad-2"></i><span>بازی‌ها و برنامه‌ها</span>
+        </a>
+        <a href="{% url 'cloud_announcements' %}" class="{% if n == 'cloud_announcements' %}active{% endif %}">
+          <i class="ti ti-speakerphone"></i><span>اطلاعیه‌ها و پیام‌ها</span>
+        </a>
+
+        <div class="gn-nav-section-title mt-3">کسب‌وکار</div>
+        <a href="{% url 'cloud_ledger' %}" class="{% if n == 'cloud_ledger' %}active{% endif %}">
+          <i class="ti ti-wallet"></i><span>امور مالی و صندوق</span>
+        </a>
+        <a href="{% url 'cloud_pricing' %}" class="{% if n == 'cloud_pricing' or n == 'cloud_manage_pricing' or n|slice:':19' == 'cloud_manage_tariff' or n|slice:':18' == 'cloud_manage_group' %}active{% endif %}">
+          <i class="ti ti-tags"></i><span>تعرفه‌ها و گروه‌ها</span>
+        </a>
+        <a href="{% url 'cloud_edges' %}" class="{% if n|slice:':10' == 'cloud_edge' or n == 'cloud_commands' or n == 'cloud_events' or n == 'cloud_config' %}active{% endif %}">
+          <i class="ti ti-server-2"></i><span>سرور سالن و تنظیمات</span>
+        </a>
+      {% endif %}
+      {% endwith %}
+    </nav>
+
+    <div class="gn-sidebar-foot">
+      <div class="d-flex justify-content-between align-items-center">
+        <span>GameNet v{{ gamenet_version }}</span>
+        <div class="d-flex align-items-center gap-1.5">
+          <a href="{% if is_edge %}{% url 'edge_account' %}{% else %}{% url 'cloud_account' %}{% endif %}" class="gn-muted" title="تنظیمات حساب و رمز عبور مدیر" style="text-decoration: none;">
+            <i class="ti ti-user-cog"></i>
+          </a>
+          {% if request.user.is_superuser %}
+            <a href="/admin/" class="gn-muted" title="تنظیمات پیشرفته سیستم" style="text-decoration: none;">
+              <i class="ti ti-settings"></i>
+            </a>
+          {% endif %}
+        </div>
+      </div>
+      <div>{% if is_edge %}سرور محلی سالن{% else %}پنل مرکزی آنلاین{% endif %}</div>
+    </div>
+  </aside>
+
+  <div class="gn-main">
+    <header class="gn-topbar">
+      <div class="d-flex align-items-center gap-2">
+        <button class="gn-btn sm d-md-none" type="button" data-gn-toggle-sidebar title="منوی ناوبری">
+          <i class="ti ti-menu-2"></i>
+        </button>
+        <div>
+          <h1 class="gn-title">{% block page_title %}داشبورد{% endblock %}</h1>
+          <p class="gn-subtitle">{% block page_subtitle %}{% endblock %}</p>
+        </div>
+      </div>
+      <div class="d-flex align-items-center gap-3">
+        {% if is_edge %}
+          {% if cloud_online %}
+            <span class="gn-chip ok" title="اطلاعات به طور خودکار با پنل آنلاین مرکزی همگام است">
+              <span class="dot"></span>متصل به سرور آنلاین
+            </span>
+          {% else %}
+            <span class="gn-chip warn" title="اینترنت قطع است؛ سیستم‌ها در شبکه محلی بدون وقفه فعال هستند و پس از اتصال، خودکار همگام خواهند شد">
+              <span class="dot"></span>حالت آفلاین (محلی)
+            </span>
+          {% endif %}
+        {% else %}
+          {% block topbar_status %}{% endblock %}
+        {% endif %}
+
+        <a href="{% if is_edge %}{% url 'edge_account' %}{% else %}{% url 'cloud_account' %}{% endif %}" class="d-flex align-items-center gap-2 px-2.5 py-1 rounded-pill" title="تنظیمات نام کاربری و رمز عبور مدیر" style="text-decoration: none; background: var(--gn-surface); border: 1px solid var(--gn-border); box-shadow: 0 1px 2px rgba(15,23,42,0.05); transition: all 120ms ease;">
+          <span class="d-inline-flex justify-content-center align-items-center rounded-circle" style="width: 26px; height: 26px; background: var(--gn-primary); color: #38bdf8; font-size: 12px; font-weight: 800; border: 1px solid #1e293b;">
+            {{ request.user.username|slice:":1"|upper }}
+          </span>
+          <span style="font-size: 12.5px; font-weight: 700; color: var(--gn-text);">
+            {{ request.user.label|default:request.user.username }}
+          </span>
+          <i class="ti ti-settings" style="font-size: 13px; color: #64748b;"></i>
+        </a>
+
+        <a class="gn-topbar-action" href="{% url 'server_errors_page' %}" title="لاگ و گزارش خطاهای سرور (جهت مشاهده و کپی)" style="color: #ef4444;">
+          <i class="ti ti-bug"></i>
+        </a>
+
+        <a class="gn-topbar-action" href="{% if is_edge %}{% url 'edge_customers' %}#create{% else %}{% url 'cloud_customers' %}#create{% endif %}" title="ثبت گیمر جدید">
+          <i class="ti ti-plus"></i>
+        </a>
+
+        <a class="gn-topbar-action danger" href="/admin/logout/" title="خروج از حساب">
+          <i class="ti ti-logout"></i>
+        </a>
+      </div>
+    </header>
+
+    <main class="gn-content">
+      {% if messages %}
+        <div class="d-flex flex-column gap-2 mb-3">
+          {% for message in messages %}
+            <div class="gn-alert {{ message.tags }}">{{ message }}</div>
+          {% endfor %}
+        </div>
+      {% endif %}
+      {% block content %}{% endblock %}
+    </main>
+  </div>
+</div>
+
+<!-- Shared Screenshot & Live Remote Desktop (RDP) Modal (outside HTMX poll zones) -->
+<dialog id="gnRemoteDialog" class="gn-dialog gn-remote-dialog" aria-labelledby="gnRemoteTitle" closedby="any" data-csrf="{{ csrf_token }}">
+  <div class="gn-remote-head">
+    <div class="d-flex align-items-center gap-3 flex-wrap">
+      <h6 id="gnRemoteTitle" class="mb-0" style="font-weight: 800; color: #f8fafc;">کنترل و صفحه نمایش کلاینت</h6>
+      <div class="gn-remote-tabs">
+        <button type="button" id="gnTabShot" class="gn-remote-tab is-active">
+          <i class="ti ti-camera"></i> اسکرین‌شات
+        </button>
+        <button type="button" id="gnTabRdp" class="gn-remote-tab">
+          <i class="ti ti-screen-share"></i> کنترل زنده (RDP)
+        </button>
+      </div>
+      <span id="gnRemoteStatus" style="font-size: 11.5px; font-weight: 700; color: #fbbf24;">آماده</span>
+    </div>
+
+    <form method="dialog" style="margin: 0;">
+      <button type="submit" value="close" class="gn-btn sm" style="background: #1e293b; border-color: #334155; color: #f8fafc;" aria-label="بستن پنجره">
+        <i class="ti ti-x"></i> بستن
+      </button>
+    </form>
+  </div>
+
+  <!-- Toolbar for Screenshot Mode -->
+  <div id="gnShotToolbar" class="gn-remote-toolbar">
+    <div class="d-flex align-items-center gap-2">
+      <button type="button" id="gnShotRefresh" class="gn-btn sm primary">
+        <i class="ti ti-refresh"></i> گرفتن اسکرین‌شات جدید
+      </button>
+      <a id="gnShotDownload" href="#" download="screenshot.jpg" class="gn-btn sm" style="background: #1e293b; border-color: #334155; color: #f8fafc;" hidden>
+        <i class="ti ti-download"></i> دانلود تصویر
+      </a>
+    </div>
+    <span id="gnShotMeta" class="num" style="color: #94a3b8; direction: ltr;"></span>
+  </div>
+
+  <!-- Toolbar for Live RDP Mode -->
+  <div id="gnRdpToolbar" class="gn-remote-toolbar" hidden>
+    <div class="d-flex align-items-center gap-1.5 flex-wrap">
+      <label class="d-inline-flex align-items-center gap-1.5 px-2 py-1 rounded" style="background: #1e293b; border: 1px solid #334155; cursor: pointer; margin: 0;">
+        <input type="checkbox" id="gnRdpInteractive" checked style="accent-color: #3b82f6;">
+        <span style="font-weight: 700; color: #f8fafc;">کنترل ماوس و کیبورد</span>
+      </label>
+
+      <select id="gnRdpQuality" class="gn-select" style="background: #1e293b; color: #f8fafc; border-color: #334155; padding: 3px 8px; font-size: 11.5px;">
+        <option value="fast">سریع (720p)</option>
+        <option value="balanced" selected>استاندارد (1024p)</option>
+        <option value="high">کیفیت بالا (1280p)</option>
+      </select>
+
+      <button type="button" class="gn-remote-key-btn" data-rdp-combo="91" title="منوی استارت ویندوز">⊞ Win</button>
+      <button type="button" class="gn-remote-key-btn" data-rdp-combo="18,9" title="Alt + Tab">Alt+Tab</button>
+      <button type="button" class="gn-remote-key-btn" data-rdp-combo="17,16,27" title="Task Manager">Ctrl+Shift+Esc</button>
+      <button type="button" class="gn-remote-key-btn" data-rdp-combo="18,115" title="بستن پنجره فعال">Alt+F4</button>
+      <button type="button" class="gn-remote-key-btn" data-rdp-combo="91,82" title="Win + R">Win+R</button>
+      <button type="button" class="gn-remote-key-btn" data-rdp-combo="27" title="ارسال کلید Esc به ویندوز">Esc</button>
+    </div>
+    <span style="color: #94a3b8; font-size: 11px;">روی صفحه کلیک کنید تا کنترل کیبورد فعال شود</span>
+  </div>
+
+  <!-- Stage -->
+  <div class="gn-remote-stage">
+    <div id="gnRemoteEmpty" class="gn-remote-empty">در حال آماده‌سازی...</div>
+    <img id="gnScreenshotImg" alt="Client screenshot preview" hidden>
+    <canvas id="gnRemoteCanvas" class="is-interactive" tabindex="0" hidden></canvas>
+  </div>
+</dialog>
+</body>
+</html>

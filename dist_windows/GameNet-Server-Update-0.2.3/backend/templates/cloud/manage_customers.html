@@ -1,0 +1,78 @@
+{% extends "base.html" %}
+{% load gn %}
+
+{% block title %}مدیریت مشتریان{% endblock %}
+{% block page_title %}مدیریت مشتریان{% endblock %}
+{% block page_subtitle %}ایجاد و ویرایش مشتری، کیف پول و نرخ‌های شخصی از راه دور{% endblock %}
+
+{% block content %}
+{% include "cloud/_manage_tabs.html" %}
+
+<div class="gn-card mb-3">
+  <h6>مشتری جدید</h6>
+  <form method="post" action="{% url 'cloud_manage_customer_create' %}" class="gn-form-row">
+    {% csrf_token %}
+    {% uuid4 as request_id %}
+    <input type="hidden" name="request_id" value="{{ request_id }}">
+    <div>
+      <label class="gn-label">Edge</label>
+      <select class="gn-select" name="edge_id" required data-gn-edge-select>
+        {% for edge in edges %}
+          <option value="{{ edge.id }}">{{ edge.name }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div class="flex-grow-1">
+      <label class="gn-label">نام مشتری</label>
+      <input class="gn-input" name="full_name" required maxlength="120" placeholder="نام و نام خانوادگی">
+    </div>
+    <div>
+      <label class="gn-label">شماره تماس <span class="text-danger">*</span></label>
+      <input class="gn-input num" name="phone" maxlength="24" placeholder="09…" required>
+    </div>
+    <div>
+      <label class="gn-label">گروه</label>
+      <select class="gn-select" name="group_id" data-gn-edge-group-select>
+        <option value="">بدون گروه</option>
+        {% for group in groups %}
+          <option value="{{ group.id }}" data-edge="{{ group.edge_id }}">{{ group.name }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div>
+      <label class="gn-label">سقف بدهی</label>
+      <input class="gn-input num" name="credit_limit" value="0" readonly title="بدهی در سیستم غیرفعال است">
+    </div>
+    <button class="gn-btn primary" type="submit"><i class="ti ti-cloud-upload"></i> ارسال</button>
+  </form>
+</div>
+
+<div class="gn-card">
+  <div class="d-flex justify-content-between align-items-center mb-2">
+    <h6 class="mb-0">مشتریان</h6>
+    <span class="gn-chip">{{ customers|length }} مشتری</span>
+  </div>
+  <div class="gn-scroll" style="max-height: 620px">
+    <table class="gn-table">
+      <thead><tr><th>نام</th><th>Edge</th><th>گروه</th><th>کیف پول</th><th>سقف اعتبار</th><th>نسخه</th><th></th></tr></thead>
+      <tbody>
+        {% for customer in customers %}
+          <tr>
+            <td>{{ customer.full_name }}</td>
+            <td class="mono gn-muted" style="font-size: 10.5px">{{ customer.edge_id|shortid }}</td>
+            <td class="gn-muted">{{ customer.group.name|default:"—" }}</td>
+            <td class="num {% if customer.wallet.balance < 0 %}text-danger{% endif %}">{{ customer.wallet.balance|default:0|toman }}</td>
+            <td class="gn-muted" style="font-size: 11.5px;">غیرمجاز (۰)</td>
+            <td class="num gn-muted">{{ customer.revision }}</td>
+            <td class="text-end">
+              <a class="gn-btn sm" href="{% url 'cloud_manage_customer' customer.id %}"><i class="ti ti-settings"></i> مدیریت</a>
+            </td>
+          </tr>
+        {% empty %}
+          <tr><td colspan="7"><div class="gn-empty">مشتری‌ای همگام نشده است.</div></td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}

@@ -1,0 +1,120 @@
+{% extends "base.html" %}
+{% load gn %}
+
+{% block title %}{{ edge.name }}{% endblock %}
+{% block page_title %}{{ edge.name }}{% endblock %}
+{% block page_subtitle %}{{ edge.id }}{% endblock %}
+
+{% block content %}
+<div class="gn-grid cols-3 mb-3">
+  <div class="gn-card">
+    <h6>اتصال</h6>
+    <div class="d-flex flex-column gap-1" style="font-size: 12.5px">
+      <div class="d-flex justify-content-between"><span class="gn-muted">وضعیت</span>
+        <span class="gn-status {% if edge.status == 'ONLINE' %}st-online{% else %}st-offline{% endif %}"><span class="dot"></span>{{ edge.status|status_fa }}</span>
+      </div>
+      <div class="d-flex justify-content-between"><span class="gn-muted">آخرین تماس</span><span class="num">{{ edge.last_seen_at|reltime }}</span></div>
+      <div class="d-flex justify-content-between"><span class="gn-muted">آخرین همگام</span><span class="num">{{ edge.last_sync_at|reltime }}</span></div>
+      <div class="d-flex justify-content-between"><span class="gn-muted">Watermark</span><span class="num">#{{ edge.last_acked_sequence }}</span></div>
+      <div class="d-flex justify-content-between"><span class="gn-muted">نسخه نرم‌افزار</span><span class="num">{{ edge.software_version|default:"—" }}</span></div>
+      <div class="d-flex justify-content-between"><span class="gn-muted">نسخه پیکربندی</span><span class="num">v{{ edge.config_version }}</span></div>
+    </div>
+  </div>
+
+  <div class="gn-card">
+    <h6>دستور به Edge</h6>
+    <p class="gn-muted" style="font-size: 12px">دستورها امضا شده و دارای انقضا هستند؛ Edge هر دستور را حداکثر یک‌بار اجرا می‌کند.</p>
+    <form method="post" action="{% url 'cloud_edge_action' edge.id %}">
+      {% csrf_token %}
+      <div class="d-flex flex-column gap-2">
+        <button class="gn-btn" name="action" value="ping"><i class="ti ti-activity"></i> Ping</button>
+        <button class="gn-btn" name="action" value="sync"><i class="ti ti-refresh"></i> همگام‌سازی فوری</button>
+        <button class="gn-btn primary" name="action" value="test_event"><i class="ti ti-send"></i> رویداد آزمایشی سرتاسری</button>
+        <button class="gn-btn" style="background: #2563eb; color: #fff;" name="action" value="update_edge" onclick="return confirm('آیا از صدور دستور به‌روزرسانی خودکار سرور سالن اطمینان دارید؟');"><i class="ti ti-download"></i> 🚀 به‌روزرسانی خودکار سرور سالن</button>
+        <button class="gn-btn" style="background: #059669; color: #fff;" name="action" value="update_clients" onclick="return confirm('آیا از صدور دستور به‌روزرسانی همه کلاینت‌های سالن اطمینان دارید؟');"><i class="ti ti-devices"></i> 💻 به‌روزرسانی همه کلاینت‌ها</button>
+      </div>
+    </form>
+  </div>
+
+  <div class="gn-card">
+    <h6>خلاصه</h6>
+    <div class="d-flex flex-column gap-2" style="font-size: 13px">
+      <div class="d-flex justify-content-between"><span class="gn-muted">دستگاه‌ها</span><span class="num">{{ devices|length }}</span></div>
+      <div class="d-flex justify-content-between"><span class="gn-muted">رویدادها</span><span class="num">{{ events|length }}</span></div>
+      <div class="d-flex justify-content-between"><span class="gn-muted">دستورها</span><span class="num">{{ commands|length }}</span></div>
+    </div>
+  </div>
+</div>
+
+<div class="gn-card mb-3">
+  <h6>دستگاه‌ها</h6>
+  <table class="gn-table">
+    <thead><tr><th>نام</th><th>وضعیت</th><th>نسخه</th><th>ضربان</th><th class="text-end">کنترل از راه دور</th></tr></thead>
+    <tbody>
+      {% for device in devices %}
+        <tr>
+          <td><strong>{{ device.name }}</strong><div class="mono gn-muted" style="font-size: 10.5px">{{ device.id|shortid }}</div></td>
+          <td><span class="gn-status {{ device.status|status_tone }}"><span class="dot"></span>{{ device.status|status_fa }}</span></td>
+          <td class="gn-muted num">{{ device.application_version|default:"—" }}</td>
+          <td class="gn-muted num">{{ device.last_heartbeat_at|reltime }}</td>
+          <td class="text-end">
+            <form method="post" action="{% url 'cloud_device_action' device.id %}" class="gn-inline-form">
+              {% csrf_token %}
+                <input type="hidden" name="next" value="{% url 'cloud_edge_detail' edge.id %}">
+              <button class="gn-btn sm success" name="action" value="wake" title="روشن کردن با LAN (WoL)"><i class="ti ti-power"></i></button>
+              <button class="gn-btn sm" name="action" value="lock" title="قفل کردن"><i class="ti ti-lock"></i></button>
+              <button class="gn-btn sm" name="action" value="unlock" title="باز کردن قفل"><i class="ti ti-lock-open"></i></button>
+              <button class="gn-btn sm" name="action" value="ping" title="پینگ"><i class="ti ti-activity"></i></button>
+            </form>
+          </td>
+        </tr>
+      {% empty %}
+        <tr><td colspan="5"><div class="gn-empty">دستگاهی برای این Edge همگام نشده است.</div></td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+
+<div class="gn-grid cols-2">
+  <div class="gn-card">
+    <h6>دستورها</h6>
+    <div class="gn-scroll">
+      <table class="gn-table">
+        <thead><tr><th>نوع</th><th>وضعیت</th><th>صدور</th><th>نتیجه</th></tr></thead>
+        <tbody>
+          {% for cmd in commands %}
+            <tr>
+              <td style="font-size: 12px">{{ cmd.command_type }}</td>
+              <td><span class="gn-status {{ cmd.status|status_tone }}"><span class="dot"></span>{{ cmd.status|status_fa }}</span></td>
+              <td class="num gn-muted">{{ cmd.issued_at|date:"H:i:s" }}</td>
+              <td class="gn-muted" style="font-size: 11px">{{ cmd.result|default:cmd.error|truncatechars:50|default:"—" }}</td>
+            </tr>
+          {% empty %}
+            <tr><td colspan="4"><div class="gn-empty">دستوری نیست.</div></td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+  <div class="gn-card">
+    <h6>رویدادها</h6>
+    <div class="gn-scroll">
+      <table class="gn-table">
+        <thead><tr><th>#</th><th>نوع</th><th>وضعیت</th><th>زمان</th></tr></thead>
+        <tbody>
+          {% for ev in events %}
+            <tr>
+              <td class="num">{{ ev.local_sequence }}</td>
+              <td style="font-size: 12px">{{ ev.event_type }}</td>
+              <td><span class="gn-status {{ ev.status|status_tone }}"><span class="dot"></span>{{ ev.status|status_fa }}</span></td>
+              <td class="num gn-muted">{{ ev.received_at|date:"H:i:s" }}</td>
+            </tr>
+          {% empty %}
+            <tr><td colspan="4"><div class="gn-empty">رویدادی نیست.</div></td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+{% endblock %}

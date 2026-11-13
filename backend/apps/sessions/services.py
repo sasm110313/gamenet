@@ -1,25 +1,38 @@
 """Session start/stop. The edge is the only writer of play time and charges.
 
-Lock order is deliberate: session row (stop only) -> customer row -> customer
-advisory lock -> wallet row -> device row. A concurrent start for the same
+Lock order is deliberate: customer row -> customer advisory lock -> wallet row
+-> session/device rows. A concurrent start for the same
 customer therefore waits and re-reads the committed balance and active-session
 exposure before it can pass the credit check.
 """
 
 from __future__ import annotations
 
+import logging
+
 from django.conf import settings
 from django.db import transaction
 from django.utils import timezone
 
-from apps.clients.models import ClientDevice, ClientStatus
-from apps.core.locks import customer_lock
+from apps.clients.models import (
+    ClientDevice,
+    ClientStatus,
+    ConnectionStatus,
+    KioskStatus,
+    OccupancyStatus,
+)
+from apps.core.locks import customer_lock, serialized_customer
 from apps.core.money import session_cost
 from apps.core.roles import require_edge
 from apps.customers.models import Customer
 from apps.ledger.models import LedgerEntry, LedgerEntryType
-from apps.pricing.models import CustomerRate
-from apps.sessions.models import GamingSession, SessionStatus
+from apps.pricing.models import CustomerRate, Tariff
+from apps.sessions.models import (
+    BillingMode,
+    DisconnectPolicy,
+    GamingSession,
+    SessionStatus,
+)
 from apps.synchronization.command_service import queue_device_command
 from apps.synchronization.config import current_config
 from apps.synchronization.edge_credentials import ensure_identity
@@ -27,19 +40,37 @@ from apps.synchronization.events import emit
 from apps.wallets.models import Wallet
 from apps.wallets.services import post_entry
 
+logger = logging.getLogger("gamenet.sessions")
+
 
 class SessionError(ValueError):
     pass
 
 
+def _send_rahro_record(payload: dict) -> None:
+    from apps.core.rahro import queue_session_record
+
+    queue_session_record(payload)
+
+
 STARTABLE_DEVICE_STATES = {ClientStatus.ONLINE, ClientStatus.LOCKED, ClientStatus.IDLE}
 
 
-def resolve_rate(customer: Customer, customer_rate: CustomerRate | None = None):
+def resolve_rate(
+    customer: Customer,
+    customer_rate: CustomerRate | None = None,
+    tariff: Tariff | None = None,
+    device: ClientDevice | None = None,
+):
     """Return (tariff, customer_rate, hourly_rate, rate_name) for a new session.
 
-    Priority: explicitly selected personal rate -> customer's default personal
-    rate -> group tariff -> global default.
+    Priority:
+    1. explicitly selected personal CustomerRate
+    2. explicitly selected Tariff
+    3. customer's default personal rate
+    4. customer group's tariff
+    5. device's default tariff (metadata.default_tariff_id)
+    6. global config default rate
     """
     if customer_rate is not None:
         if customer_rate.customer_id != customer.id:
@@ -49,6 +80,15 @@ def resolve_rate(customer: Customer, customer_rate: CustomerRate | None = None):
         if customer_rate.hourly_rate <= 0:
             raise SessionError("نرخ انتخاب‌شده نامعتبر است.")
         return None, customer_rate, customer_rate.hourly_rate, customer_rate.name
+
+    if tariff is not None:
+        if tariff.edge_id != customer.edge_id:
+            raise SessionError("تعرفه انتخاب‌شده به این سرور سالن تعلق ندارد.")
+        if not tariff.is_active:
+            raise SessionError("تعرفه انتخاب‌شده غیرفعال است.")
+        if tariff.hourly_rate <= 0:
+            raise SessionError("نرخ تعرفه نامعتبر است.")
+        return tariff, None, tariff.hourly_rate, tariff.name
 
     personal = CustomerRate.objects.filter(
         customer=customer, is_active=True, is_default=True
@@ -61,17 +101,31 @@ def resolve_rate(customer: Customer, customer_rate: CustomerRate | None = None):
     group = customer.group
     if group is not None and not group.is_active:
         raise SessionError("گروه مشتری غیرفعال است.")
-    tariff = group.tariff if group is not None else None
-    if tariff is not None:
-        if not tariff.is_active:
+    group_tariff = group.tariff if group is not None else None
+    if group_tariff is not None:
+        if not group_tariff.is_active:
             raise SessionError("تعرفه گروه غیرفعال است.")
-        if tariff.hourly_rate <= 0:
+        if group_tariff.hourly_rate <= 0:
             raise SessionError("نرخ تعرفه نامعتبر است.")
-        return tariff, None, tariff.hourly_rate, tariff.name
+        return group_tariff, None, group_tariff.hourly_rate, group_tariff.name
+
+    if device is not None:
+        default_tid = str((device.metadata or {}).get("default_tariff_id") or "").strip()
+        if default_tid:
+            dev_tariff = Tariff.objects.filter(
+                id=default_tid, edge_id=customer.edge_id, is_active=True
+            ).first()
+            if dev_tariff is not None and dev_tariff.hourly_rate > 0:
+                return dev_tariff, None, dev_tariff.hourly_rate, dev_tariff.name
+
+    default_t = Tariff.objects.filter(name="آزاد", is_active=True).first()
+    if default_t is not None and default_t.hourly_rate > 0:
+        return default_t, None, default_t.hourly_rate, default_t.name
+
     rate = int(current_config().get("default_hourly_rate", settings.DEFAULT_HOURLY_RATE))
     if rate <= 0:
         raise SessionError("نرخ پیش‌فرض نامعتبر است.")
-    return None, None, rate, "تعرفه پیش‌فرض"
+    return None, None, rate, "آزاد"
 
 
 def _session_payload(session: GamingSession) -> dict:
@@ -85,22 +139,53 @@ def _session_payload(session: GamingSession) -> dict:
         ),
         "tariff_name": session.tariff_name,
         "hourly_rate": session.hourly_rate,
+        "coupon_hours": getattr(session, "coupon_hours", 0),
+        "coupon_hourly_rate": getattr(session, "coupon_hourly_rate", 20000),
+        "billing_mode": session.billing_mode,
+        "planned_duration_minutes": session.planned_duration_minutes,
+        "estimated_cost": session.estimated_cost,
+        "disconnect_policy": session.disconnect_policy,
+        "paused_seconds": int(session.paused_seconds or 0),
         "started_at": session.started_at.isoformat(),
     }
 
 
+@serialized_customer
 @transaction.atomic
 def start_session(
     customer: Customer,
     device: ClientDevice,
     *,
     customer_rate: CustomerRate | None = None,
+    tariff: Tariff | None = None,
+    billing_mode: str = BillingMode.CREDIT,
+    planned_duration_minutes: int | None = None,
+    disconnect_policy: str = DisconnectPolicy.PAUSE,
     session_id=None,
     actor=None,
 ) -> GamingSession:
     require_edge()
     identity = ensure_identity()
     now = timezone.now()
+
+    clean_mode = (billing_mode or BillingMode.CREDIT).strip().upper()
+    if clean_mode not in BillingMode.values:
+        raise SessionError("نوع محاسبه نشست نامعتبر است.")
+
+    clean_policy = (disconnect_policy or DisconnectPolicy.PAUSE).strip().upper()
+    if clean_policy not in DisconnectPolicy.values:
+        raise SessionError("سیاست قطع ارتباط نشست نامعتبر است.")
+
+    duration_mins: int | None = None
+    if planned_duration_minutes not in (None, ""):
+        try:
+            duration_mins = int(planned_duration_minutes)
+        except (TypeError, ValueError) as exc:
+            raise SessionError("مدت زمان انتخاب‌شده نامعتبر است.") from exc
+        if duration_mins < 5 or duration_mins > 1440:
+            raise SessionError("مدت زمان نشست باید بین ۵ تا ۱۴۴۰ دقیقه باشد.")
+    elif clean_mode == BillingMode.TIMED:
+        raise SessionError("در حالت محاسبه زمانی، انتخاب مدت زمان الزامی است.")
 
     # A retried remote-start command carries a cloud-generated session id. The
     # session status and this lookup make the command idempotent.
@@ -131,32 +216,85 @@ def start_session(
         raise SessionError("دستگاه غیرفعال است.")
     if device.edge_id != identity.edge_id:
         raise SessionError("دستگاه به این Edge تعلق ندارد.")
-    if device.status not in STARTABLE_DEVICE_STATES:
-        raise SessionError(f"دستگاه در وضعیت قابل شروع نیست ({device.status}).")
-
-    if GamingSession.objects.filter(device=device, status=SessionStatus.ACTIVE).exists():
+    if (
+        device.occupancy_status == OccupancyStatus.MAINTENANCE
+        or device.status == ClientStatus.MAINTENANCE
+    ):
+        raise SessionError("دستگاه در حالت تعمیرات است و آماده شروع نشست نیست.")
+    if (
+        device.occupancy_status == OccupancyStatus.BUSY
+        or GamingSession.objects.filter(device=device, status=SessionStatus.ACTIVE).exists()
+    ):
         raise SessionError("این دستگاه در یک نشست فعال است.")
+    if (
+        device.connection_status != ConnectionStatus.ONLINE
+        and device.status not in STARTABLE_DEVICE_STATES
+    ):
+        raise SessionError("کلاینت دستگاه به سرور متصل (آنلاین) نیست و امکان باز کردن آن وجود ندارد.")
 
     if customer_rate is not None:
         customer_rate = CustomerRate.objects.get(pk=customer_rate.pk)
+    if tariff is not None:
+        tariff = Tariff.objects.get(pk=tariff.pk)
 
-    tariff, customer_rate, hourly_rate, tariff_name = resolve_rate(
-        customer, customer_rate
+    tariff_obj, rate_obj, hourly_rate, tariff_name = resolve_rate(
+        customer, customer_rate=customer_rate, tariff=tariff, device=device
     )
 
-    # Reserve the accrued cost of every live session, not just one hour. A long
-    # running session can already be over the limit; a second start must not
-    # increase that exposure.
-    reserved = 0
-    for active_rate, started_at in GamingSession.objects.filter(
+    # بررسی و اعمال هوشمند کوپن تخفیف ۵۰٪ برای اعضای لیگ رهرو (سهمیه ماهانه یا کوپن‌های امتیازی)
+    is_league = bool(
+        (customer.group and any(k in customer.group.name for k in ["لیگ", "رهرو", "دانش"]))
+        or ("لیگ" in tariff_name)
+        or getattr(customer, "is_rahro_member", False)
+    )
+    coupon_hours = 0
+    coupon_hourly_rate = 20000
+    coupon_message = ""
+
+    active_sessions = list(GamingSession.objects.select_for_update().filter(
         customer=customer, status=SessionStatus.ACTIVE
-    ).values_list("hourly_rate", "started_at"):
-        elapsed = max(0, int((now - started_at).total_seconds()))
-        reserved += max(active_rate, session_cost(active_rate, elapsed))
-    available = wallet.balance + customer.credit_limit - reserved
-    if available < hourly_rate:
+    ))
+    coupons_available = max(0, (customer.active_coupons or 0) - sum(
+        s.coupon_hours for s in active_sessions
+    ))
+
+    if is_league and coupons_available > 0:
+        coupon_hours = min(coupons_available, (duration_mins + 59) // 60) if duration_mins else coupons_available
+        coupon_hourly_rate = 20000
+        coupon_message = (
+            f"🎁 شما دارای {coupon_hours} کوپن تخفیف ۵۰٪ رهرو هستید؛ "
+            f"تا {coupon_hours} ساعت با تعرفه ویژه ۲۰,۰۰۰ تومان در ساعت محاسبه می‌شوید."
+        )
+
+    effective_start_rate = coupon_hourly_rate if coupon_hours > 0 else hourly_rate
+    if clean_mode == BillingMode.TIMED and duration_mins:
+        estimated_cost, _ = GamingSession(
+            hourly_rate=hourly_rate, coupon_hours=coupon_hours,
+            coupon_hourly_rate=coupon_hourly_rate, discount_percent=0,
+        ).calculate_cost(duration_mins * 60)
+        required_balance = max(1, estimated_cost)
+    else:
+        estimated_cost = effective_start_rate
+        required_balance = max(1000, effective_start_rate // 4) if effective_start_rate >= 4000 else effective_start_rate
+
+    # Reserve the accrued cost of every live session so concurrent starts stay within balance.
+    reserved = 0
+    for s in active_sessions:
+        elapsed = s.billable_elapsed_seconds(now)
+        reserved += s.calculate_cost(elapsed)[0]
+    available = (wallet.balance if wallet else 0) - reserved
+
+    # Strict rule: Cannot start session with zero or negative balance, or with unpaid debt after balance exhaustion
+    if getattr(customer, "debt_balance", 0) > 0 and available <= 0:
         raise SessionError(
-            "موجودی و سقف اعتبار برای شروع یک ساعت بازی کافی نیست."
+            f"مشتری «{customer.full_name}» دارای {customer.debt_balance:,} تومان بدهی پرداخت‌نشده است و موجودی کیف‌پول به پایان رسیده. "
+            f"برای باز کردن سیستم یا شروع نشست جدید، ابتدا باید بدهی قبلی تسویه شود."
+        )
+
+    if available <= 0 or available < required_balance:
+        raise SessionError(
+            f"موجودی کیف‌پول کاربر «{customer.full_name}» برای شروع بازی کافی نیست (موجودی فعلی: {max(0, available):,} تومان؛ حداقل اعتبار مورد نیاز: {required_balance:,} تومان). "
+            f"امکان باز کردن سیستم بدون داشتن اعتبار وجود ندارد."
         )
 
     session = GamingSession.objects.create(
@@ -165,10 +303,17 @@ def start_session(
         customer=customer,
         device=device,
         status=SessionStatus.ACTIVE,
-        tariff=tariff,
-        customer_rate=customer_rate,
+        tariff=tariff_obj,
+        customer_rate=rate_obj,
         tariff_name=tariff_name,
         hourly_rate=hourly_rate,
+        coupon_hours=coupon_hours,
+        coupon_hourly_rate=coupon_hourly_rate,
+        discount_source=f"{coupon_hours} کوپن ۵۰٪ رهرو" if coupon_hours > 0 else "",
+        billing_mode=clean_mode,
+        planned_duration_minutes=duration_mins if clean_mode == BillingMode.TIMED else None,
+        estimated_cost=estimated_cost,
+        disconnect_policy=clean_policy,
         started_at=now,
         started_by=actor if getattr(actor, "pk", None) else None,
     )
@@ -177,7 +322,15 @@ def start_session(
 
     wallet_balance = wallet.balance if wallet else 0
 
-    set_status(device, ClientStatus.STARTING, force=True, reason="session started")
+    set_status(
+        device,
+        ClientStatus.STARTING,
+        force=True,
+        connection_status=ConnectionStatus.ONLINE,
+        kiosk_status=KioskStatus.UNLOCKED,
+        occupancy_status=OccupancyStatus.BUSY,
+        reason="session started",
+    )
     queue_device_command(
         device,
         "client.unlock",
@@ -187,9 +340,17 @@ def start_session(
             "customer_name": customer.full_name,
             "username": customer.username or customer.phone,
             "wallet_balance": wallet_balance,
-            "credit_limit": customer.credit_limit,
+            "credit_limit": 0,
             "hourly_rate": hourly_rate,
             "rate_name": tariff_name,
+            "coupon_hours": coupon_hours,
+            "coupon_hourly_rate": coupon_hourly_rate,
+            "has_coupon": coupon_hours > 0,
+            "coupon_message": coupon_message,
+            "billing_mode": session.billing_mode,
+            "planned_duration_minutes": session.planned_duration_minutes,
+            "estimated_cost": session.estimated_cost,
+            "disconnect_policy": session.disconnect_policy,
             "started_at": session.started_at.isoformat(),
         },
         actor=actor,
@@ -203,16 +364,27 @@ def start_session(
     return session
 
 
+@serialized_customer
 @transaction.atomic
 def stop_session(
-    session: GamingSession, *, actor=None, reason: str = "پایان دستی"
+    session: GamingSession,
+    *,
+    actor=None,
+    reason: str = "پایان دستی",
+    keep_processes: bool = False,
+    at=None,
 ) -> tuple[GamingSession, LedgerEntry | None]:
     """Finish a session and charge actual elapsed time exactly once.
 
     Safe to call twice: a non-ACTIVE session is not charged again, and the
     ledger's unique (session, entry_type) constraint is the database backstop.
+    ``at`` ends the session at a specific instant (used to avoid charging for
+    hub downtime after a restart).
     """
     require_edge()
+    customer = Customer.objects.select_for_update().get(pk=session.customer_id)
+    customer_lock(customer.id)
+    wallet = Wallet.objects.select_for_update().filter(customer=customer).first()
     session = GamingSession.objects.select_for_update().select_related(
         "customer", "device"
     ).get(pk=session.pk)
@@ -223,23 +395,47 @@ def stop_session(
         ).first()
         return session, entry
 
-    now = timezone.now()
-    elapsed = max(0, int((now - session.started_at).total_seconds()))
-    base_cost = session_cost(session.hourly_rate, elapsed)
+    now = at or timezone.now()
+    if timezone.is_naive(now):
+        now = timezone.make_aware(now)
+    if now < session.started_at:
+        now = session.started_at
+    if session.paused_at is not None:
+        session.paused_seconds = int(session.paused_seconds or 0) + max(
+            0, int((now - session.paused_at).total_seconds())
+        )
+        session.paused_at = None
+    session.connection_lost_at = None
 
-    if session.discount_percent > 0:
-        discount_amount = (base_cost * session.discount_percent + 50) // 100
-        cost = max(0, base_cost - discount_amount)
-    else:
-        discount_amount = 0
-        cost = base_cost
+    elapsed = session.billable_elapsed_seconds(now)
+    cost, discount_amount = session.calculate_cost(elapsed)
+    balance = max(0, wallet.balance if wallet else 0)
+    exposure = sum(s.calculate_cost(s.billable_elapsed_seconds(now))[0] for s in
+                   GamingSession.objects.filter(customer=customer, status=SessionStatus.ACTIVE))
+    if exposure > balance:
+        cost = min(cost, balance * cost // exposure)
+    session.customer = customer
+    base_cost = cost + discount_amount
+
+    # بررسی و کسر کوپن‌های مصرف‌شده در این نشست
+    used_coupons = 0
+    if session.coupon_hours > 0 and elapsed >= 60:
+        used_coupons = min(session.coupon_hours, max(1, (elapsed + 3599) // 3600))
+        if used_coupons > 0:
+            cust = session.customer
+            cust.active_coupons = max(0, cust.active_coupons - used_coupons)
+            cust.revision += 1
+            cust.save(update_fields=["active_coupons", "revision", "updated_at"])
+            session.discount_source = f"مصرف {used_coupons} کوپن ۵۰٪ رهرو"
 
     entry = LedgerEntry.objects.filter(
         session=session, entry_type=LedgerEntryType.SESSION_CHARGE
     ).first()
     if entry is None and cost > 0:
         note_text = f"شارژ نشست {str(session.id)[:8]}"
-        if session.discount_percent > 0:
+        if session.coupon_hours > 0:
+            note_text += f" (تخفیف کوپن رهرو: {used_coupons} ساعت با نرخ ۲۰,۰۰۰ ت)"
+        elif session.discount_percent > 0:
             note_text += f" (تخفیف {session.discount_percent}٪)"
         entry = post_entry(
             customer=session.customer,
@@ -248,7 +444,7 @@ def stop_session(
             session=session,
             note=note_text,
             actor=actor,
-            allow_over_limit=True,
+            allow_over_limit=False,
         )
 
     session.status = SessionStatus.COMPLETED
@@ -256,49 +452,58 @@ def stop_session(
     session.elapsed_seconds = elapsed
     session.cost = cost
     session.discount_amount = discount_amount
+    if session.coupon_hours > 0 and not session.discount_percent:
+        session.discount_percent = 50
     session.ended_by = actor if getattr(actor, "pk", None) else None
     session.end_reason = (reason or "")[:120]
     session.save(
         update_fields=[
             "status", "ended_at", "elapsed_seconds", "cost", "discount_amount",
-            "ended_by", "end_reason", "updated_at",
+            "discount_percent", "discount_source",
+            "ended_by", "end_reason", "paused_at", "paused_seconds",
+            "connection_lost_at", "updated_at",
         ]
     )
 
-    # اطلاع به سامانه رهرو جهت ثبت دقایق بازی در پنل دانش‌آموز
-    try:
-        import requests
-        from django.conf import settings
-        rahro_url = getattr(settings, "RAHRO_API_URL", "http://127.0.0.1:8000/rahro/api/gamenet/")
-        shared_secret = getattr(settings, "RAHRO_GAMENET_SHARED_SECRET", "rahro_gamenet_secret_2026")
-        payload = {
-            "session_id": str(session.id),
-            "phone": session.customer.phone,
-            "username": session.customer.username,
-            "device_name": session.device.name if session.device else "",
-            "started_at": session.started_at.isoformat(),
-            "ended_at": now.isoformat(),
-            "duration_seconds": elapsed,
-            "hourly_rate": session.hourly_rate,
-            "base_cost": base_cost,
-            "discount_percent": session.discount_percent,
-            "discount_amount": discount_amount,
-            "final_cost": cost,
-            "discount_source": session.discount_source,
-        }
-        requests.post(
-            f"{rahro_url.rstrip('/')}/record-session/",
-            json=payload,
-            headers={"X-Internal-Secret": shared_secret, "Content-Type": "application/json"},
-            timeout=3,
+    # اطلاع ناهمگام به سامانه رهرو جهت ثبت دقایق بازی در پنل دانش‌آموز و مصرف کوپن‌ها
+    payload = {
+        "session_id": str(session.id),
+        "phone": session.customer.phone,
+        "username": session.customer.username,
+        "device_name": session.device.name if session.device else "",
+        "started_at": session.started_at.isoformat(),
+        "ended_at": now.isoformat(),
+        "duration_seconds": elapsed,
+        "hourly_rate": session.hourly_rate,
+        "base_cost": base_cost,
+        "discount_percent": session.discount_percent,
+        "discount_amount": discount_amount,
+        "final_cost": cost,
+        "discount_source": session.discount_source,
+        "coupons_used": used_coupons,
+        "coupon_hours_used": used_coupons,
+    }
+    _send_rahro_record(payload)
+    if used_coupons:
+        from apps.customers.services import _payload
+        emit(
+            "customer.updated", aggregate_type="customer", aggregate_id=str(session.customer_id),
+            payload=_payload(session.customer, Wallet.objects.get(customer_id=session.customer_id)),
         )
-    except Exception as exc:
-        import logging
-        logging.getLogger("gamenet.sessions").warning(f"Failed to notify Rahro of session {session.id}: {exc}")
 
     from apps.devices.services import set_status
 
-    set_status(session.device, ClientStatus.STOPPING, force=True, reason="session ended")
+    is_connected = session.device.connection_status == ConnectionStatus.ONLINE
+    set_status(
+        session.device,
+        ClientStatus.STOPPING if is_connected else ClientStatus.OFFLINE,
+        force=True,
+        connection_status=ConnectionStatus.ONLINE if is_connected else ConnectionStatus.OFFLINE,
+        kiosk_status=KioskStatus.LOCKED,
+        occupancy_status=OccupancyStatus.FREE,
+        bump_heartbeat=is_connected,
+        reason="session ended",
+    )
     queue_device_command(
         session.device,
         "client.lock",
@@ -306,6 +511,9 @@ def stop_session(
             "session_id": str(session.id),
             "cost": cost,
             "elapsed_seconds": elapsed,
+            "keep_processes": keep_processes,
+            "close_games": not keep_processes,
+            "reason": reason,
         },
         actor=actor,
     )
@@ -318,12 +526,108 @@ def stop_session(
             "status": session.status,
             "ended_at": session.ended_at.isoformat(),
             "elapsed_seconds": elapsed,
+            "paused_seconds": int(session.paused_seconds or 0),
             "cost": cost,
             "discount_percent": session.discount_percent,
             "discount_amount": session.discount_amount,
             "discount_source": session.discount_source,
             "end_reason": session.end_reason,
             "ledger_entry_id": str(entry.id) if entry is not None else None,
+            "rahro_delivery_owner": "edge",
+            "coupons_used": used_coupons,
+            "coupon_hours_used": used_coupons,
         },
     )
     return session, entry
+
+
+def reconcile_orphaned_sessions(*, reason: str = "پایان خودکار نشست پس از راه‌اندازی مجدد سرور") -> int:
+    """Mark boot-time connections lost; allow the same reconnect grace as a socket loss."""
+    from apps.devices.services import handle_device_disconnect
+    require_edge()
+    now = timezone.now()
+    stopped = 0
+    for session in (
+        GamingSession.objects.filter(status=SessionStatus.ACTIVE)
+        .select_related("device")
+        .order_by("started_at")
+    ):
+        try:
+            with transaction.atomic():
+                ClientDevice.objects.filter(pk=session.device_id).update(
+                    connection_status=ConnectionStatus.OFFLINE, connection_owner="",
+                    status=ClientStatus.OFFLINE,
+                )
+                GamingSession.objects.filter(pk=session.pk).update(connection_lost_at=now)
+                handle_device_disconnect(session.device, now=min(session.device.last_heartbeat_at or now, now))
+            stopped += 1
+        except Exception:
+            logger.exception("Could not reconcile orphaned session %s", session.id)
+    return stopped
+
+
+def enforce_active_session_policies(now=None, *, customer_id=None) -> int:
+    """Enforce TIMED expirations, disconnect policies (AUTO_STOP / PAUSE), and wallet caps."""
+    require_edge()
+    now = now or timezone.now()
+    handled = 0
+    from apps.core.locks import customer_mutex
+    customers = GamingSession.objects.filter(status=SessionStatus.ACTIVE)
+    if customer_id is not None:
+        customers = customers.filter(customer_id=customer_id)
+    for cid in list(customers.order_by().values_list("customer_id", flat=True).distinct()):
+        with customer_mutex(cid), transaction.atomic():
+            Customer.objects.select_for_update().get(pk=cid)
+            wallet = Wallet.objects.select_for_update().filter(customer_id=cid).first()
+            sessions = list(GamingSession.objects.select_for_update().filter(
+                customer_id=cid, status=SessionStatus.ACTIVE
+            ).select_related("device"))
+            exposure = sum(s.calculate_cost(s.billable_elapsed_seconds(now))[0] for s in sessions)
+            exhausted = exposure >= (wallet.balance if wallet else 0)
+            for session in sessions:
+                handled += _enforce_session_policy(session, now, exhausted)
+    return handled
+
+
+def _enforce_session_policy(session, now, exhausted):
+    from apps.devices.services import handle_device_disconnect
+
+    if session.status == SessionStatus.ACTIVE:
+        dev = session.device
+        if dev.connection_status == ConnectionStatus.OFFLINE:
+            # A station that stopped talking to the hub cannot keep a paid session
+            # alive: that is exactly how "zombie" sessions billed customers for
+            # hours. Close it and bill only up to the last heartbeat.
+            last_seen = dev.last_heartbeat_at or session.started_at
+            lost_at = session.connection_lost_at or last_seen
+            if session.disconnect_policy == DisconnectPolicy.AUTO_STOP and (now - lost_at).total_seconds() >= 90:
+                if session.connection_lost_at is None:
+                    with transaction.atomic():
+                        handle_device_disconnect(dev, now=last_seen)
+                    session.refresh_from_db()
+                stop_session(
+                    session,
+                    reason="قطع ارتباط کلاینت با هاب (پایان خودکار نشست)",
+                    at=min(last_seen, now),
+                )
+                return 1
+            if session.connection_lost_at is None or (
+                session.disconnect_policy == DisconnectPolicy.PAUSE and session.paused_at is None
+            ):
+                with transaction.atomic():
+                    handle_device_disconnect(dev, now=min(last_seen, now))
+                session.refresh_from_db()
+
+        elapsed = session.billable_elapsed_seconds(now)
+        if (
+            session.billing_mode == BillingMode.TIMED
+            and session.planned_duration_minutes
+            and elapsed >= session.planned_duration_minutes * 60
+        ):
+            stop_session(session, reason="پایان مدت زمان انتخاب‌شده نشست", keep_processes=False)
+            return 1
+
+        if exhausted:
+            stop_session(session, reason="اتمام خودکار موجودی کیف‌پول (بدهی مجاز نیست)", keep_processes=False)
+            return 1
+    return 0

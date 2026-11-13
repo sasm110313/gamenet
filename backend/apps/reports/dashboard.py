@@ -20,7 +20,7 @@ def _base() -> dict:
     return {
         "customers_total": Customer.objects.filter(is_active=True).count(),
         "wallet_total": Wallet.objects.aggregate(total=Sum("balance"))["total"] or 0,
-        "debt_total": Wallet.objects.filter(balance__lt=0).aggregate(total=Sum("balance"))["total"] or 0,
+        "debt_total": Customer.objects.aggregate(total=Sum("debt_balance"))["total"] or 0,
         "sessions_active": GamingSession.objects.filter(status=SessionStatus.ACTIVE).count(),
         "ledger_total": LedgerEntry.objects.count(),
     }
@@ -81,7 +81,7 @@ def sessions(request):
     ctx = _base()
     status = request.GET.get("status", "").strip()
     q = request.GET.get("q", "").strip()
-    qs = GamingSession.objects.select_related("customer", "device").order_by("-started_at")
+    qs = GamingSession.objects.select_related("customer", "device", "tariff", "customer_rate").order_by("-started_at")
     if status in SessionStatus.values:
         qs = qs.filter(status=status)
     if q:
@@ -111,6 +111,9 @@ def ledger(request):
         qs = qs.filter(
             Q(customer__full_name__icontains=q)
             | Q(customer__phone__icontains=q)
+            | Q(tracking_code__icontains=q)
+            | Q(operator_label__icontains=q)
+            | Q(note__icontains=q)
             | Q(id__icontains=q)
         )
     if entry_type in LedgerEntryType.values:

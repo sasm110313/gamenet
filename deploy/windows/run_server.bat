@@ -29,8 +29,14 @@ echo   UDP Discovery    : 0.0.0.0:19445 (SmartLaunch Mode)
 echo   Cloud Sync       : https://gamenet.hammasjedy.ir
 echo ========================================================
 
-:: Determine Python executable
-if exist "%ROOT_DIR%\backend\.venv\Scripts\python.exe" (
+:: Determine Python executable (Embedded Python runtime has top priority for zero-setup portability)
+if exist "%~dp0python\python.exe" (
+    set "PYTHON_EXE=%~dp0python\python.exe"
+) else if exist "%ROOT_DIR%\deploy\windows\python\python.exe" (
+    set "PYTHON_EXE=%ROOT_DIR%\deploy\windows\python\python.exe"
+) else if exist "%ROOT_DIR%\backend\python\python.exe" (
+    set "PYTHON_EXE=%ROOT_DIR%\backend\python\python.exe"
+) else if exist "%ROOT_DIR%\backend\.venv\Scripts\python.exe" (
     set "PYTHON_EXE=%ROOT_DIR%\backend\.venv\Scripts\python.exe"
 ) else (
     set "PYTHON_EXE=python.exe"
@@ -44,9 +50,23 @@ echo [1/3] بررسی و ارتقای دیتابیس (Migrations)...
 echo [2/3] بررسی استیشن‌ها و کاربر مدیر سالن...
 "%PYTHON_EXE%" manage.py bootstrap_edge --settings=gamenet.settings.edge
 
-:: Launch Uvicorn ASGI Server (automatically hosts Dashboard, UDP Discovery, and Cloud Sync)
-echo [3/3] اجرای موتور سرور سالن گیم‌نت...
+:: Check if GameNetServer Windows Service or port 19443 is already running
+netstat -ano 2>nul | findstr ":19443 " | findstr "LISTENING" >nul 2>&1
+if %errorlevel% equ 0 (
+    echo [OK] سرور گیم‌نت هم‌اکنون در پس‌زمینه روی پورت 19443 فعال و در حال اجرا است.
+    timeout /t 3 /nobreak >nul 2>&1
+    exit /b 0
+)
+
+:: Launch Uvicorn ASGI Server with Keep-Alive auto-restart loop
+:server_loop
+echo.
+echo [3/3] اجرای موتور سرور سالن «بازی سرای رهرو»...
 "%PYTHON_EXE%" -m uvicorn gamenet.asgi:application ^
     --host 0.0.0.0 --port 19443 ^
     --ssl-keyfile "%CERTS%\edge.key" --ssl-certfile "%CERTS%\edge.pem" ^
     --ws websockets --log-level info
+
+echo [!] موتور سرور متوقف شد (کد خروج: %errorlevel%). راه‌اندازی مجدد در ۳ ثانیه...
+timeout /t 3 /nobreak >nul 2>&1
+goto server_loop

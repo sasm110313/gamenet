@@ -11,6 +11,9 @@ from apps.synchronization.outbox import pending_counts
 def edge_common() -> dict:
     require_edge()
     identity = ensure_identity()
+    from apps.devices.discovery import get_primary_lan_ip, get_interface_pairs
+    ips = [ip for ip, _ in get_interface_pairs() if not ip.startswith("127.")]
+    primary_ip = get_primary_lan_ip()
     return {
         "identity": identity,
         "registered": is_registered(),
@@ -18,4 +21,6 @@ def edge_common() -> dict:
         "last_sync": identity.last_sync_at,
         "counts": pending_counts(),
         "config": current_config(),
+        "edge_primary_ip": primary_ip,
+        "edge_lan_ips": ips,
     }

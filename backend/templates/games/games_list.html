@@ -1,0 +1,244 @@
+{% extends "base.html" %}
+{% load gn %}
+
+{% block title %}مدیریت بازی‌ها و برنامه‌ها{% endblock %}
+{% block page_title %}مدیریت بازی‌ها و فایل‌های اجرایی{% endblock %}
+{% block page_subtitle %}تعریف بازی‌ها، فایل‌های .exe، پوشه نصب، آرگومان‌های اجرا و همگام‌سازی با لانچر کلاینت‌ها{% endblock %}
+
+{% block content %}
+{% if is_edge %}{% include "edge/_tabs_content.html" with active='games' %}{% endif %}
+<!-- KPI cards -->
+<div class="gn-grid cols-3 mb-3">
+  <div class="gn-card gn-kpi">
+    <span class="label">تعداد بازی‌های تعریف‌شده</span>
+    <span class="value num">{{ games_total }}</span>
+    <span class="hint">مجموع بازی‌ها در کاتالوگ سالن</span>
+  </div>
+  <div class="gn-card gn-kpi accent">
+    <span class="label">بازی‌های فعال در لانچر</span>
+    <span class="value num">{{ games_active }}</span>
+    <span class="hint">قابل مشاهده و اجرا توسط گیمرها</span>
+  </div>
+  <div class="gn-card gn-kpi">
+    <span class="label">همگام‌سازی با کلاینت‌ها</span>
+    <span class="value" style="font-size: 20px; color: var(--gn-primary); font-weight: 800;">خودکار</span>
+    <span class="hint">ارسال خودکار به هاب و کلاینت‌های ویندوز</span>
+  </div>
+</div>
+
+<!-- Main Table Card -->
+<div class="gn-card">
+  <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-3">
+    <div class="d-flex align-items-center gap-2">
+      <i class="ti ti-device-gamepad-2 text-primary" style="font-size: 22px;"></i>
+      <h6 id="games-table-title" class="mb-0" style="font-weight: 800; font-size: 15px;">لیست بازی‌ها و فایل‌های اجرایی لانچر</h6>
+    </div>
+    <div class="d-flex gap-2">
+      <button type="button" class="gn-btn primary" data-gn-game-add>
+        <i class="ti ti-plus"></i> افزودن بازی جدید
+      </button>
+      <form method="post" class="gn-inline-form">
+        {% csrf_token %}
+        <input type="hidden" name="action" value="reset">
+        <button type="submit" class="gn-btn" data-gn-confirm="آیا از بازنشانی کاتالوگ بازی‌ها به حالت پیش‌فرض مطمئنید؟" title="بازنشانی به بازی‌های پیش‌فرض کارخانه">
+          <i class="ti ti-reload"></i> بازنشانی پیش‌فرض
+        </button>
+      </form>
+    </div>
+  </div>
+
+  <div class="gn-table-wrap" tabindex="0" role="region" aria-labelledby="games-table-title">
+    <table class="gn-table">
+      <thead>
+        <tr>
+          <th style="width: 45px;">آیکون</th>
+          <th>نام بازی</th>
+          <th>دسته‌بندی</th>
+          <th>مسیر فایل اجرایی یا پوشه</th>
+          <th>آرگومان‌ها و فلگ‌ها</th>
+          <th>وضعیت</th>
+          <th style="text-align: left;">عملیات</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for game in games %}
+          <tr>
+            <td style="font-size: 22px; text-align: center;">{{ game.icon|default:"🎮" }}</td>
+            <td>
+              <strong style="color: var(--gn-text); font-size: 14px;">{{ game.name }}</strong>
+              {% if game.working_dir %}
+                <div class="gn-muted" style="font-size: 11px;" dir="ltr">cwd: {{ game.working_dir }}</div>
+              {% endif %}
+            </td>
+            <td>
+              <span class="gn-chip" style="font-size: 11.5px; font-weight: 600;">
+                {{ game.category|default:"بازی" }}
+              </span>
+            </td>
+            <td class="num" dir="ltr" style="font-family: monospace; font-size: 12px; color: #2563eb;">
+              {{ game.executable|default:"—" }}
+            </td>
+            <td class="num" dir="ltr" style="font-family: monospace; font-size: 12px; color: var(--gn-muted);">
+              {{ game.arguments|default:"—" }}
+            </td>
+            <td>
+              {% if game.is_active %}
+                <span class="gn-chip" style="background: rgba(16, 185, 129, 0.1); color: #059669; border-color: rgba(16, 185, 129, 0.3);">
+                  <span class="dot" style="background: #10b981;"></span>فعال
+                </span>
+              {% else %}
+                <span class="gn-chip" style="background: rgba(100, 116, 139, 0.1); color: #64748b; border-color: rgba(100, 116, 139, 0.3);">
+                  غیرفعال
+                </span>
+              {% endif %}
+            </td>
+            <td style="text-align: left;">
+              <div class="d-flex justify-content-end align-items-center gap-1.5">
+                <!-- Toggle Active Form -->
+                <form method="post" class="gn-inline-form">
+                  {% csrf_token %}
+                  <input type="hidden" name="action" value="toggle">
+                  <input type="hidden" name="game_id" value="{{ game.id }}">
+                  <button type="submit" class="gn-btn sm" title="{% if game.is_active %}غیرفعال‌سازی{% else %}فعال‌سازی{% endif %}" style="padding: 4px 8px;">
+                    <i class="ti {% if game.is_active %}ti-eye-off{% else %}ti-eye{% endif %}"></i>
+                  </button>
+                </form>
+
+                <!-- Edit Button -->
+                <button
+                  type="button"
+                  class="gn-btn sm"
+                  title="ویرایش مشخصات بازی"
+                  style="padding: 4px 8px;"
+                  data-gn-game-edit
+                  data-id="{{ game.id }}"
+                  data-name="{{ game.name }}"
+                  data-category="{{ game.category }}"
+                  data-icon="{{ game.icon }}"
+                  data-executable="{{ game.executable }}"
+                  data-arguments="{{ game.arguments }}"
+                  data-working-dir="{{ game.working_dir }}"
+                  data-active="{{ game.is_active|yesno:'1,0' }}"
+                >
+                  <i class="ti ti-edit"></i>
+                </button>
+
+                <!-- Delete Form -->
+                <form method="post" class="gn-inline-form">
+                  {% csrf_token %}
+                  <input type="hidden" name="action" value="delete">
+                  <input type="hidden" name="game_id" value="{{ game.id }}">
+                  <button type="submit" class="gn-btn sm danger" data-gn-confirm="آیا از حذف بازی «{{ game.name }}» مطمئنید؟" title="حذف بازی" style="padding: 4px 8px;">
+                    <i class="ti ti-trash"></i>
+                  </button>
+                </form>
+              </div>
+            </td>
+          </tr>
+        {% empty %}
+          <tr>
+            <td colspan="7">
+              <div class="gn-empty">
+                <i class="ti ti-device-gamepad-off"></i>
+                هیچ بازی یا فایل اجرایی تعریف نشده است. جهت شروع دکمه «افزودن بازی جدید» یا «بازنشانی پیش‌فرض» را بزنید.
+              </div>
+            </td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<!-- ======================================================== -->
+<!-- Native Modal Dialog: Add / Edit Game -->
+<!-- ======================================================== -->
+<dialog id="gameModal" class="gn-dialog" closedby="any" aria-labelledby="modalTitle" style="width: min(580px, 94vw); max-height: 90vh;">
+  <div class="gn-dialog-inner" style="max-height: 88vh; overflow-y: auto;">
+    <div class="d-flex justify-content-between align-items-center mb-3 pb-2" style="border-bottom: 1px solid var(--gn-border);">
+      <h5 id="modalTitle" class="mb-0" style="font-weight: 800; font-size: 16px; color: var(--gn-text);">
+        <i class="ti ti-plus text-primary"></i> افزودن بازی جدید
+      </h5>
+      <button type="button" class="gn-btn sm" data-gn-game-close aria-label="بستن پنجره" style="border: none; background: transparent; font-size: 16px;">
+        ✕
+      </button>
+    </div>
+
+    <form method="post" id="gameForm">
+      {% csrf_token %}
+      <input type="hidden" name="action" id="formAction" value="add">
+      <input type="hidden" name="game_id" id="formGameId" value="">
+
+      <div class="mb-3">
+        <label class="gn-label" for="formName">نام بازی یا برنامه:</label>
+        <input type="text" name="name" id="formName" class="gn-input" required placeholder="مثلاً شطرنج ویندوز (Chess) یا Counter-Strike 2" autofocus>
+      </div>
+
+      <div class="gn-grid cols-2 mb-3">
+        <div>
+          <label class="gn-label" for="formCategory">دسته‌بندی:</label>
+          <input type="text" name="category" id="formCategory" class="gn-input" required placeholder="مثلاً فکری و رومیزی یا شوتر رقابتی">
+          <div class="d-flex flex-wrap gap-1 mt-2">
+            <button type="button" class="gn-pill" data-gn-game-cat="فکری و رومیزی">فکری</button>
+            <button type="button" class="gn-pill" data-gn-game-cat="شوتر رقابتی">شوتر</button>
+            <button type="button" class="gn-pill" data-gn-game-cat="فوتبال و ورزشی">فوتبال</button>
+            <button type="button" class="gn-pill" data-gn-game-cat="جهان‌باز و اکشن">اکشن</button>
+            <button type="button" class="gn-pill" data-gn-game-cat="استراتژی تیمی">استراتژی</button>
+            <button type="button" class="gn-pill" data-gn-game-cat="اتومبیل‌رانی">ماشین</button>
+            <button type="button" class="gn-pill" data-gn-game-cat="مبارزه‌ای">مبارزه‌ای</button>
+          </div>
+        </div>
+
+        <div>
+          <label class="gn-label" for="formIcon">آیکون / اموجی:</label>
+          <div class="d-flex align-items-center gap-2 flex-wrap">
+            <input type="text" name="icon" id="formIcon" class="gn-input text-center" value="🎯" style="width: 58px; font-size: 20px;">
+            <div class="d-flex flex-wrap gap-1">
+              <button type="button" class="gn-pill" data-gn-game-icon="♟️">♟️</button>
+              <button type="button" class="gn-pill" data-gn-game-icon="🎯">🎯</button>
+              <button type="button" class="gn-pill" data-gn-game-icon="⚽">⚽</button>
+              <button type="button" class="gn-pill" data-gn-game-icon="🚗">🚗</button>
+              <button type="button" class="gn-pill" data-gn-game-icon="⚔️">⚔️</button>
+              <button type="button" class="gn-pill" data-gn-game-icon="🪖">🪖</button>
+              <button type="button" class="gn-pill" data-gn-game-icon="🏎️">🏎️</button>
+              <button type="button" class="gn-pill" data-gn-game-icon="🥊">🥊</button>
+              <button type="button" class="gn-pill" data-gn-game-icon="🎮">🎮</button>
+              <button type="button" class="gn-pill" data-gn-game-icon="🕹️">🕹️</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="mb-3">
+        <label class="gn-label" for="formExecutable">مسیر فایل اجرایی (.exe یا مسیر پوشه بازی روی کلاینت):</label>
+        <input type="text" name="executable" id="formExecutable" class="gn-input" required placeholder="مثلاً C:\Program Files\Microsoft Games\Chess\Chess.exe یا C:\Program Files\Microsoft Games\Chess" dir="ltr" style="font-family: monospace;" aria-describedby="exec-help">
+        <small id="exec-help" class="gn-muted d-block mt-1" style="font-size: 11px;">می‌توانید مسیر مستقیم فایل `.exe` یا مسیر پوشه نصب بازی (مثل `C:\Program Files\Microsoft Games\Chess`) را وارد کنید؛ کلاینت فایل اجرایی را خودکار پیدا و اجرا می‌کند.</small>
+      </div>
+
+      <div class="mb-3">
+        <label class="gn-label" for="formArguments">آرگومان‌ها و فلگ‌های خط فرمان (اختیاری):</label>
+        <input type="text" name="arguments" id="formArguments" class="gn-input" placeholder="مثلاً -novid -fullscreen" dir="ltr" style="font-family: monospace;">
+      </div>
+
+      <div class="mb-3">
+        <label class="gn-label" for="formWorkingDir">پوشه کاری (Working Directory - اختیاری):</label>
+        <input type="text" name="working_dir" id="formWorkingDir" class="gn-input" placeholder="پیش‌فرض: همان پوشه فایل اجرایی" dir="ltr" style="font-family: monospace;">
+      </div>
+
+      <div class="mb-3">
+        <label class="d-flex align-items-center gap-2" for="formActive" style="cursor: pointer; font-size: 13px; font-weight: 600; color: var(--gn-text);">
+          <input type="checkbox" name="is_active" id="formActive" checked style="width: 17px; height: 17px; accent-color: #2563eb;">
+          <span>فعال و قابل نمایش در لانچر کلاینت‌های سالن</span>
+        </label>
+      </div>
+
+      <div class="d-flex justify-content-between align-items-center pt-2" style="border-top: 1px solid var(--gn-border);">
+        <button type="button" class="gn-btn" data-gn-game-close>انصراف</button>
+        <button type="submit" class="gn-btn primary" id="formSubmitBtn">
+          <i class="ti ti-check"></i> ذخیره بازی
+        </button>
+      </div>
+    </form>
+  </div>
+</dialog>
+{% endblock %}

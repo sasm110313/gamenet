@@ -1,0 +1,53 @@
+{% extends "admin/base.html" %}
+{% load static %}
+
+{% block title %}{% if subtitle %}{{ subtitle }} · {% endif %}{{ title }} · GameNet Control{% endblock %}
+
+{% block extrahead %}
+  {{ block.super }}
+  <link rel="stylesheet" href="{% static 'vendor/css/tabler-icons.min.css' %}">
+  <link rel="stylesheet" href="{% static 'css/admin_custom.css' %}?v=20261108d">
+{% endblock %}
+
+{% block branding %}
+<div id="branding">
+  <a href="{% url 'admin:index' %}" class="gn-admin-brand-wrap">
+    <div class="gn-admin-brand-mark">G</div>
+    <div class="gn-admin-brand-text">
+      <span class="gn-admin-brand-title">GameNet Control</span>
+      <span class="gn-admin-brand-badge">مدیریت پیشرفته پایگاه داده و تنظیمات</span>
+    </div>
+  </a>
+</div>
+{% endblock %}
+
+{% block usertools %}
+<div id="user-tools">
+  <a href="/" class="gn-back-to-app-btn" title="بازگشت به پنل عملیات سالن گیم‌نت">
+    <i class="ti ti-layout-dashboard"></i>
+    <span>داشبورد عملیات گیم‌نت</span>
+  </a>
+
+  {% block welcome-msg %}
+    <span style="color: #cbd5e1;">
+      <i class="ti ti-user" style="vertical-align: middle;"></i>
+      <strong>{% firstof user.get_short_name user.get_username %}</strong>
+    </span>
+  {% endblock %}
+
+  {% block userlinks %}
+    {% if site_url %}
+      <a href="{{ site_url }}"><i class="ti ti-external-link"></i> مشاهده سایت</a>
+    {% endif %}
+    {% if user.has_usable_password %}
+      <a href="{% url 'admin:password_change' %}"><i class="ti ti-key"></i> تغییر رمز</a>
+    {% endif %}
+    <form id="logout-form" method="post" action="{% url 'admin:logout' %}" style="display: inline; margin: 0;">
+      {% csrf_token %}
+      <button type="submit" style="background: none; border: none; color: #fb7185; cursor: pointer; padding: 0; font-size: 13px; font-family: inherit; display: inline-flex; align-items: center; gap: 4px;">
+        <i class="ti ti-logout"></i> خروج
+      </button>
+    </form>
+  {% endblock %}
+</div>
+{% endblock %}

@@ -1,0 +1,21 @@
+{% comment %}
+Shared tab strip for the money area: transactions, pricing and sessions are one
+job (what a gamer is charged) and should never look like three unrelated pages.
+{% endcomment %}
+<nav class="gn-section-tabs" aria-label="بخش مالی و تعرفه‌ها">
+  <a href="{% url 'edge_ledger' %}" class="gn-section-tab {% if active == 'ledger' %}is-active{% endif %}"
+     {% if active == 'ledger' %}aria-current="page"{% endif %}>
+    <i class="ti ti-receipt" aria-hidden="true"></i>
+    تراکنش‌ها و صندوق
+  </a>
+  <a href="{% url 'edge_pricing' %}" class="gn-section-tab {% if active == 'pricing' %}is-active{% endif %}"
+     {% if active == 'pricing' %}aria-current="page"{% endif %}>
+    <i class="ti ti-tags" aria-hidden="true"></i>
+    تعرفه‌ها و گروه‌ها
+  </a>
+  <a href="{% url 'edge_sessions' %}" class="gn-section-tab {% if active == 'sessions' %}is-active{% endif %}"
+     {% if active == 'sessions' %}aria-current="page"{% endif %}>
+    <i class="ti ti-clock-play" aria-hidden="true"></i>
+    نشست‌های بازی
+  </a>
+</nav>

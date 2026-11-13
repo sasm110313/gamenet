@@ -1,0 +1,7 @@
+{
+  "version": "0.2.3",
+  "url": "/static/updates/app.asar",
+  "sha256": "fe0effce56fd0ffa833c3b7e791ef518dbae4267309f10dd912a0de5a21156ad",
+  "mandatory": true,
+  "release_notes": "نسخه 0.2.3 - رفع کامل باگ صفحه سفید با ErrorBoundary، مسدودسازی Ctrl+Shift+Esc در کیوسک، رفع باگ لیست پنجره‌ها و تسک‌بار، بازیابی نشست در هاب هنگام راه‌اندازی مجدد، رفع حلقه بی‌پایان آپدیت"
+}

@@ -1,0 +1,575 @@
+{% extends "base.html" %}
+{% load gn %}
+
+{% block title %}مدیریت {{ customer.full_name }}{% endblock %}
+{% block page_title %}مدیریت {{ customer.full_name }}{% endblock %}
+{% block page_subtitle %}{{ customer.phone|default:"بدون شماره تماس" }} · کد ورود کلاینت: {{ customer.username|default:"تنظیم‌نشده" }}{% endblock %}
+
+{% block content %}
+<div id="gnCatalogData" hidden data-json="{{ catalog_json }}"></div>
+
+<style>
+  .unified-panel-card {
+    background: #ffffff;
+    border: 1px solid #e2e8f0;
+    border-radius: 14px;
+    padding: 22px;
+    box-shadow: 0 1px 3px rgba(15, 23, 42, 0.05);
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+  }
+  .unified-input, .unified-select {
+    width: 100%;
+    background: #ffffff !important;
+    border: 1.5px solid #cbd5e1 !important;
+    color: #0f172a !important;
+    border-radius: 9px;
+    padding: 10px 14px;
+    font-size: 13.5px;
+    font-weight: 600;
+    transition: all 0.15s ease;
+  }
+  .unified-input:focus, .unified-select:focus {
+    outline: none !important;
+    border-color: #2563eb !important;
+    box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.15) !important;
+    background: #ffffff !important;
+  }
+  .unified-label {
+    font-size: 12.5px;
+    font-weight: 700;
+    color: #334155 !important;
+    margin-bottom: 6px;
+    display: block;
+  }
+  .quick-hour-btn {
+    flex: 1;
+    min-width: 85px;
+    padding: 11px 12px;
+    font-size: 13px;
+    font-weight: 700;
+    border-radius: 9px;
+    background: #f8fafc;
+    border: 1.5px solid #cbd5e1;
+    color: #334155;
+    cursor: pointer;
+    transition: all 0.15s ease;
+    text-align: center;
+  }
+  .quick-hour-btn:hover {
+    background: #f1f5f9;
+    color: #0f172a;
+    border-color: #94a3b8;
+  }
+  .quick-hour-btn.btn-active {
+    background: #0f172a !important;
+    border-color: #0f172a !important;
+    color: #ffffff !important;
+    font-weight: 800 !important;
+    box-shadow: 0 3px 10px rgba(15, 23, 42, 0.18) !important;
+  }
+  .pay-pill-label {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 11px 16px;
+    border-radius: 9px;
+    background: #f8fafc;
+    border: 1.5px solid #cbd5e1;
+    color: #334155;
+    cursor: pointer;
+    flex: 1;
+    font-size: 13px;
+    font-weight: 600;
+    transition: all 0.15s ease;
+  }
+  .pay-pill-label:has(input:checked) {
+    background: #ecfdf5;
+    border-color: #10b981;
+    color: #065f46;
+    font-weight: 700;
+  }
+</style>
+
+<div class="d-flex flex-column gap-3">
+
+  <!-- نوار بالای صفحه: خلاصه حساب مشتری، تعرفه و موجودی کیف پول -->
+  <div class="gn-card p-3">
+    <div class="d-flex justify-content-between align-items-center flex-wrap gap-3">
+      <div class="d-flex align-items-center gap-3">
+        <div style="width: 46px; height: 46px; border-radius: 12px; background: #0f172a; color: #38bdf8; display: grid; place-items: center; font-size: 20px; font-weight: 900;">
+          {{ customer.full_name|slice:":1"|default:"گ" }}
+        </div>
+        <div>
+          <div class="d-flex align-items-center gap-2 flex-wrap">
+            <h4 class="mb-0" style="font-size: 18px; font-weight: 800; color: #0f172a;">{{ customer.full_name }}</h4>
+            {% if customer.is_active %}
+              <span class="gn-chip" style="background: #ecfdf5; color: #047857; border: 1px solid #a7f3d0; font-weight: 700;">
+                <span class="dot" style="background: #059669;"></span> حساب فعال
+              </span>
+            {% else %}
+              <span class="gn-chip" style="background: #fef2f2; color: #991b1b; border: 1px solid #fecaca; font-weight: 700;">
+                <span class="dot" style="background: #dc2626;"></span> حساب غیرفعال
+              </span>
+            {% endif %}
+            <span class="gn-chip">
+              <i class="ti ti-phone"></i>
+              <span class="num">{{ customer.phone|default:"بدون شماره" }}</span>
+            </span>
+          </div>
+
+          <div class="d-flex align-items-center gap-2 mt-2 flex-wrap">
+            <!-- نشان تعرفه استانداردی (آزاد ۶۰ک / لیگ رهرو ۴۰ک / کادر ۲۰ک) -->
+            {% if rahro_status and rahro_status.found %}
+              {% if rahro_status.pricing_tier == 'CADRE_SENIOR' %}
+                <span class="gn-chip" style="background: #f5f3ff; color: #6d28d9; border: 1px solid #ddd6fe; font-weight: 700;">
+                  <i class="ti ti-shield-check"></i> کادر و پایه ۸ و ۹ (ساعتی ۲۰,۰۰۰ ت)
+                </span>
+              {% else %}
+                <span class="gn-chip" style="background: #ecfdf5; color: #047857; border: 1px solid #a7f3d0; font-weight: 700;">
+                  <i class="ti ti-school"></i> لیگ رهرو - پایه ۵ تا ۷ (ساعتی ۴۰,۰۰۰ ت)
+                </span>
+              {% endif %}
+            {% else %}
+              {% if customer.group and customer.group.name == 'کادر' %}
+                <span class="gn-chip" style="background: #f5f3ff; color: #6d28d9; border: 1px solid #ddd6fe; font-weight: 700;">
+                  <i class="ti ti-shield-check"></i> گروه کادر (ساعتی ۲۰,۰۰۰ ت)
+                </span>
+              {% elif customer.group and customer.group.name == 'لیگ رهرو' %}
+                <span class="gn-chip" style="background: #ecfdf5; color: #047857; border: 1px solid #a7f3d0; font-weight: 700;">
+                  <i class="ti ti-school"></i> گروه لیگ رهرو (ساعتی ۴۰,۰۰۰ ت)
+                </span>
+              {% else %}
+                <span class="gn-chip" style="background: #f8fafc; color: #334155; border: 1px solid #cbd5e1; font-weight: 700;">
+                  <i class="ti ti-user"></i> تعرفه آزاد (ساعتی ۶۰,۰۰۰ ت)
+                </span>
+              {% endif %}
+            {% endif %}
+
+            {% if customer.active_coupons > 0 or rahro_status.total_coupons > 0 %}
+              <span class="gn-chip" style="background: #eff6ff; color: #1d4ed8; border: 1px solid #bfdbfe; font-weight: 800;">
+                🎁 {% if customer.active_coupons %}{{ customer.active_coupons }}{% elif rahro_status %}{{ rahro_status.total_coupons|default:0 }}{% else %}0{% endif %} کوپن ۵۰٪ فعال ({% if customer.active_coupons %}{{ customer.active_coupons }}{% elif rahro_status %}{{ rahro_status.total_coupons|default:0 }}{% else %}0{% endif %} ساعت ۲۰,۰۰۰ ت)
+              </span>
+            {% endif %}
+
+            <!-- کد لاگین کلاینت -->
+            {% if customer.username and customer.username|length >= 4 and customer.username|length <= 6 %}
+              <span class="gn-chip" style="background: #fffbeb; color: #b45309; border: 1px solid #fde68a; font-weight: 700;">
+                <i class="ti ti-key"></i> کد ورود کلاینت: <strong class="num">{{ customer.username }}</strong>
+              </span>
+            {% else %}
+              <span class="gn-chip" style="background: #fffbeb; color: #b45309; border: 1px dashed #fcd34d; font-size: 11.5px;">
+                <i class="ti ti-key"></i> کد ورود: تنظیم‌نشده
+              </span>
+            {% endif %}
+
+            <!-- موجودی کیف پول -->
+            <span class="gn-chip" style="background: #ecfdf5; color: #047857; border: 1px solid #a7f3d0; font-weight: 800; font-size: 12.5px;">
+              <i class="ti ti-wallet"></i> موجودی: <strong class="num">{{ wallet.balance|default:0|toman }}</strong> تومان
+            </span>
+
+            <!-- نشان بدهی در صورت وجود -->
+            {% if customer.debt_balance > 0 %}
+              <span class="gn-chip" style="background: #fef2f2; color: #dc2626; border: 1.5px solid #f87171; font-weight: 800; font-size: 12.5px;">
+                <i class="ti ti-alert-circle"></i> دارای بدهی: <strong class="num">{{ customer.debt_balance|toman }}</strong> تومان
+              </span>
+              <button type="button" class="gn-btn sm danger" onclick="document.getElementById('settleDebtModal').showModal()" data-bs-toggle="modal" data-bs-target="#settleDebtModal" style="background: #dc2626; color: #ffffff; font-weight: 700; height: 32px; cursor: pointer;">
+                <i class="ti ti-cash"></i> تسویه نقدی بدهی
+              </button>
+            {% endif %}
+          </div>
+        </div>
+      </div>
+
+      <div class="d-flex align-items-center gap-2">
+        <a href="{% url 'edge_customers' %}" class="gn-btn sm">
+          <i class="ti ti-arrow-right"></i> بازگشت به لیست مشتریان
+        </a>
+      </div>
+    </div>
+  </div>
+
+  <!-- بنر نشست در حال اجرا (در صورت وجود نشست فعال) -->
+  {% if active_session %}
+    <div class="p-3 rounded-3" style="background: #f0fdf4; border: 1.5px solid #86efac; box-shadow: 0 2px 6px rgba(5, 150, 105, 0.08);">
+      <div class="d-flex justify-content-between align-items-center flex-wrap gap-2">
+        <div class="d-flex align-items-center gap-2 flex-wrap">
+          <span class="gn-chip" style="background: #059669; color: #ffffff; font-weight: 800;">
+            <i class="ti ti-player-play"></i> در حال بازی روی ایستگاه {{ active_session.device.name }}
+          </span>
+          <span style="font-size: 13px; color: #166534; font-weight: 600;">
+            شروع: <strong class="num">{{ active_session.started_at|date:"H:i" }}</strong> · تعرفه: <strong class="num">{{ active_session.hourly_rate|toman }}</strong> تومان/ساعت
+          </span>
+        </div>
+        <div class="d-flex align-items-center gap-2">
+          <button type="button" class="gn-btn sm" data-gn-screenshot="{{ active_session.device.id }}" data-device-name="{{ active_session.device.name }}">
+            <i class="ti ti-camera"></i> تصویر زنده
+          </button>
+          <button type="button" class="gn-btn sm" data-gn-remote="{{ active_session.device.id }}" data-device-name="{{ active_session.device.name }}">
+            <i class="ti ti-screen-share"></i> کنترل مانیتور
+          </button>
+          <form method="post" action="{% url 'edge_session_stop' active_session.id %}" class="gn-inline-form">
+            {% csrf_token %}
+            <input type="hidden" name="reason" value="پایان از پنل مدیریت مشتری">
+            <input type="hidden" name="next" value="{% url 'edge_customer_detail' customer.id %}">
+            <button type="submit" class="gn-btn sm danger" data-gn-confirm="آیا از پایان این نشست بازی اطمینان دارید؟">
+              <i class="ti ti-player-stop"></i> پایان نشست
+            </button>
+          </form>
+        </div>
+      </div>
+    </div>
+  {% endif %}
+
+  <!-- بخش اصلی: ۲ ستون هماهنگ (ستون شارژ کیف پول و ستون ویرایش مشخصات) -->
+  <div class="row g-3">
+
+    <!-- ================= ستون ۱ (راست): شارژ کیف پول و زمان بازی ================= -->
+    <div class="col-lg-6 col-12">
+      <div class="unified-panel-card" id="wallet">
+        <div class="d-flex align-items-center justify-content-between mb-3 pb-2" style="border-bottom: 1.5px solid #f1f5f9;">
+          <div class="d-flex align-items-center gap-2">
+            <i class="ti ti-bolt" style="font-size: 22px; color: #059669;"></i>
+            <h5 style="margin: 0; font-size: 15.5px; font-weight: 800; color: #0f172a;">شارژ کیف پول و زمان بازی</h5>
+          </div>
+          <div class="text-end">
+            <span style="font-size: 11px; color: #64748b;">موجودی فعلی:</span>
+            <strong class="num d-block" style="font-size: 16px; color: #059669;">{{ wallet.balance|default:0|toman }} تومان</strong>
+          </div>
+        </div>
+
+        <form method="post" action="{% url 'edge_customer_rahro_recharge' customer.id %}" id="edge-recharge-form" data-gn-recharge-root data-rate-cadre="{{ recharge_cadre_rate|default:20000 }}" data-rate-rahro="{{ recharge_rahro_rate|default:40000 }}" data-rate-regular="{{ default_hourly_rate|default:60000 }}" data-customer-name="{{ customer.full_name }}" data-current-balance="{{ wallet.balance|default:0 }}" data-operator="{{ operator_label }}" data-tier="{% if rahro_status and rahro_status.found %}{{ rahro_status.pricing_tier }}{% elif customer.group and customer.group.name == 'کادر' %}CADRE_SENIOR{% elif customer.group and customer.group.name == 'لیگ رهرو' %}RAHRO_STUDENT{% else %}REGULAR{% endif %}" data-has-quota="{% if customer.active_coupons > 0 or rahro_status.total_coupons > 0 or rahro_status.has_free_monthly_quota %}1{% else %}0{% endif %}" data-remaining-quotas="{% if customer.active_coupons > 0 %}{{ customer.active_coupons }}{% elif rahro_status.total_coupons > 0 %}{{ rahro_status.total_coupons }}{% else %}{{ rahro_status.remaining_monthly_quotas|default:0 }}{% endif %}">
+          {% csrf_token %}
+          <input type="hidden" name="tier" value="{% if rahro_status and rahro_status.found %}{{ rahro_status.pricing_tier }}{% elif customer.group and customer.group.name == 'کادر' %}CADRE_SENIOR{% elif customer.group and customer.group.name == 'لیگ رهرو' %}RAHRO_STUDENT{% else %}REGULAR{% endif %}">
+          <input type="hidden" name="hours" id="edge-input-hours" data-gn-hours-input value="1">
+          <input type="hidden" name="use_coupon" id="edge-input-coupon" data-gn-coupon-input value="">
+
+          <label class="unified-label">انتخاب سریع مدت بازی:</label>
+          <div class="d-flex align-items-center gap-2 flex-wrap mb-3" id="edge-quick-hours" data-gn-hours-wrap>
+            <button type="button" class="quick-hour-btn btn-active" data-hours="1" data-gn-recharge-hour="1">۱ ساعت بازی</button>
+            <button type="button" class="quick-hour-btn" data-hours="2" data-gn-recharge-hour="2">۲ ساعت بازی</button>
+            <button type="button" class="quick-hour-btn" data-hours="3" data-gn-recharge-hour="3">۳ ساعت بازی</button>
+            <button type="button" class="quick-hour-btn" data-hours="custom" data-gn-recharge-hour="custom">مبلغ دلخواه</button>
+          </div>
+
+          <div class="mb-3">
+            <label class="unified-label" for="edge-amount-input">مبلغ پرداختی نقد / کارتخوان (تومان):</label>
+            <div style="position: relative;">
+              <input type="text" inputmode="numeric" dir="ltr" name="amount" id="edge-amount-input" data-gn-recharge-amount class="unified-input num text-center" value="{% if rahro_status and rahro_status.found %}{% if rahro_status.pricing_tier == 'CADRE_SENIOR' or rahro_status.has_free_monthly_quota %}20000{% else %}40000{% endif %}{% elif customer.group and customer.group.name == 'کادر' %}20000{% elif customer.group and customer.group.name == 'لیگ رهرو' %}40000{% else %}60000{% endif %}" style="font-size: 20px; font-weight: 800; color: #059669; padding-inline-end: 50px; height: 48px;" required>
+              <span style="position: absolute; left: 14px; top: 50%; transform: translateY(-50%); color: #64748b; font-size: 13px; font-weight: 700; pointer-events: none;">تومان</span>
+            </div>
+          </div>
+
+          {% if rahro_status and rahro_status.found and rahro_status.pricing_tier != 'CADRE_SENIOR' %}
+            {% if rahro_status.has_free_monthly_quota %}
+              <div class="p-2.5 rounded mb-3" style="background: #eff6ff; border: 1px solid #bfdbfe;">
+                <label class="d-flex align-items-center gap-2" style="font-size: 12.5px; color: #1e40af; cursor: pointer; margin: 0;">
+                  <input type="checkbox" id="edge-chk-coupon" data-gn-recharge-coupon style="width: 18px; height: 18px; accent-color: #2563eb; cursor: pointer;">
+                  <span>استفاده از ۱ سهمیه ۵۰٪ ماهانه رهرو (۱ ساعت با نرخ ۲۰,۰۰۰ ت بدون کسر امتیاز)</span>
+                </label>
+              </div>
+            {% endif %}
+          {% endif %}
+
+          <!-- گزینه شارژ به عنوان بدهی (نسیه) -->
+          <div class="p-2.5 rounded mb-3" style="background: #fff1f2; border: 1.5px solid #fecdd3;">
+            <label class="d-flex align-items-center gap-2" style="font-size: 13px; color: #9f1239; cursor: pointer; font-weight: 700; margin: 0;">
+              <input type="checkbox" name="is_debt" value="1" id="edge-chk-debt" style="width: 18px; height: 18px; accent-color: #e11d48; cursor: pointer;">
+              <span>ثبت به عنوان بدهی (نسیه)</span>
+            </label>
+            <div style="font-size: 11.5px; color: #be123c; margin-top: 4px; padding-right: 26px;">
+              سقف کل بدهی: <strong class="num">{{ customer.max_debt_limit|default:40000|toman }}</strong> تومان ·
+              بدهی فعلی: <strong class="num">{{ customer.debt_balance|default:0|toman }}</strong> تومان ·
+              ظرفیت باقی‌مانده نسیه: <strong class="num">{{ customer.max_debt_limit|default:40000|sub:customer.debt_balance|toman }}</strong> تومان
+            </div>
+          </div>
+
+          <div class="mb-3">
+            <label class="unified-label">روش دریافت وجه:</label>
+            <div class="d-flex align-items-center gap-2">
+              <label class="pay-pill-label">
+                <input type="radio" name="payment_method" value="pos" checked style="accent-color: #059669;">
+                <span><i class="ti ti-credit-card"></i> کارتخوان باجه (پوز)</span>
+              </label>
+              <label class="pay-pill-label">
+                <input type="radio" name="payment_method" value="cash" style="accent-color: #059669;">
+                <span><i class="ti ti-cash"></i> پرداخت نقدی</span>
+              </label>
+            </div>
+          </div>
+
+          <div class="mb-3">
+            <label class="unified-label" for="edgeRechargeNote">یادداشت تراکنش (ثبت در سند غیرقابل‌حذف):</label>
+            <input id="edgeRechargeNote" class="unified-input" name="note" maxlength="160" placeholder="مثلاً پرداخت کارتخوان باجه">
+          </div>
+
+          <!-- جعبه پیش‌نمایش زنده محاسبه تعرفه و زمان بازی -->
+          <div id="edge-explain-box" class="p-3 rounded mb-3" style="background: #f0fdf4; border: 1px solid #86efac; font-size: 12.5px; line-height: 1.8; color: #14532d;">
+            <div class="d-flex align-items-center gap-1.5 mb-1" style="font-weight: 800; color: #047857;">
+              <i class="ti ti-calculator"></i><span>محاسبه زمان و تعرفه بازی:</span>
+            </div>
+            <div id="edge-explain-text" data-gn-explain-text>
+              {% if rahro_status and rahro_status.found %}
+                {% if rahro_status.pricing_tier == 'CADRE_SENIOR' %}
+                  تعرفه کادر و پایه ۸ و ۹: <strong>ساعتی ۲۰,۰۰۰ ت</strong> | مدت بازی: <strong>۱ ساعت</strong><br>مبلغ دریافتی: <strong style="color: #047857; font-size: 15px;">۲۰,۰۰۰ تومان</strong>
+                {% elif rahro_status.has_free_monthly_quota %}
+                  🎁 <strong>۱ سهمیه ماهانه ۵۰٪ رهرو</strong> اعمال می‌شود (۰ امتیاز کسر می‌گردد).<br>نرخ کلاینت برای ۱ ساعت روی <strong style="color: #2563eb;">۲۰,۰۰۰ ت</strong> تنظیم شده و مبلغ <strong style="color: #047857; font-size: 15px;">۲۰,۰۰۰ تومان</strong> به کیف پول افزوده می‌شود.
+                {% else %}
+                  تعرفه اعضای رهرو: <strong>ساعتی ۴۰,۰۰۰ ت</strong> | مدت بازی: <strong>۱ ساعت</strong><br>مبلغ دریافتی: <strong style="color: #047857; font-size: 15px;">۴۰,۰۰۰ تومان</strong>
+                {% endif %}
+              {% elif customer.group and customer.group.name == 'کادر' %}
+                تعرفه کادر: <strong>ساعتی ۲۰,۰۰۰ ت</strong> | مدت بازی: <strong>۱ ساعت</strong><br>مبلغ دریافتی: <strong style="color: #047857; font-size: 15px;">۲۰,۰۰۰ تومان</strong>
+              {% elif customer.group and customer.group.name == 'لیگ رهرو' %}
+                تعرفه لیگ رهرو: <strong>ساعتی ۴۰,۰۰۰ ت</strong> | مدت بازی: <strong>۱ ساعت</strong><br>مبلغ دریافتی: <strong style="color: #047857; font-size: 15px;">۴۰,۰۰۰ تومان</strong>
+              {% else %}
+                تعرفه آزاد کاربر عادی: <strong>ساعتی ۶۰,۰۰۰ ت</strong> | مدت بازی: <strong>۱ ساعت</strong><br>مبلغ دریافتی: <strong style="color: #047857; font-size: 15px;">۶۰,۰۰۰ تومان</strong>
+              {% endif %}
+            </div>
+          </div>
+
+          <button type="submit" class="gn-btn primary w-100 justify-content-center mb-2" style="padding: 12px; font-weight: 800; font-size: 14px; background: #059669; border-color: #047857; color: #ffffff; box-shadow: 0 4px 12px rgba(5, 150, 105, 0.2); border-radius: 9px;">
+            <i class="ti ti-check"></i> تایید دریافت وجه و افزایش موجودی
+          </button>
+        </form>
+
+        <!-- بخش کسر شارژ یا اصلاح دستی موجودی -->
+        <div class="mt-3 pt-3" style="border-top: 1px dashed #cbd5e1;">
+          <details style="cursor: pointer;">
+            <summary style="font-size: 13px; font-weight: 700; color: #92400e; user-select: none;">
+              <i class="ti ti-adjustments-horizontal"></i> کسر شارژ یا اصلاح دستی موجودی (توسط مدیر)
+            </summary>
+            <div class="p-3 rounded mt-2" style="background: #fffbeb; border: 1px solid #fde68a;">
+              <div class="d-flex justify-content-between align-items-center mb-2 flex-wrap gap-2">
+                <span style="font-size: 12px; color: #78350f; font-weight: 600;">مبالغ سریع:</span>
+                <div class="d-flex gap-1">
+                  <button type="button" class="gn-btn sm" data-gn-preset-deduct="10000" data-form="#edgeDeductForm">-۱۰,۰۰۰</button>
+                  <button type="button" class="gn-btn sm" data-gn-preset-deduct="20000" data-form="#edgeDeductForm">-۲۰,۰۰۰</button>
+                  <button type="button" class="gn-btn sm" data-gn-preset-deduct="50000" data-form="#edgeDeductForm">-۵۰,۰۰۰</button>
+                </div>
+              </div>
+              <form method="post" action="{% url 'edge_customer_adjust' customer.id %}" id="edgeDeductForm" data-gn-adjust-form data-customer-name="{{ customer.full_name }}" data-current-balance="{{ wallet.balance|default:0 }}" data-operator="{{ operator_label }}">
+                {% csrf_token %}
+                <input type="hidden" name="amount" value="">
+                <div class="mb-2">
+                  <div class="d-flex gap-2">
+                    <select data-adjust-mode class="unified-select" style="width: auto; min-width: 120px;">
+                      <option value="deduct" selected>کسر (-)</option>
+                      <option value="add">افزایش (+)</option>
+                    </select>
+                    <input class="unified-input num flex-grow-1" data-adjust-raw inputmode="numeric" dir="ltr" required placeholder="مبلغ به تومان">
+                  </div>
+                </div>
+                <div class="mb-2">
+                  <input class="unified-input" name="note" maxlength="255" value="کسر دستی توسط مدیر" required placeholder="دلیل اصلاح موجودی">
+                </div>
+                <button class="gn-btn sm danger w-100 justify-content-center" type="submit">
+                  <i class="ti ti-check"></i> ثبت اصلاح موجودی
+                </button>
+              </form>
+            </div>
+          </details>
+        </div>
+      </div>
+    </div>
+
+    <!-- ================= ستون ۲ (چپ): ویرایش مشخصات و کد ورود کلاینت ================= -->
+    <div class="col-lg-6 col-12">
+      <div class="unified-panel-card">
+        <div class="d-flex align-items-center justify-content-between mb-3 pb-2" style="border-bottom: 1.5px solid #f1f5f9;">
+          <div class="d-flex align-items-center gap-2">
+            <i class="ti ti-user-edit" style="font-size: 22px; color: #2563eb;"></i>
+            <h5 style="margin: 0; font-size: 15.5px; font-weight: 800; color: #0f172a;">مشخصات و کد ورود کلاینت</h5>
+          </div>
+        </div>
+
+        <form method="post" action="{% url 'edge_customer_update' customer.id %}">
+          {% csrf_token %}
+          <input type="hidden" name="expected_revision" value="{{ customer.revision }}">
+
+          <div class="mb-2.5">
+            <label class="unified-label">نام و نام خانوادگی:</label>
+            <input class="unified-input" name="full_name" value="{{ customer.full_name }}" required maxlength="120">
+          </div>
+
+          <div class="row g-2 mb-2.5">
+            <div class="col-6">
+              <label class="unified-label" style="color: #b45309 !important;"><i class="ti ti-key"></i> کد لاگین کلاینت (۴ تا ۶ رقم):</label>
+              <input class="unified-input num text-center" name="username" value="{{ customer.username|default:'' }}" maxlength="6" pattern="([0-9]{4,6})?" placeholder="مثلاً ۱۲۳۴۵" dir="ltr" style="letter-spacing: 2px; color: #b45309 !important; font-size: 15px; font-weight: 800; border-color: #fcd34d !important; background: #fffbeb !important;">
+            </div>
+            <div class="col-6">
+              <label class="unified-label">تغییر رمز عبور کلاینت:</label>
+              <input class="unified-input num" type="password" name="password" placeholder="تغییر رمز…" dir="ltr">
+            </div>
+          </div>
+
+          <div class="mb-2.5">
+            <label class="unified-label">شماره همراه:</label>
+            <input class="unified-input num" name="phone" value="{{ customer.phone }}" maxlength="24">
+          </div>
+
+          <div class="mb-2.5">
+            <label class="unified-label">گروه کاربری و تعرفه سالن:</label>
+            <select class="unified-select" name="group_id" style="font-weight: 700;">
+              {% for group in groups %}
+                <option value="{{ group.id }}" {% if customer.group_id == group.id %}selected{% endif %}>
+                  {{ group.name }} ({{ group.tariff.hourly_rate|default:60000|toman }} تومان/ساعت)
+                </option>
+              {% empty %}
+                <option value="">آزاد (۶۰,۰۰۰ تومان/ساعت)</option>
+              {% endfor %}
+            </select>
+          </div>
+          <div class="mb-2.5">
+            <label class="unified-label">سقف مجاز بدهی (تومان):</label>
+            <input class="unified-input num" name="max_debt_limit" value="{{ customer.max_debt_limit|default:40000 }}" inputmode="numeric" dir="ltr" placeholder="پیش‌فرض ۴۰,۰۰۰ تومان">
+          </div>
+          <input type="hidden" name="credit_limit" value="0">
+
+          <div class="mb-3">
+            <label class="unified-label">یادداشت مسئول باجه:</label>
+            <input class="unified-input" name="notes" value="{{ customer.notes }}" maxlength="255" placeholder="توضیحات و یادداشت...">
+          </div>
+
+          <label class="d-flex align-items-center gap-2 mb-3" style="font-size: 13px; font-weight: 600; color: #334155; cursor: pointer;">
+            <input type="checkbox" name="is_active" value="1" {% if customer.is_active %}checked{% endif %} style="width: 18px; height: 18px; accent-color: #10b981; cursor: pointer;">
+            <span>حساب کاربری فعال است</span>
+          </label>
+
+          <button class="gn-btn primary w-100 justify-content-center" type="submit" style="padding: 12px; font-size: 14px; font-weight: 800; border-radius: 9px;">
+            <i class="ti ti-device-floppy"></i> ذخیره تغییرات مشخصات
+          </button>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <!-- بخش سوابق: نشست‌های اخیر و تراکنش‌های مالی -->
+  <div class="row g-3">
+    <!-- نشست‌های اخیر در سالن -->
+    <div class="col-lg-6 col-12">
+      <div class="unified-panel-card">
+        <div class="d-flex align-items-center justify-content-between mb-3 pb-2" style="border-bottom: 1.5px solid #f1f5f9;">
+          <div class="d-flex align-items-center gap-2">
+            <i class="ti ti-device-gamepad-2" style="color: #2563eb; font-size: 20px;"></i>
+            <h6 style="margin: 0; font-size: 14px; font-weight: 800; color: #0f172a;">نشست‌های اخیر در سالن</h6>
+          </div>
+          <span class="gn-chip">{{ sessions|length }} نشست</span>
+        </div>
+        <div class="gn-table-wrap gn-scroll" style="max-height: 280px;">
+          <table class="gn-table">
+            <thead><tr><th>دستگاه</th><th>شروع</th><th>مدت</th><th>هزینه</th><th>وضعیت</th></tr></thead>
+            <tbody>
+              {% for session in sessions %}
+                <tr>
+                  <td style="font-weight: 700; color: #0f172a;">{{ session.device.name }}</td>
+                  <td class="num" style="color: #475569;">{{ session.started_at|date:"m-d H:i" }}</td>
+                  <td class="num">{% if session.elapsed_seconds is not None %}{{ session.elapsed_seconds|duration_hms }}{% else %}—{% endif %}</td>
+                  <td class="num" style="font-weight: 700; color: #047857;">{{ session.cost|default:0|toman }}</td>
+                  <td>
+                    <span class="gn-chip {% if session.status == 'ACTIVE' %}accent{% endif %}">
+                      {{ session.status|status_fa }}
+                    </span>
+                  </td>
+                </tr>
+              {% empty %}
+                <tr><td colspan="5"><div class="gn-empty py-3">نشستی ثبت نشده است.</div></td></tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- دفتر مالی و کدهای پیگیری تراکنش‌ها -->
+    <div class="col-lg-6 col-12">
+      <div class="unified-panel-card">
+        <div class="d-flex align-items-center justify-content-between mb-3 pb-2" style="border-bottom: 1.5px solid #f1f5f9;">
+          <div class="d-flex align-items-center gap-2">
+            <i class="ti ti-receipt" style="color: #059669; font-size: 20px;"></i>
+            <h6 style="margin: 0; font-size: 14px; font-weight: 800; color: #0f172a;">سابقه تراکنش‌های مالی</h6>
+          </div>
+          <a class="gn-btn sm" href="{% url 'edge_ledger' %}?q={{ customer.full_name }}">مشاهده در دفتر مالی</a>
+        </div>
+        <div class="gn-table-wrap gn-scroll" style="max-height: 280px;">
+          <table class="gn-table">
+            <thead><tr><th>کد پیگیری</th><th>نوع / اپراتور</th><th>مبلغ</th><th>مانده</th><th>زمان</th></tr></thead>
+            <tbody>
+              {% for entry in entries %}
+                <tr>
+                  <td>
+                    {% if entry.tracking_code %}
+                      <button type="button" class="gn-chip" style="font-weight: 700; cursor: pointer;" data-copy-text="{{ entry.tracking_code }}">{{ entry.tracking_code }}</button>
+                    {% else %}
+                      <span class="mono" style="color: #64748b;">{{ entry.id|shortid }}</span>
+                    {% endif %}
+                  </td>
+                  <td>
+                    <div style="font-weight: 600; color: #0f172a;">{{ entry.get_entry_type_display }}</div>
+                    <div style="font-size: 10.5px; color: #64748b;">{{ entry.operator_label|default:"سیستم" }}</div>
+                  </td>
+                  <td class="num" style="font-weight: 800; color: {% if entry.amount < 0 %}#b91c1c{% else %}#047857{% endif %};">
+                    {{ entry.amount|toman }}
+                  </td>
+                  <td class="num" style="color: #475569;">{{ entry.balance_after|toman }}</td>
+                  <td class="num" style="color: #64748b;">{{ entry.created_at|date:"m-d H:i" }}</td>
+                </tr>
+              {% empty %}
+                <tr><td colspan="5"><div class="gn-empty py-3">تراکنشی ثبت نشده است.</div></td></tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- مدال تسویه بدهی نقدی -->
+  {% if customer.debt_balance > 0 %}
+  <dialog id="settleDebtModal" class="gn-dialog" style="max-width: 480px; width: 92vw; border: 1px solid #cbd5e1; border-radius: 16px; padding: 0; box-shadow: 0 25px 50px -12px rgba(0,0,0,0.25);">
+    <div style="background: #ffffff; border-radius: 16px; overflow: hidden;">
+      <div style="background: #fff1f2; border-bottom: 1px solid #fecdd3; padding: 14px 18px; display: flex; justify-content: space-between; align-items: center;">
+        <h5 style="margin: 0; font-weight: 800; color: #9f1239; font-size: 15px;">
+          <i class="ti ti-cash me-1"></i> تسویه نقدی بدهی {{ customer.full_name }}
+        </h5>
+        <button type="button" onclick="document.getElementById('settleDebtModal').close()" style="background: transparent; border: 0; font-size: 18px; cursor: pointer; color: #9f1239; font-weight: 800;">✕</button>
+      </div>
+      <form method="post" action="{% url 'edge_customer_settle_debt' customer.id %}">
+        {% csrf_token %}
+        <div class="p-3">
+          <div class="p-3 rounded mb-3" style="background: #f8fafc; border: 1px solid #e2e8f0;">
+            <div class="d-flex justify-content-between align-items-center mb-1">
+              <span style="font-size: 13px; color: #64748b;">میزان کل بدهی مشتری:</span>
+              <strong class="num" style="font-size: 18px; color: #dc2626; font-weight: 900;">{{ customer.debt_balance|toman }} تومان</strong>
+            </div>
+            <span style="font-size: 11.5px; color: #64748b;">
+              با ثبت این فرم، دریافت نقدی در سیستم ثبت شده و برچسب بدهی از روی حساب مشتری برداشته می‌شود.
+            </span>
+          </div>
+
+          <div class="mb-3">
+            <label class="unified-label" for="settleDebtAmount">مبلغ پرداختی مشتری (تومان):</label>
+            <div style="position: relative;">
+              <input id="settleDebtAmount" name="amount" type="text" inputmode="numeric" dir="ltr" class="unified-input num text-center" value="{{ customer.debt_balance }}" style="height: 44px; font-weight: 800; font-size: 18px; color: #047857; padding-inline-end: 45px;" required>
+              <span style="position: absolute; left: 12px; top: 50%; transform: translateY(-50%); font-size: 12px; color: #64748b; font-weight: 700; pointer-events: none;">تومان</span>
+            </div>
+          </div>
+
+          <div class="mb-2">
+            <label class="unified-label" for="settleDebtNote">توضیحات (اختیاری):</label>
+            <input id="settleDebtNote" name="note" class="unified-input" maxlength="160" value="تسویه نقدی بدهی توسط مشتری" placeholder="مثلاً: پرداخت نقدی در باجه">
+          </div>
+        </div>
+        <div style="padding: 12px 18px; border-top: 1px solid #e2e8f0; display: flex; justify-content: flex-end; gap: 8px; background: #f8fafc;">
+          <button type="button" class="gn-btn sm" onclick="document.getElementById('settleDebtModal').close()">انصراف</button>
+          <button type="submit" class="gn-btn sm cd-btn-emerald" style="background: #059669; color: #ffffff; font-weight: 800; padding: 6px 16px;">
+            <i class="ti ti-check"></i> تأیید دریافت وجه و تسویه بدهی
+          </button>
+        </div>
+      </form>
+    </div>
+  </dialog>
+  {% endif %}
+
+</div>
+{% endblock %}

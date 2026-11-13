@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from django.contrib.auth.decorators import login_required
+from django.core.paginator import Paginator
 from django.db.models import Q, Sum
 from django.shortcuts import render
 
@@ -20,13 +21,18 @@ def ledger(request):
         qs = qs.filter(
             Q(customer__full_name__icontains=q)
             | Q(customer__phone__icontains=q)
+            | Q(tracking_code__icontains=q)
+            | Q(operator_label__icontains=q)
+            | Q(note__icontains=q)
             | Q(id__icontains=q)
         )
     if entry_type in LedgerEntryType.values:
         qs = qs.filter(entry_type=entry_type)
+    page_obj = Paginator(qs, 100).get_page(request.GET.get("page"))
     ctx.update(
         {
-            "entries": qs[:300],
+            "entries": page_obj,
+            "page_obj": page_obj,
             "q": q,
             "entry_type": entry_type,
             "types": LedgerEntryType,

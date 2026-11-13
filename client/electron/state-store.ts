@@ -19,6 +19,8 @@ export interface StoredState {
   deviceName: string;
   hubName: string;
   tokenSealed: string;
+  idleShutdownMinutes?: number;
+  pendingLogout?: string | null;
   savedAt: string;
 }
 
@@ -69,7 +71,10 @@ export class StateStore {
         deviceName: typeof parsed.deviceName === "string" ? parsed.deviceName : "",
         hubName: typeof parsed.hubName === "string" ? parsed.hubName : "",
         tokenSealed: parsed.tokenSealed,
+        idleShutdownMinutes:
+          typeof parsed.idleShutdownMinutes === "number" ? parsed.idleShutdownMinutes : undefined,
         savedAt: typeof parsed.savedAt === "string" ? parsed.savedAt : "",
+        pendingLogout: typeof parsed.pendingLogout === "string" ? parsed.pendingLogout : null,
       };
     } catch {
       return null;

@@ -1,0 +1,18 @@
+{% comment %}System maintenance lives in one place: cloud sync, the server desktop and error logs.{% endcomment %}
+<nav class="gn-section-tabs" aria-label="بخش سیستم و نگهداری">
+  <a href="{% url 'edge_cloud' %}" class="gn-section-tab {% if active == 'cloud' %}is-active{% endif %}"
+     {% if active == 'cloud' %}aria-current="page"{% endif %}>
+    <i class="ti ti-cloud-upload" aria-hidden="true"></i>
+    همگام‌سازی ابر
+  </a>
+  <a href="{% url 'edge_server_remote' %}" class="gn-section-tab {% if active == 'remote' %}is-active{% endif %}"
+     {% if active == 'remote' %}aria-current="page"{% endif %}>
+    <i class="ti ti-brand-windows" aria-hidden="true"></i>
+    دسکتاپ سرور
+  </a>
+  <a href="{% url 'server_errors_page' %}" class="gn-section-tab {% if active == 'errors' %}is-active{% endif %}"
+     {% if active == 'errors' %}aria-current="page"{% endif %}>
+    <i class="ti ti-bug" aria-hidden="true"></i>
+    خطاهای سرور
+  </a>
+</nav>

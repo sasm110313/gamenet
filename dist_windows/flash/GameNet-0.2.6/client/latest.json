@@ -1,0 +1,7 @@
+{
+  "version": "0.2.6",
+  "url": "/static/updates/app.asar",
+  "sha256": "c35fbed856d40ac0ff393f32955d10996de4c7a9184bc2f46e4a88e5b66ffa14",
+  "mandatory": true,
+  "release_notes": "نسخه 0.2.6 کلاینت — رفع نشست زامبی، ورود سریع، دکمه‌های خاموش/ری‌استارت، سبک‌سازی و حذف تاری، به‌روزرسان پایدار"
+}

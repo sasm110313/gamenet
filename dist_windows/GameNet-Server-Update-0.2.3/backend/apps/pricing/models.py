@@ -1,0 +1,84 @@
+from __future__ import annotations
+
+from django.db import models
+from django.utils import timezone
+
+from apps.core.ids import uuid7
+
+
+class Tariff(models.Model):
+    """Hourly price list. Sessions copy the rate at start and are never repriced.
+
+    Edge rows are authoritative; cloud rows are read-only replicas created by
+    the ingest projection (`is_replica=True`).
+    """
+
+    id = models.UUIDField(primary_key=True, default=uuid7, editable=False)
+    edge_id = models.UUIDField(db_index=True)
+    name = models.CharField(max_length=80)
+    hourly_rate = models.PositiveIntegerField()
+    is_active = models.BooleanField(default=True)
+    is_replica = models.BooleanField(default=False)
+    revision = models.PositiveIntegerField(default=1)
+    created_at = models.DateTimeField(default=timezone.now)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["name"]
+        constraints = [
+            models.UniqueConstraint(fields=["edge_id", "name"], name="pricing_unique_tariff_name"),
+            models.CheckConstraint(
+                condition=models.Q(hourly_rate__gt=0), name="pricing_tariff_rate_positive"
+            ),
+        ]
+
+    def __str__(self) -> str:
+        return f"{self.name} ({self.hourly_rate:,} تومان/ساعت)"
+
+
+class CustomerRate(models.Model):
+    """A named, per-customer hourly rate.
+
+    A customer may have several active rates but at most one default. Sessions
+    copy the chosen rate into their own row, so later edits never reprice a live
+    or historical session. Edge rows are authoritative; cloud rows are replicas.
+    """
+
+    id = models.UUIDField(primary_key=True, default=uuid7, editable=False)
+    edge_id = models.UUIDField(db_index=True)
+    customer = models.ForeignKey(
+        "customers.Customer", on_delete=models.PROTECT, related_name="rates"
+    )
+    name = models.CharField(max_length=80)
+    hourly_rate = models.PositiveIntegerField()
+    is_default = models.BooleanField(default=False)
+    is_active = models.BooleanField(default=True)
+    is_replica = models.BooleanField(default=False)
+    revision = models.PositiveIntegerField(default=1)
+    created_at = models.DateTimeField(default=timezone.now)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["customer_id", "name"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["edge_id", "customer", "name"],
+                name="pricing_unique_customer_rate_name",
+            ),
+            models.CheckConstraint(
+                condition=models.Q(hourly_rate__gt=0),
+                name="pricing_customer_rate_positive",
+            ),
+            models.UniqueConstraint(
+                fields=["customer"],
+                condition=models.Q(is_default=True, is_active=True),
+                name="pricing_one_default_rate_per_customer",
+            ),
+        ]
+        indexes = [
+            models.Index(fields=["edge_id", "customer", "is_active"]),
+        ]
+
+    def __str__(self) -> str:
+        suffix = " (پیش‌فرض)" if self.is_default else ""
+        return f"{self.name} - {self.hourly_rate:,} تومان/ساعت{suffix}"

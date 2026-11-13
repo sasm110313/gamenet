@@ -101,15 +101,16 @@ def ingest_batch(edge: EdgeNode, raw_events: list[dict]) -> dict:
 
         # Same log position with a different id means a broken producer; refuse it
         # rather than silently accepting two facts for one slot.
-        if SyncEvent.objects.filter(edge=edge, local_sequence=event["local_sequence"]).exists():
-            existing = SyncEvent.objects.get(edge=edge, local_sequence=event["local_sequence"])
-            if existing.event_id == event["event_id"]:
+        record = SyncEvent.objects.filter(edge=edge, local_sequence=event["local_sequence"]).first()
+        if record is not None:
+            if record.event_id == event["event_id"] and record.status == SyncEventStatus.APPLIED:
                 duplicates.append(str(event["event_id"]))
-            else:
+                continue
+            if record.event_id != event["event_id"]:
                 rejected.append(
                     {"event_id": str(event["event_id"]), "reason": "sequence already used"}
                 )
-            continue
+                continue
 
         # Per-aggregate causal order. Gaps are allowed (rolled-back transactions),
         # regression is not.
@@ -132,7 +133,8 @@ def ingest_batch(edge: EdgeNode, raw_events: list[dict]) -> dict:
 
         try:
             with transaction.atomic():
-                record = SyncEvent.objects.create(edge=edge, **event)
+                if record is None:
+                    record = SyncEvent.objects.create(edge=edge, **event)
         except IntegrityError:
             # Concurrent retry of the same batch.
             if SyncEvent.objects.filter(edge=edge, event_id=event["event_id"]).exists():
@@ -141,16 +143,22 @@ def ingest_batch(edge: EdgeNode, raw_events: list[dict]) -> dict:
             raise
 
         try:
-            apply_event(record)
-        except Exception as exc:  # DB/transport/projection bug -> edge must retry
-            logger.exception("projection failed for %s", event["event_id"])
-            raise RuntimeError(f"projection failed for {event['event_id']}: {exc}") from exc
-
-        record.applied_at = timezone.now()
-        record.save(update_fields=["applied_at"])
-        accepted.append(str(event["event_id"]))
-        if event["local_sequence"] > watermark:
-            watermark = event["local_sequence"]
+            with transaction.atomic():
+                apply_event(record)
+                record.applied_at = timezone.now()
+                record.status = SyncEventStatus.APPLIED
+                record.reject_reason = ""
+                record.save(update_fields=["applied_at", "status", "reject_reason"])
+            accepted.append(str(event["event_id"]))
+            if event["local_sequence"] > watermark:
+                watermark = event["local_sequence"]
+        except Exception as exc:
+            logger.exception("projection failed for %s: %s", event["event_id"], exc)
+            record.status = SyncEventStatus.REJECTED
+            record.reject_reason = str(exc)[:255]
+            record.save(update_fields=["status", "reject_reason"])
+            rejected.append({"event_id": str(event["event_id"]), "reason": str(exc)[:255]})
+            break
 
     edge.last_sync_at = timezone.now()
     edge.last_seen_at = timezone.now()

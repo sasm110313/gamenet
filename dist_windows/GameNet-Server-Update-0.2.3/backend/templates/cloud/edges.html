@@ -1,0 +1,468 @@
+{% extends "base.html" %}
+{% load gn %}
+
+{% block title %}سرور سالن و تنظیمات{% endblock %}
+{% block page_title %}سرور سالن، همگام‌سازی و تنظیمات{% endblock %}
+{% block page_subtitle %}وضعیت اتصال سرور محلی، دستورهای راه دور، جریان رویدادها و پیکربندی مرکزی{% endblock %}
+
+{% block content %}
+<div class="cd-scope d-flex flex-column gap-3">
+
+  <div class="gn-tabs" data-gn-tabs="cloud-edges">
+    <div role="tablist" aria-label="مدیریت سرور سالن و تنظیمات" class="gn-tablist" data-gn-tablist>
+      <button type="button" role="tab" id="tab-server" data-tab-panel="panel-server" aria-selected="true" tabindex="0" class="gn-tab" data-tab-hash="server">
+        <i class="ti ti-server-2" aria-hidden="true"></i>
+        <span>سرور سالن و ایستگاه‌ها</span>
+        <span class="gn-tab-count">{{ devices|length }}</span>
+      </button>
+      <button type="button" role="tab" id="tab-commands" data-tab-panel="panel-commands" aria-selected="false" tabindex="-1" class="gn-tab" data-tab-hash="commands">
+        <i class="ti ti-terminal-2" aria-hidden="true"></i>
+        <span>دستورهای راه دور</span>
+        <span class="gn-tab-count">{{ commands|length }}</span>
+      </button>
+      <button type="button" role="tab" id="tab-events" data-tab-panel="panel-events" aria-selected="false" tabindex="-1" class="gn-tab" data-tab-hash="events">
+        <i class="ti ti-arrows-exchange" aria-hidden="true"></i>
+        <span>رویدادهای همگام‌شده</span>
+        <span class="gn-tab-count">{{ events|length }}</span>
+      </button>
+      <button type="button" role="tab" id="tab-config" data-tab-panel="panel-config" aria-selected="false" tabindex="-1" class="gn-tab" data-tab-hash="config">
+        <i class="ti ti-settings" aria-hidden="true"></i>
+        <span>پیکربندی و نسخه‌ها</span>
+        <span class="gn-tab-count">{{ snapshots|length }}</span>
+      </button>
+    </div>
+
+    <!-- تب ۱: سرور سالن و ایستگاه‌ها -->
+    <div role="tabpanel" id="panel-server" aria-labelledby="tab-server" class="gn-tabpanel">
+      <div class="gn-tabpanel-inner d-flex flex-column gap-3">
+        {% if salon_server %}
+          <div class="cd-header">
+            <div class="d-flex justify-content-between align-items-center flex-wrap gap-3 mb-3">
+              <div class="d-flex align-items-center gap-3">
+                <div class="cd-avatar" aria-hidden="true"><i class="ti ti-server-2"></i></div>
+                <div>
+                  <h4 class="mb-0" style="font-size: 17px; font-weight: 800; color: #0f172a;">{{ salon_server.name }}</h4>
+                  <span style="font-size: 12px; color: #475569;">
+                    سرور اصلی سالن · {{ salon_server.site_name|default:"شعبه مرکزی" }} · شناسه <span class="mono">{{ salon_server.id|shortid }}</span>
+                  </span>
+                </div>
+              </div>
+
+              <div>
+                {% if salon_server.status == 'ONLINE' %}
+                  <span class="cd-pill is-emerald" style="font-size: 12.5px; padding: 6px 14px;">
+                    <i class="ti ti-circle-check" aria-hidden="true"></i> آنلاین و متصل
+                  </span>
+                {% else %}
+                  <span class="cd-pill" style="font-size: 12.5px; padding: 6px 14px;">
+                    <i class="ti ti-wifi-off" aria-hidden="true"></i> آفلاین (قطع ارتباط)
+                  </span>
+                {% endif %}
+              </div>
+            </div>
+
+            <div class="cd-kpi-grid mb-3">
+              <div class="cd-kpi-card" style="background: #f8fafc;">
+                <div class="cd-kpi-label"><span>آخرین ارتباط زنده</span></div>
+                <div class="cd-kpi-value num" style="font-size: 15px;">{{ salon_server.last_seen_at|reltime }}</div>
+              </div>
+              <div class="cd-kpi-card" style="background: #f8fafc;">
+                <div class="cd-kpi-label"><span>آخرین همگام‌سازی</span></div>
+                <div class="cd-kpi-value num" style="font-size: 15px;">{{ salon_server.last_sync_at|reltime }}</div>
+              </div>
+              <div class="cd-kpi-card" style="background: #f8fafc;">
+                <div class="cd-kpi-label"><span>ایستگاه‌های بازی</span></div>
+                <div class="cd-kpi-value is-blue num" style="font-size: 15px;">{{ devices|length }} سیستم</div>
+              </div>
+              <div class="cd-kpi-card" style="background: #f8fafc;">
+                <div class="cd-kpi-label"><span>نسخه نرم‌افزار / پیکربندی</span></div>
+                <div class="cd-kpi-value num" style="font-size: 15px;">
+                  {{ salon_server.software_version|default:"v1.0" }} · v{{ salon_server.config_version|default:0 }}
+                </div>
+              </div>
+            </div>
+
+            <div class="d-flex justify-content-between align-items-center flex-wrap gap-2">
+              <div class="d-flex gap-2 flex-wrap">
+                <form method="post" action="{% url 'cloud_edge_action' salon_server.id %}" class="gn-inline-form">
+                  {% csrf_token %}
+                  <input type="hidden" name="next" value="{% url 'cloud_edges' %}">
+                  <button class="gn-btn cd-btn-outline" name="action" value="ping" type="submit">
+                    <i class="ti ti-activity" aria-hidden="true"></i> ارسال سیگنال پینگ
+                  </button>
+                </form>
+
+                <form method="post" action="{% url 'cloud_edge_action' salon_server.id %}" class="gn-inline-form">
+                  {% csrf_token %}
+                  <input type="hidden" name="next" value="{% url 'cloud_edges' %}">
+                  <button class="gn-btn cd-btn-ink" name="action" value="sync" type="submit">
+                    <i class="ti ti-refresh" aria-hidden="true"></i> همگام‌سازی فوری داده‌ها
+                  </button>
+                </form>
+
+                <form method="post" action="{% url 'cloud_edge_action' salon_server.id %}" class="gn-inline-form">
+                  {% csrf_token %}
+                  <input type="hidden" name="next" value="{% url 'cloud_edges' %}">
+                  <button class="gn-btn cd-btn-outline" name="action" value="test_event" type="submit">
+                    <i class="ti ti-send" aria-hidden="true"></i> رویداد آزمایشی
+                  </button>
+                </form>
+
+                <form method="post" action="{% url 'cloud_edge_action' salon_server.id %}" class="gn-inline-form" onsubmit="return confirm('آیا از به‌روزرسانی خودکار سرور سالن اطمینان دارید؟ نرم‌افزار سرور دانلود و مجدداً راه‌اندازی خواهد شد.');">
+                  {% csrf_token %}
+                  <input type="hidden" name="next" value="{% url 'cloud_edges' %}">
+                  <button class="gn-btn cd-btn-outline" style="color: #2563eb; border-color: rgba(37,99,235,.35);" name="action" value="update_edge" type="submit">
+                    <i class="ti ti-download" aria-hidden="true"></i> 🚀 به‌روزرسانی آنلاین سرور سالن
+                  </button>
+                </form>
+
+                <form method="post" action="{% url 'cloud_edge_action' salon_server.id %}" class="gn-inline-form" onsubmit="return confirm('آیا از به‌روزرسانی تمام کلاینت‌های سالن اطمینان دارید؟');">
+                  {% csrf_token %}
+                  <input type="hidden" name="next" value="{% url 'cloud_edges' %}">
+                  <button class="gn-btn cd-btn-outline" style="color: #059669; border-color: rgba(5,150,105,.35);" name="action" value="update_clients" type="submit">
+                    <i class="ti ti-devices" aria-hidden="true"></i> 💻 به‌روزرسانی آنلاین کلاینت‌ها
+                  </button>
+                </form>
+
+                <form method="post" action="{% url 'cloud_edge_revoke' salon_server.id %}" class="gn-inline-form" onsubmit="return confirm('آیا مطمئنید؟ اتصال این سرور و ایستگاه‌های آن لغو می‌شود تا سرور جدید ثبت کنید.');">
+                  {% csrf_token %}
+                  <button class="gn-btn cd-btn-outline" style="color: #dc2626; border-color: rgba(220,38,38,.35);" type="submit">
+                    <i class="ti ti-unlink" aria-hidden="true"></i> لغو اتصال این سرور
+                  </button>
+                </form>
+              </div>
+
+              <span style="font-size: 12px; color: #475569;">
+                Watermark رویداد: <strong class="num" style="color: #0f172a;">#{{ salon_server.last_acked_sequence|default:0 }}</strong>
+              </span>
+            </div>
+          </div>
+
+          <!-- جدول ایستگاه‌های متصل -->
+          <div class="cd-panel">
+            <div class="cd-panel-head">
+              <h5 class="cd-panel-title">
+                <i class="ti ti-device-desktop" style="color: #2563eb;" aria-hidden="true"></i>
+                <span>ایستگاه‌های متصل به سرور سالن</span>
+              </h5>
+              <a href="{% url 'cloud_devices' %}" class="gn-btn sm cd-btn-outline">مدیریت کامل ایستگاه‌ها</a>
+            </div>
+
+            <div class="gn-table-wrap" tabindex="0" role="region" aria-label="فهرست ایستگاه‌های بازی">
+              <table class="gn-table">
+                <thead>
+                  <tr>
+                    <th>نام ایستگاه</th>
+                    <th>وضعیت ارتباط و سیستم</th>
+                    <th>نشست فعال گیمر</th>
+                    <th>آخرین ضربان</th>
+                    <th class="text-end">کنترل راه دور</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {% for device in devices %}
+                    <tr>
+                      <td>
+                        <a href="{% url 'cloud_device_detail' device.id %}" style="color: #0f172a; text-decoration: none; font-weight: 800;">
+                          {{ device.name }}
+                        </a>
+                        <div class="mono gn-muted" style="font-size: 10.5px;">{{ device.id|shortid }}</div>
+                      </td>
+                      <td>
+                        <div class="d-flex flex-wrap gap-1">
+                          <span class="cd-pill {% if device.connection_status == 'ONLINE' %}is-emerald{% endif %}">
+                            <i class="ti ti-wifi" aria-hidden="true"></i> {{ device.connection_status|conn_fa }}
+                          </span>
+                          <span class="cd-pill {% if device.power_status == 'ON' %}is-blue{% endif %}">
+                            <i class="ti ti-power" aria-hidden="true"></i> {{ device.power_status|power_fa }}
+                          </span>
+                          {% if device.connection_status == 'ONLINE' %}
+                            <span class="cd-pill">
+                              <i class="ti ti-lock" aria-hidden="true"></i> {{ device.kiosk_status|kiosk_fa }}
+                            </span>
+                          {% endif %}
+                          <span class="cd-pill {% if device.occupancy_status == 'BUSY' %}is-emerald{% endif %}">
+                            {{ device.occupancy_status|occ_fa }}
+                          </span>
+                        </div>
+                      </td>
+                      <td>
+                        {% if device.active_session %}
+                          <a href="{% url 'cloud_customer_detail' device.active_session.customer.id %}#wallet" class="cd-pill is-emerald" style="text-decoration: none;">
+                            <i class="ti ti-user" aria-hidden="true"></i> {{ device.active_session.customer.full_name }}
+                          </a>
+                        {% else %}
+                          <span style="font-size: 12px; color: #64748b;">بدون گیمر</span>
+                        {% endif %}
+                      </td>
+                      <td class="num" style="color: #475569; font-size: 12px;">{{ device.last_heartbeat_at|reltime }}</td>
+                      <td class="text-end">
+                        <form method="post" action="{% url 'cloud_device_action' device.id %}" class="gn-inline-form">
+                          {% csrf_token %}
+                          <input type="hidden" name="next" value="{% url 'cloud_edges' %}">
+                          {% if device.power_status == 'OFF' or device.connection_status == 'OFFLINE' %}
+                            <button class="gn-btn sm cd-btn-emerald" style="width: auto;" name="action" value="wake" title="روشن کردن با LAN (Wake-on-LAN)">
+                              <i class="ti ti-power" aria-hidden="true"></i> روشن
+                            </button>
+                          {% elif device.kiosk_status == 'LOCKED' %}
+                            <button class="gn-btn sm cd-btn-outline" name="action" value="unlock" title="باز کردن قفل">
+                              <i class="ti ti-lock-open" aria-hidden="true"></i> باز
+                            </button>
+                          {% else %}
+                            <button class="gn-btn sm cd-btn-outline" name="action" value="lock" title="قفل کردن">
+                              <i class="ti ti-lock" aria-hidden="true"></i> قفل
+                            </button>
+                          {% endif %}
+                          <button class="gn-btn sm cd-btn-outline" name="action" value="ping" title="ارسال پینگ">
+                            <i class="ti ti-activity" aria-hidden="true"></i>
+                          </button>
+                        </form>
+                      </td>
+                    </tr>
+                  {% empty %}
+                    <tr><td colspan="5"><div class="gn-empty">ایستگاهی متصل نیست.</div></td></tr>
+                  {% endfor %}
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          <details class="cd-panel is-subtle" {% if active_codes %}open{% endif %}>
+            <summary style="cursor: pointer; font-weight: 700; font-size: 13px; color: #0f172a;">
+              صدور کد ثبت سرور سالن جدید (Edge Registration Code)
+            </summary>
+            {% if active_codes %}
+              <div class="mt-2 p-2 rounded" style="background: #ecfdf5; border: 1px solid #a7f3d0; font-size: 12.5px;">
+                <strong>کدهای ثبت فعال فعلی:</strong>
+                {% for c in active_codes %}
+                  <span class="mono mx-2" style="background: #fff; padding: 2px 8px; border-radius: 6px; border: 1px solid #6ee7b7; font-weight: 800;" dir="ltr">{{ c.code }}</span>
+                  {% if c.note %}<span class="gn-muted">({{ c.note }})</span>{% endif %}
+                {% endfor %}
+              </div>
+            {% endif %}
+            <form method="post" action="{% url 'cloud_create_code' %}" class="d-flex align-items-end gap-2 mt-3 flex-wrap">
+              {% csrf_token %}
+              <div class="flex-grow-1" style="min-width: 220px;">
+                <label class="cd-label" for="cloudEdgeCodeNote">یادداشت شعبه / سرور (اختیاری)</label>
+                <input id="cloudEdgeCodeNote" class="cd-input" name="note" maxlength="160" placeholder="مثلاً سرور جدید سالن مرکزی">
+              </div>
+              <button type="submit" class="gn-btn cd-btn-ink">
+                <i class="ti ti-key" aria-hidden="true"></i> ساخت کد یک‌بارمصرف (۲۴ ساعته)
+              </button>
+            </form>
+          </details>
+        {% else %}
+          <div class="cd-panel">
+            <div class="gn-empty py-4">
+              <i class="ti ti-server-off" style="font-size: 32px; color: #0f172a; margin-bottom: 10px;"></i>
+              <h5>سرور سالنی ثبت نشده است</h5>
+              <p style="color: #475569; font-size: 13px;">برای اتصال سرور محلی سالن به پنل آنلاین، یک کد ثبت ۲۴ ساعته بسازید و در پنل سالن وارد کنید.</p>
+              <form method="post" action="{% url 'cloud_create_code' %}" class="d-flex justify-content-center align-items-end gap-2 mt-3 flex-wrap">
+                {% csrf_token %}
+                <input class="cd-input" style="max-width: 280px;" name="note" maxlength="160" placeholder="نام یا توضیح سالن (اختیاری)">
+                <button type="submit" class="gn-btn cd-btn-emerald" style="width: auto;">
+                  <i class="ti ti-key" aria-hidden="true"></i> ساخت کد ثبت سرور
+                </button>
+              </form>
+              {% if active_codes %}
+                <div class="mt-3 p-2 rounded" style="background: #ecfdf5; border: 1px solid #a7f3d0; font-size: 13px; display: inline-block;">
+                  <strong>کد ثبت فعال:</strong>
+                  {% for c in active_codes %}
+                    <span class="mono mx-2" style="background: #fff; padding: 3px 10px; border-radius: 6px; border: 1px solid #6ee7b7; font-weight: 800; font-size: 15px;" dir="ltr">{{ c.code }}</span>
+                  {% endfor %}
+                </div>
+              {% endif %}
+            </div>
+          </div>
+        {% endif %}
+      </div>
+    </div>
+
+    <!-- تب ۲: دستورهای راه دور -->
+    <div role="tabpanel" id="panel-commands" aria-labelledby="tab-commands" class="gn-tabpanel" hidden="until-found">
+      <div class="gn-tabpanel-inner">
+        <div class="cd-panel-head">
+          <h5 class="cd-panel-title">
+            <i class="ti ti-terminal-2" style="color: #2563eb;" aria-hidden="true"></i>
+            <span>دستورهای ارسال‌شده به سرور سالن</span>
+          </h5>
+          <span style="font-size: 12px; color: #475569;">هر دستور امضا شده، دارای انقضا بوده و حداکثر یک‌بار اجرا می‌شود</span>
+        </div>
+
+        <div class="gn-table-wrap" tabindex="0" role="region" aria-label="جدول دستورهای راه دور">
+          <table class="gn-table">
+            <thead>
+              <tr>
+                <th>نوع دستور</th>
+                <th>سرور</th>
+                <th>وضعیت</th>
+                <th>صدور</th>
+                <th>انقضا</th>
+                <th>تأیید</th>
+                <th>نتیجه / خطا</th>
+                <th>شناسه</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for cmd in commands %}
+                <tr>
+                  <td><strong style="color: #0f172a; font-size: 12.5px;">{{ cmd.command_type }}</strong></td>
+                  <td style="color: #475569;">{{ cmd.edge.name }}</td>
+                  <td>
+                    <span class="cd-pill {% if cmd.status == 'SUCCEEDED' or cmd.status == 'ACKNOWLEDGED' %}is-emerald{% elif cmd.status == 'SENT' or cmd.status == 'PENDING' %}is-blue{% endif %}">
+                      {{ cmd.status|status_fa }}
+                    </span>
+                  </td>
+                  <td class="num gn-muted">{{ cmd.issued_at|date:"H:i:s" }}</td>
+                  <td class="num gn-muted">{{ cmd.expires_at|date:"H:i:s" }}</td>
+                  <td class="num gn-muted">{{ cmd.acknowledged_at|date:"H:i:s"|default:"—" }}</td>
+                  <td class="gn-muted" style="font-size: 11px;">{{ cmd.result|default:cmd.error|truncatechars:60|default:"—" }}</td>
+                  <td class="mono gn-muted">{{ cmd.id|shortid }}</td>
+                </tr>
+              {% empty %}
+                <tr><td colspan="8"><div class="gn-empty"><i class="ti ti-terminal-2"></i>دستوری صادر نشده است.</div></td></tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- تب ۳: رویدادهای همگام‌شده -->
+    <div role="tabpanel" id="panel-events" aria-labelledby="tab-events" class="gn-tabpanel" hidden="until-found">
+      <div class="gn-tabpanel-inner">
+        <div class="cd-panel-head">
+          <h5 class="cd-panel-title">
+            <i class="ti ti-arrows-exchange" style="color: #2563eb;" aria-hidden="true"></i>
+            <span>رویدادهای همگام‌شده از سرور سالن</span>
+          </h5>
+          <span style="font-size: 12px; color: #475569;">جریان فقط-افزودنی تغییرات سالن؛ داده‌های تکراری در مبدأ حذف می‌شوند</span>
+        </div>
+
+        <div class="gn-table-wrap gn-scroll" style="max-height: 62vh;" tabindex="0" role="region" aria-label="جدول رویدادهای همگام‌شده">
+          <table class="gn-table">
+            <thead>
+              <tr>
+                <th>سرور</th>
+                <th>#</th>
+                <th>نوع رویداد</th>
+                <th>Aggregate</th>
+                <th>وضعیت</th>
+                <th>زمان وقوع</th>
+                <th>دریافت</th>
+                <th>Payload</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for ev in events %}
+                <tr>
+                  <td style="font-size: 11.5px; color: #475569;">{{ ev.edge.name }}</td>
+                  <td class="num" style="color: #0f172a; font-weight: 700;">{{ ev.local_sequence }}</td>
+                  <td><strong style="color: #0f172a; font-size: 12px;">{{ ev.event_type }}</strong></td>
+                  <td class="mono gn-muted">{{ ev.aggregate_type }}:{{ ev.aggregate_id|shortid }}</td>
+                  <td>
+                    <span class="cd-pill {% if ev.status == 'APPLIED' or ev.status == 'SYNCED' %}is-emerald{% elif ev.status == 'PENDING' %}is-blue{% endif %}">
+                      {{ ev.status|status_fa }}
+                    </span>
+                  </td>
+                  <td class="num gn-muted">{{ ev.occurred_at|date:"m-d H:i:s" }}</td>
+                  <td class="num gn-muted">{{ ev.received_at|date:"H:i:s" }}</td>
+                  <td class="mono gn-muted" style="font-size: 10.5px; max-width: 340px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">{{ ev.payload }}</td>
+                </tr>
+              {% empty %}
+                <tr><td colspan="8"><div class="gn-empty"><i class="ti ti-arrows-exchange"></i>رویدادی دریافت نشده است.</div></td></tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- تب ۴: پیکربندی و نسخه‌ها -->
+    <div role="tabpanel" id="panel-config" aria-labelledby="tab-config" class="gn-tabpanel" hidden="until-found">
+      <div class="gn-tabpanel-inner">
+        <div class="row g-3">
+          <div class="col-lg-5 col-12">
+            <div class="cd-panel is-subtle">
+              <div class="cd-panel-head">
+                <h5 class="cd-panel-title">
+                  <i class="ti ti-rocket" style="color: #2563eb;" aria-hidden="true"></i>
+                  <span>انتشار نسخه جدید پیکربندی</span>
+                </h5>
+              </div>
+              <form method="post" action="{% url 'cloud_config' %}" class="d-flex flex-column gap-3">
+                {% csrf_token %}
+                <div>
+                  <label class="cd-label" for="cfgHeartbeat">ضربان دستگاه (ثانیه)</label>
+                  <input id="cfgHeartbeat" class="cd-input num" dir="ltr" name="device_heartbeat_seconds" value="{{ active.payload.device_heartbeat_seconds|default:10 }}">
+                </div>
+                <div>
+                  <label class="cd-label" for="cfgOffline">آستانه آفلاین (تعداد ضربان ازدست‌رفته)</label>
+                  <input id="cfgOffline" class="cd-input num" dir="ltr" name="device_offline_after_missed" value="{{ active.payload.device_offline_after_missed|default:3 }}">
+                </div>
+                <div>
+                  <label class="cd-label" for="cfgRate">نرخ ساعتی پیش‌فرض (تومان)</label>
+                  <input id="cfgRate" class="cd-input num" dir="ltr" name="default_hourly_rate" value="{{ active.payload.default_hourly_rate|default:40000 }}">
+                </div>
+                <div>
+                  <label class="cd-label" for="cfgCredit">سقف اعتبار پیش‌فرض (تومان)</label>
+                  <input id="cfgCredit" class="cd-input num" dir="ltr" name="default_credit_limit" value="{{ active.payload.default_credit_limit|default:60000 }}">
+                </div>
+                <div>
+                  <label class="cd-label" for="cfgTtl">اعتبار دستور (ثانیه)</label>
+                  <input id="cfgTtl" class="cd-input num" dir="ltr" name="command_ttl_seconds" value="{{ active.payload.command_ttl_seconds|default:120 }}">
+                </div>
+                <button class="gn-btn cd-btn-emerald" type="submit">
+                  <i class="ti ti-rocket" aria-hidden="true"></i> انتشار نسخه پیکربندی
+                </button>
+              </form>
+            </div>
+          </div>
+
+          <div class="col-lg-7 col-12">
+            <div class="cd-panel">
+              <div class="cd-panel-head">
+                <h5 class="cd-panel-title">
+                  <i class="ti ti-versions" style="color: #0f172a;" aria-hidden="true"></i>
+                  <span>نسخه‌های پیکربندی توزیع‌شده</span>
+                </h5>
+              </div>
+              <div class="gn-table-wrap gn-scroll" style="max-height: 460px;" tabindex="0" role="region" aria-label="فهرست نسخه‌های پیکربندی">
+                <table class="gn-table">
+                  <thead>
+                    <tr>
+                      <th>نسخه</th>
+                      <th>Hash</th>
+                      <th>وضعیت</th>
+                      <th>زمان ساخت</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {% for snap in snapshots %}
+                      <tr>
+                        <td class="num"><strong style="color: #0f172a;">v{{ snap.version }}</strong></td>
+                        <td class="mono gn-muted">{{ snap.content_hash|slice:":12" }}</td>
+                        <td>
+                          {% if snap.is_active %}
+                            <span class="cd-pill is-emerald"><i class="ti ti-circle-check" aria-hidden="true"></i> فعال</span>
+                          {% else %}
+                            <span class="cd-pill">بازنشسته</span>
+                          {% endif %}
+                        </td>
+                        <td class="num gn-muted">{{ snap.created_at|date:"m-d H:i" }}</td>
+                      </tr>
+                    {% empty %}
+                      <tr><td colspan="4"><div class="gn-empty">نسخه‌ای منتشر نشده است.</div></td></tr>
+                    {% endfor %}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</div>
+{% endblock %}

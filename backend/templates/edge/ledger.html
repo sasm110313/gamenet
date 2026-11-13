@@ -3,18 +3,24 @@
 
 {% block title %}صندوق{% endblock %}
 {% block page_title %}دفتر مالی{% endblock %}
-{% block page_subtitle %}تاریخچه فقط‌افزودنی تراکنش‌های کیف پول{% endblock %}
+{% block page_subtitle %}سابقه غیرقابل‌حذف و فقط‌افزودنی تراکنش‌های کیف پول با شماره پیگیری یکتا{% endblock %}
 
 {% block content %}
+{% include "edge/_tabs_finance.html" with active='ledger' %}
+<div class="gn-alert info mb-3 py-2 px-3" style="font-size: 12.5px;">
+  <i class="ti ti-lock-square-rounded"></i>
+  <strong>سابقه مالی غیرقابل‌حذف:</strong> تمام تراکنش‌ها به‌صورت فقط‌افزودنی با شماره پیگیری و نام اپراتور ثبت می‌شوند و هرگونه اصلاح صرفاً از طریق ردیف جدید یا برگشت حسابداری انجام می‌شود.
+</div>
+
 <div class="gn-card mb-3">
   <form method="get" class="gn-form-row">
     <div class="flex-grow-1">
-      <label class="gn-label">مشتری / شناسه تراکنش</label>
-      <input class="gn-input" name="q" value="{{ q }}" placeholder="جستجو…">
+      <label class="gn-label" for="edgeLedgerQ">مشتری / کد پیگیری / اپراتور</label>
+      <input id="edgeLedgerQ" class="gn-input" name="q" value="{{ q }}" placeholder="جستجو نام مشتری، موبایل، کد پیگیری یا اپراتور...">
     </div>
     <div>
-      <label class="gn-label">نوع</label>
-      <select class="gn-select" name="type">
+      <label class="gn-label" for="edgeLedgerType">نوع</label>
+      <select id="edgeLedgerType" class="gn-select" name="type">
         <option value="">همه</option>
         {% for value, label in types.choices %}
           <option value="{{ value }}" {% if entry_type == value %}selected{% endif %}>{{ label }}</option>
@@ -22,30 +28,72 @@
       </select>
     </div>
     <button class="gn-btn" type="submit"><i class="ti ti-filter"></i> اعمال</button>
-    <span class="gn-chip ms-auto">جمع فیلتر: <span class="num">{{ total|toman }}</span> تومان</span>
+    <span class="gn-chip ms-auto">جمع کل ردیف‌های فیلترشده: <span class="num">{{ total|toman }}</span> تومان</span>
   </form>
 </div>
 
 <div class="gn-card">
-  <table class="gn-table">
-    <thead><tr><th>زمان</th><th>مشتری</th><th>نوع</th><th>مبلغ</th><th>مانده</th><th>نشست</th><th>توضیح</th></tr></thead>
-    <tbody>
-      {% for entry in entries %}
+  <div class="gn-table-wrap" tabindex="0" role="region" aria-label="دفتر مالی غیرقابل‌حذف">
+    <table class="gn-table">
+      <thead>
         <tr>
-          <td class="num gn-muted">{{ entry.created_at|date:"Y-m-d H:i:s" }}</td>
-          <td>
-            <a href="{% url 'edge_customer_detail' entry.customer.id %}" style="color: var(--gn-text); text-decoration: none">{{ entry.customer.full_name }}</a>
-          </td>
-          <td>{{ entry.get_entry_type_display }}</td>
-          <td class="num {% if entry.amount < 0 %}text-danger{% else %}text-success{% endif %}">{{ entry.amount|toman }}</td>
-          <td class="num gn-muted">{{ entry.balance_after|toman }}</td>
-          <td class="mono gn-muted" style="font-size: 10.5px">{{ entry.session_id|default:"—"|shortid }}</td>
-          <td class="gn-muted" style="font-size: 11.5px">{{ entry.note|default:"—" }}</td>
+          <th>زمان</th>
+          <th>کد پیگیری</th>
+          <th>مشتری</th>
+          <th>نوع</th>
+          <th>مبلغ</th>
+          <th>مانده بعد</th>
+          <th>اپراتور</th>
+          <th>توضیح / یادداشت</th>
         </tr>
-      {% empty %}
-        <tr><td colspan="7"><div class="gn-empty"><i class="ti ti-receipt-off"></i>تراکنشی یافت نشد.</div></td></tr>
-      {% endfor %}
-    </tbody>
-  </table>
+      </thead>
+      <tbody>
+        {% for entry in entries %}
+          <tr>
+            <td class="num gn-muted">{{ entry.created_at|date:"Y-m-d H:i:s" }}</td>
+            <td>
+              {% if entry.tracking_code %}
+                <button type="button" class="gn-tracking-pill" data-copy-text="{{ entry.tracking_code }}" title="کلیک برای کپی شماره پیگیری">
+                  <i class="ti ti-copy"></i> {{ entry.tracking_code }}
+                </button>
+              {% else %}
+                <span class="mono gn-muted">{{ entry.id|shortid }}</span>
+              {% endif %}
+            </td>
+            <td>
+              <a href="{% url 'edge_customer_detail' entry.customer.id %}" style="color: var(--gn-text); text-decoration: none; font-weight: 700;">{{ entry.customer.full_name }}</a>
+            </td>
+            <td>{{ entry.get_entry_type_display }}</td>
+            <td class="num {% if entry.amount < 0 %}text-danger{% else %}text-success{% endif %}" style="font-weight: 700;">{{ entry.amount|toman }}</td>
+            <td class="num gn-muted">{{ entry.balance_after|toman }}</td>
+            <td style="font-size: 12px;">{{ entry.operator_label|default:"سیستم" }}</td>
+            <td class="gn-muted" style="font-size: 11.5px">{{ entry.note|default:"—" }}</td>
+          </tr>
+        {% empty %}
+          <tr><td colspan="8"><div class="gn-empty"><i class="ti ti-receipt-off"></i>تراکنشی یافت نشد.</div></td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+  {% if page_obj.paginator.num_pages > 1 %}
+    <div class="d-flex align-items-center justify-content-between gap-2 p-3" style="border-top: 1px solid var(--gn-border);">
+      <span class="gn-muted" style="font-size: 12px;">
+        صفحه {{ page_obj.number }} از {{ page_obj.paginator.num_pages }} · {{ page_obj.paginator.count }} ردیف
+      </span>
+      <div class="d-flex gap-2">
+        {% if page_obj.has_previous %}
+          <a class="gn-btn sm" href="?page={{ page_obj.previous_page_number }}{% if q %}&q={{ q|urlencode }}{% endif %}{% if entry_type %}&type={{ entry_type|urlencode }}{% endif %}">
+            <i class="ti ti-chevron-right"></i> قبلی
+          </a>
+        {% endif %}
+        {% if page_obj.has_next %}
+          <a class="gn-btn sm" href="?page={{ page_obj.next_page_number }}{% if q %}&q={{ q|urlencode }}{% endif %}{% if entry_type %}&type={{ entry_type|urlencode }}{% endif %}">
+            بعدی <i class="ti ti-chevron-left"></i>
+          </a>
+        {% endif %}
+      </div>
+    </div>
+  {% endif %}
 </div>
 {% endblock %}

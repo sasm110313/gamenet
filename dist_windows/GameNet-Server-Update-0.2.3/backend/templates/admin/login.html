@@ -1,0 +1,77 @@
+{% extends "admin/base_site.html" %}
+{% load i18n static %}
+
+{% block title %}ورود به مدیریت GameNet{% endblock %}
+
+{% block bodyclass %}{{ block.super }} login gn-admin-login-page{% endblock %}
+{% block header %}{% endblock %}
+{% block nav-breadcrumbs %}{% endblock %}
+{% block nav-sidebar %}{% endblock %}
+{% block content_title %}{% endblock %}
+
+{% block content %}
+<div class="gn-login-wrap">
+  <div class="gn-login-box">
+    <div class="gn-login-header">
+      <div class="gn-login-logo">G</div>
+      <h1 class="gn-login-title">GameNet Control</h1>
+      <p class="gn-login-subtitle">ورود به پنل مدیریت پیشرفته و پایگاه داده سالن</p>
+    </div>
+
+    {% if form.errors and not form.non_field_errors %}
+      <p class="errornote" style="margin-bottom: 18px;">
+        <i class="ti ti-alert-triangle"></i>
+        نام کاربری یا رمز عبور وارد شده نادرست است. لطفاً دوباره بررسی کنید.
+      </p>
+    {% endif %}
+
+    {% if form.non_field_errors %}
+      {% for error in form.non_field_errors %}
+        <p class="errornote" style="margin-bottom: 18px;">
+          <i class="ti ti-alert-circle"></i> {{ error }}
+        </p>
+      {% endfor %}
+    {% endif %}
+
+    {% if user.is_authenticated %}
+      <p class="errornote" style="margin-bottom: 18px;">
+        شما هم‌اکنون با نام کاربری <strong>{{ request.user.username }}</strong> وارد شده‌اید.
+      </p>
+    {% endif %}
+
+    <form action="{{ app_path }}" method="post" id="login-form">
+      {% csrf_token %}
+      
+      <div class="gn-login-field">
+        <label for="id_username">نام کاربری ادمین</label>
+        <div class="gn-input-icon-wrap">
+          <i class="ti ti-user"></i>
+          <input type="text" name="username" id="id_username" value="{{ form.username.value|default:'' }}" placeholder="admin" required autofocus autocomplete="username">
+        </div>
+      </div>
+
+      <div class="gn-login-field">
+        <label for="id_password">رمز عبور</label>
+        <div class="gn-input-icon-wrap">
+          <i class="ti ti-lock"></i>
+          <input type="password" name="password" id="id_password" placeholder="••••••••" required autocomplete="current-password">
+        </div>
+      </div>
+
+      <input type="hidden" name="next" value="{{ next|default:'/admin/' }}">
+
+      <button type="submit" class="gn-login-btn">
+        <i class="ti ti-login"></i>
+        <span>ورود به پنل مدیریت</span>
+      </button>
+    </form>
+
+    <div class="gn-login-footer">
+      <a href="/">
+        <i class="ti ti-arrow-right"></i>
+        <span>بازگشت به داشبورد عملیات سالن</span>
+      </a>
+    </div>
+  </div>
+</div>
+{% endblock %}

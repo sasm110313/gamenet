@@ -1,3 +1,5 @@
+//go:build windows
+
 package main
 
 import (
@@ -8,104 +10,81 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"syscall"
 	"time"
+	"unsafe"
+
+	"github.com/jchv/go-webview2"
+	"golang.org/x/sys/windows"
+	"golang.org/x/sys/windows/registry"
 )
 
-func main() {
-	fmt.Println("=======================================================")
-	fmt.Println("       GameNet Salon Management Server (Windows)       ")
-	fmt.Println("             مدیریت سالن گیم‌نت - نسخه ویندوز          ")
-	fmt.Println("=======================================================")
-	fmt.Println()
+const serverURL = "https://127.0.0.1:19443/"
 
-	// Locate repo root directory
+func main() {
+	// Set WebView2 to ignore self-signed SSL certificate on local server
+	_ = os.Setenv(
+		"WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS",
+		"--ignore-certificate-errors --allow-insecure-localhost --disable-features=Translate,PrivacySandboxSettings4",
+	)
+
 	exePath, err := os.Executable()
 	if err != nil {
 		exePath = "."
 	}
 	exeDir := filepath.Dir(exePath)
+	rootDir := findRootDir(exeDir)
 
-	// Determine root directory (either current dir, parent dir, or grand-parent)
-	rootDir := exeDir
-	if fileExists(filepath.Join(rootDir, "backend", "manage.py")) {
-		// rootDir is current
-	} else if fileExists(filepath.Join(rootDir, "..", "backend", "manage.py")) {
-		rootDir = filepath.Clean(filepath.Join(rootDir, ".."))
-	} else if fileExists(filepath.Join(rootDir, "..", "..", "backend", "manage.py")) {
-		rootDir = filepath.Clean(filepath.Join(rootDir, "..", ".."))
-	}
+	if !isServerRunning(serverURL) {
+		startBackgroundServer(exeDir, rootDir)
 
-	backendDir := filepath.Join(rootDir, "backend")
-	runBat := filepath.Join(rootDir, "deploy", "windows", "run_server.bat")
-
-	serverURL := "https://127.0.0.1:19443/"
-
-	// Check if server is already running
-	fmt.Print("[1/3] بررسی وضعیت سرور گیم‌نت... ")
-	if isServerRunning(serverURL) {
-		fmt.Println("فعال است! (Server is running)")
-	} else {
-		fmt.Println("در حال راه‌اندازی...")
-
-		// Try starting Windows Service first
-		scCmd := exec.Command("sc", "start", "GameNetServer")
-		_ = scCmd.Run()
-
-		time.Sleep(1 * time.Second)
-
-		if !isServerRunning(serverURL) {
-			// Start server via run_server.bat in background
-			if fileExists(runBat) {
-				fmt.Println("[2/3] اجرای مستقیم سرور در پس‌زمینه...")
-				cmd := exec.Command("cmd.exe", "/c", "start", "/b", runBat)
-				cmd.Dir = backendDir
-				_ = cmd.Start()
-			} else {
-				// Fallback to python
-				pyExe := filepath.Join(backendDir, ".venv", "Scripts", "python.exe")
-				if !fileExists(pyExe) {
-					pyExe = "python"
-				}
-				cmd := exec.Command("cmd.exe", "/c", "start", "/b", pyExe, "-m", "uvicorn", "gamenet.asgi:application", "--host", "0.0.0.0", "--port", "19443")
-				cmd.Dir = backendDir
-				_ = cmd.Start()
-			}
-		}
-
-		// Wait for server to be responsive
-		fmt.Print("      در انتظار پاسخ‌گویی سرور")
-		started := false
-		for i := 0; i < 15; i++ {
-			time.Sleep(1 * time.Second)
-			fmt.Print(".")
+		ready := false
+		for i := 0; i < 40; i++ {
+			time.Sleep(500 * time.Millisecond)
 			if isServerRunning(serverURL) {
-				started = true
+				ready = true
 				break
 			}
 		}
-		fmt.Println()
 
-		if started {
-			fmt.Println("      سرور سالن با موفقیت راه‌اندازی شد!")
-		} else {
-			fmt.Println("      [هشدار] راه‌اندازی سرور طول کشید؛ با این حال پنل باز می‌شود...")
+		if !ready {
+			logPath := filepath.Join(rootDir, "backend", "data", "server.log")
+			showErrorDialog(
+				"بازی سرای رهرو - خطا در راه‌اندازی سرور",
+				fmt.Sprintf(
+					"سرور محلی روی پورت 19443 پاسخ نداد.\r\n\r\nلطفاً برنامه را با دسترسی Administrator اجرا کنید یا فایل گزارش زیر را بررسی نمایید:\r\n%s",
+					logPath,
+				),
+			)
+			return
 		}
 	}
 
-	// Open admin management dashboard
-	fmt.Println("[3/3] باز کردن پنل مدیریت سالن (10 سیستم)...")
-	openBrowserApp(serverURL)
+	openStandaloneApp(serverURL)
+}
 
-	fmt.Println()
-	fmt.Println("=======================================================")
-	fmt.Println("  پنل مدیریت سالن باز شد: " + serverURL)
-	fmt.Println("  - کلاینت‌ها (سیستم‌های ۱ تا ۱۰) به صورت خودکار متصل می‌شوند.")
-	fmt.Println("  - در صورت اتصال به اینترنت، اطلاعات با سرور آنلاین همگام می‌شود.")
-	fmt.Println("=======================================================")
-	fmt.Println()
-	fmt.Println("برای بستن این پنجره دکمه Enter را بزنید (سرور در پس‌زمینه به کار خود ادامه می‌دهد).")
-	var dummy string
-	fmt.Scanln(&dummy)
+func showErrorDialog(title, text string) {
+	u32 := windows.NewLazySystemDLL("user32.dll")
+	msgBox := u32.NewProc("MessageBoxW")
+	tPtr, _ := windows.UTF16PtrFromString(title)
+	mPtr, _ := windows.UTF16PtrFromString(text)
+	// MB_OK | MB_ICONERROR | MB_RTLREADING
+	_, _, _ = msgBox.Call(0, uintptr(unsafe.Pointer(mPtr)), uintptr(unsafe.Pointer(tPtr)), 0x00000010)
+}
+
+func findRootDir(startDir string) string {
+	dir := startDir
+	for i := 0; i < 4; i++ {
+		if fileExists(filepath.Join(dir, "backend", "manage.py")) {
+			return dir
+		}
+		parent := filepath.Dir(dir)
+		if parent == dir {
+			break
+		}
+		dir = parent
+	}
+	return startDir
 }
 
 func fileExists(path string) bool {
@@ -122,7 +101,7 @@ func isServerRunning(url string) bool {
 	}
 	client := &http.Client{
 		Transport: tr,
-		Timeout:   1200 * time.Millisecond,
+		Timeout:   1000 * time.Millisecond,
 	}
 	resp, err := client.Get(url)
 	if err != nil {
@@ -132,38 +111,154 @@ func isServerRunning(url string) bool {
 	return resp.StatusCode > 0
 }
 
-func openBrowserApp(url string) {
-	// 1. Try Microsoft Edge in standalone app window
-	edgePaths := []string{
+func startBackgroundServer(exeDir, rootDir string) {
+	// 1. Try starting Windows Service first if registered
+	scCmd := exec.Command("sc.exe", "start", "GameNetServer")
+	scCmd.SysProcAttr = &syscall.SysProcAttr{HideWindow: true, CreationFlags: windows.CREATE_NO_WINDOW}
+	if err := scCmd.Run(); err == nil {
+		for i := 0; i < 16; i++ {
+			time.Sleep(500 * time.Millisecond)
+			if isServerRunning(serverURL) {
+				return
+			}
+		}
+	}
+
+	// 2. Fallback: start bundled GameNet_Service.exe --foreground hidden
+	svcCandidates := []string{
+		filepath.Join(exeDir, "GameNet_Service.exe"),
+		filepath.Join(rootDir, "GameNet_Service.exe"),
+		filepath.Join(rootDir, "deploy", "windows", "GameNet_Service.exe"),
+	}
+	for _, svcExe := range svcCandidates {
+		if fileExists(svcExe) {
+			cmd := exec.Command(svcExe, "--foreground")
+			cmd.Dir = filepath.Dir(svcExe)
+			cmd.SysProcAttr = &syscall.SysProcAttr{
+				HideWindow:    true,
+				CreationFlags: windows.CREATE_NO_WINDOW | windows.DETACHED_PROCESS,
+			}
+			if err := cmd.Start(); err == nil {
+				return
+			}
+		}
+	}
+
+	// 3. Final fallback: direct bundled python execution
+	pyExe := filepath.Join(rootDir, "deploy", "windows", "python", "python.exe")
+	if !fileExists(pyExe) {
+		pyExe = filepath.Join(rootDir, "backend", "python", "python.exe")
+	}
+	if !fileExists(pyExe) {
+		pyExe = "python.exe"
+	}
+
+	cmd := exec.Command(
+		pyExe,
+		"-m", "uvicorn", "gamenet.asgi:application",
+		"--app-dir", filepath.Join(rootDir, "backend"),
+		"--host", "0.0.0.0", "--port", "19443",
+		"--ssl-keyfile", filepath.Join(rootDir, "dev", "certs", "edge.key"),
+		"--ssl-certfile", filepath.Join(rootDir, "dev", "certs", "edge.pem"),
+		"--ws", "websockets",
+	)
+	cmd.Dir = filepath.Join(rootDir, "backend")
+	cmd.Env = append(
+		os.Environ(),
+		"GAMENET_ROLE=edge",
+		"DJANGO_SETTINGS_MODULE=gamenet.settings.edge",
+		"PYTHONUTF8=1",
+		"CERTS="+filepath.Join(rootDir, "dev", "certs"),
+		"DJANGO_STATIC_ROOT="+filepath.Join(rootDir, ".artifacts", "static"),
+	)
+	cmd.SysProcAttr = &syscall.SysProcAttr{
+		HideWindow:    true,
+		CreationFlags: windows.CREATE_NO_WINDOW | windows.DETACHED_PROCESS,
+	}
+	_ = cmd.Start()
+}
+
+func isWebView2Available() bool {
+	const webView2Guid = `{F3017226-FE2A-4295-8BDF-00C3A9A7E4C5}`
+	checks := []struct {
+		root registry.Key
+		path string
+	}{
+		{registry.LOCAL_MACHINE, `SOFTWARE\WOW6432Node\Microsoft\EdgeUpdate\Clients\` + webView2Guid},
+		{registry.LOCAL_MACHINE, `SOFTWARE\Microsoft\EdgeUpdate\Clients\` + webView2Guid},
+		{registry.CURRENT_USER, `Software\Microsoft\EdgeUpdate\Clients\` + webView2Guid},
+	}
+	for _, c := range checks {
+		k, err := registry.OpenKey(c.root, c.path, registry.QUERY_VALUE)
+		if err == nil {
+			pv, _, err2 := k.GetStringValue("pv")
+			_ = k.Close()
+			if err2 == nil && strings.TrimSpace(pv) != "" {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+func openStandaloneApp(url string) {
+	dataDir := filepath.Join(os.Getenv("APPDATA"), "GameNet", "ServerProfile")
+	_ = os.MkdirAll(dataDir, 0755)
+
+	if isWebView2Available() {
+		w := webview2.NewWithOptions(webview2.WebViewOptions{
+			Debug:     false,
+			AutoFocus: true,
+			DataPath:  dataDir,
+			WindowOptions: webview2.WindowOptions{
+				Title:  "بازی سرای رهرو - پنل مدیریت سالن (GameNet Server)",
+				Width:  1366,
+				Height: 850,
+				Center: true,
+			},
+		})
+		if w != nil {
+			defer w.Destroy()
+			w.SetSize(1366, 850, webview2.HintNone)
+			w.Navigate(url)
+			w.Run()
+			return
+		}
+	}
+
+	// Fallback for Windows 10 LTSB/LTSC or older builds without WebView2 runtime:
+	// Launch in isolated borderless app window via Edge/Chrome
+	appArgs := []string{
+		"--app=" + url,
+		"--ignore-certificate-errors",
+		"--allow-insecure-localhost",
+		"--no-first-run",
+		"--user-data-dir=" + dataDir,
+	}
+	browserPaths := []string{
 		`C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe`,
 		`C:\Program Files\Microsoft\Edge\Application\msedge.exe`,
-		"msedge.exe",
-	}
-	for _, p := range edgePaths {
-		if strings.HasSuffix(p, ".exe") && (fileExists(p) || p == "msedge.exe") {
-			cmd := exec.Command(p, "--app="+url, "--ignore-certificate-errors", "--no-first-run")
-			if err := cmd.Start(); err == nil {
-				return
-			}
-		}
-	}
-
-	// 2. Try Google Chrome in standalone app window
-	chromePaths := []string{
 		`C:\Program Files\Google\Chrome\Application\chrome.exe`,
 		`C:\Program Files (x86)\Google\Chrome\Application\chrome.exe`,
-		os.Getenv("LOCALAPPDATA") + `\Google\Chrome\Application\chrome.exe`,
-		"chrome.exe",
 	}
-	for _, p := range chromePaths {
-		if strings.HasSuffix(p, ".exe") && (fileExists(p) || p == "chrome.exe") {
-			cmd := exec.Command(p, "--app="+url, "--ignore-certificate-errors", "--no-first-run")
+	for _, p := range browserPaths {
+		if fileExists(p) {
+			cmd := exec.Command(p, appArgs...)
 			if err := cmd.Start(); err == nil {
 				return
 			}
 		}
 	}
 
-	// 3. Fallback to default browser
-	_ = exec.Command("cmd.exe", "/c", "start", url).Start()
+	for _, name := range []string{"msedge.exe", "chrome.exe"} {
+		if path, err := exec.LookPath(name); err == nil {
+			cmd := exec.Command(path, appArgs...)
+			if err := cmd.Start(); err == nil {
+				return
+			}
+		}
+	}
+
+	// Final fallback to system default browser
+	_ = exec.Command("cmd.exe", "/c", "start", "", url).Start()
 }

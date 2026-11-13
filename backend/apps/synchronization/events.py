@@ -22,8 +22,10 @@ logger = logging.getLogger("gamenet.outbox")
 KNOWN_EVENT_TYPES = {
     "device.registered",
     "device.status_changed",
+    "device.updated",
     "device.deactivated",
     "device.command_result",
+    "device.code_created",
     "command.result",
     "config.applied",
     "edge.test",
@@ -38,6 +40,7 @@ KNOWN_EVENT_TYPES = {
     "customer_rate.updated",
     "ledger.entry_created",
     "session.started",
+    "session.updated",
     "session.ended",
 }
 
@@ -82,4 +85,16 @@ def emit(
         occurred_at=occurred_at or timezone.now(),
     )
     logger.debug("queued %s #%s %s", event_type, sequence, aggregate_id)
+
+    # Trigger immediate sync when the transaction commits
+    def _trigger_on_commit():
+        try:
+            from apps.synchronization.daemon import trigger_sync_now
+
+            trigger_sync_now()
+        except Exception:
+            pass
+
+    transaction.on_commit(_trigger_on_commit)
+
     return event

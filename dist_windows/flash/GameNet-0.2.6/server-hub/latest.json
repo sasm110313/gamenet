@@ -1,0 +1,7 @@
+{
+  "version": "0.2.6",
+  "url": "/static/updates/server/GameNet-Server-Update-0.2.6.zip",
+  "sha256": "c82e8f35d562c17b4615f21102b44a26a50de42307fb529b04235aa7fefb683d",
+  "mandatory": true,
+  "release_notes": "نسخه 0.2.6 سرور سالن — پایان فوری نشست‌های زامبی، ورود سریع گیمر، صفحه RDP، چیدمان فشرده کارت‌ها، ناوبری جمع‌وجور و رفع کندی"
+}

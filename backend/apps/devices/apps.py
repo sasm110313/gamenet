@@ -4,6 +4,9 @@ import logging
 import os
 from django.apps import AppConfig
 
+# Register the SQLite pragmas receiver as early as possible (no-op on PostgreSQL).
+from apps.core import sqlite_pragmas  # noqa: F401
+
 logger = logging.getLogger("gamenet.devices")
 
 
@@ -18,12 +21,20 @@ class DevicesConfig(AppConfig):
             cli_commands_to_skip = {
                 "migrate",
                 "makemigrations",
+                "showmigrations",
                 "collectstatic",
                 "createsuperuser",
+                "change_admin",
+                "check",
                 "shell",
+                "dbshell",
                 "test",
                 "edge_register",
+                "run_edge_worker",
                 "bootstrap_edge",
+                "inspectdb",
+                "dumpdata",
+                "loaddata",
             }
             if any(cmd in sys.argv for cmd in cli_commands_to_skip):
                 return

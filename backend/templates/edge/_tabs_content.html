@@ -1,0 +1,13 @@
+{% comment %}Games and announcements are both "what the client shows"; one content area, two tabs.{% endcomment %}
+<nav class="gn-section-tabs" aria-label="بخش محتوا و پیام‌ها">
+  <a href="{% url 'edge_games' %}" class="gn-section-tab {% if active == 'games' %}is-active{% endif %}"
+     {% if active == 'games' %}aria-current="page"{% endif %}>
+    <i class="ti ti-device-gamepad-2" aria-hidden="true"></i>
+    بازی‌ها و برنامه‌ها
+  </a>
+  <a href="{% url 'edge_announcements' %}" class="gn-section-tab {% if active == 'announcements' %}is-active{% endif %}"
+     {% if active == 'announcements' %}aria-current="page"{% endif %}>
+    <i class="ti ti-speakerphone" aria-hidden="true"></i>
+    اطلاعیه‌ها و پیام‌ها
+  </a>
+</nav>

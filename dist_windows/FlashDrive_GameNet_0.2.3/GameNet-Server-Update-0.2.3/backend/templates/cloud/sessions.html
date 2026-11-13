@@ -1,0 +1,101 @@
+{% extends "base.html" %}
+{% load gn %}
+
+{% block title %}نشست‌های بازی{% endblock %}
+{% block page_title %}نشست‌های بازی{% endblock %}
+{% block page_subtitle %}تاریخچه و وضعیت زندهٔ نشست‌ها، نوع محاسبه و سیاست قطع ارتباط{% endblock %}
+
+{% block topbar_status %}
+  <span class="gn-chip {% if sessions_active %}accent{% endif %}"><span class="dot"></span>{{ sessions_active }} نشست فعال</span>
+{% endblock %}
+
+{% block content %}
+<div class="gn-card mb-3">
+  <form method="get" class="gn-form-row">
+    <div class="flex-grow-1">
+      <label class="gn-label" for="cloudSessQ">مشتری، دستگاه یا شناسه</label>
+      <input id="cloudSessQ" class="gn-input" name="q" value="{{ q }}" placeholder="جستجو نام مشتری یا دستگاه…">
+    </div>
+    <div>
+      <label class="gn-label" for="cloudSessStatus">وضعیت</label>
+      <select id="cloudSessStatus" class="gn-select" name="status">
+        <option value="">همه وضعیت‌ها</option>
+        {% for value, label in statuses.choices %}
+          <option value="{{ value }}" {% if status == value %}selected{% endif %}>{{ label }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <button class="gn-btn" type="submit"><i class="ti ti-filter"></i> اعمال</button>
+  </form>
+</div>
+
+<div class="gn-card">
+  <div class="gn-table-wrap" tabindex="0" role="region" aria-label="فهرست نشست‌های بازی">
+    <table class="gn-table">
+      <thead>
+        <tr>
+          <th>مشتری</th>
+          <th>دستگاه</th>
+          <th>نوع / سیاست قطعی</th>
+          <th>زمان شروع</th>
+          <th>مدت مفید</th>
+          <th>هزینه</th>
+          <th>وضعیت</th>
+          <th>تعرفه ساعتی</th>
+          <th class="text-end">عملیات</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for session in sessions %}
+          <tr>
+            <td><a href="{% url 'cloud_customer_detail' session.customer.id %}" style="color: var(--gn-text); text-decoration: none; font-weight: 600;">{{ session.customer.full_name }}</a></td>
+            <td><a href="{% url 'cloud_device_detail' session.device.id %}" style="font-weight: 600;">{{ session.device.name }}</a></td>
+            <td style="font-size: 11.5px;">
+              <div><span class="gn-chip">{{ session.billing_mode|billing_mode_fa }}{% if session.planned_duration_minutes %} ({{ session.planned_duration_minutes }} د){% endif %}</span></div>
+              <div class="gn-muted mt-1">{{ session.disconnect_policy|disconnect_policy_fa }}</div>
+            </td>
+            <td class="num gn-muted">{{ session.started_at|date:"Y-m-d H:i" }}</td>
+            <td class="num">
+              {% if session.status == 'ACTIVE' %}
+                {% with elapsed=session.billable_elapsed_seconds %}
+                  <span class="baz-timer-badge" data-elapsed="{{ elapsed }}" data-paused="{% if session.paused_at %}1{% else %}0{% endif %}">
+                    <i class="ti ti-clock"></i> {{ elapsed|duration_hms }}{% if session.paused_at %} (متوقف){% endif %}
+                  </span>
+                {% endwith %}
+              {% elif session.elapsed_seconds is not None %}
+                {{ session.elapsed_seconds|duration_hms }}
+              {% else %}
+                —
+              {% endif %}
+            </td>
+            <td class="num fw-bold">{{ session.cost|default:0|toman }} تومان</td>
+            <td>
+              <span class="gn-status {{ session.status|status_tone }}"><span class="dot"></span>{{ session.status|status_fa }}</span>
+              {% if session.paused_at %}
+                <div><span class="gn-ortho-pill tone-warn mt-1">متوقف در قطعی</span></div>
+              {% endif %}
+            </td>
+            <td class="gn-muted">{{ session.tariff_name }}<div class="num" style="font-size: 11px">{{ session.hourly_rate|toman }} ت/ساعت</div></td>
+            <td class="text-end">
+              {% if session.status == 'ACTIVE' %}
+                <form method="post" action="{% url 'cloud_manage_session_stop' session.id %}">
+                  {% csrf_token %}
+                  {% uuid4 as request_id %}
+                  <input type="hidden" name="request_id" value="{{ request_id }}">
+                  <input type="hidden" name="reason" value="پایان از پنل">
+                  <input type="hidden" name="next" value="/sessions/">
+                  <button class="gn-btn sm danger" type="submit"><i class="ti ti-player-stop"></i> پایان نشست</button>
+                </form>
+              {% else %}
+                <span class="gn-muted">—</span>
+              {% endif %}
+            </td>
+          </tr>
+        {% empty %}
+          <tr><td colspan="9"><div class="gn-empty"><i class="ti ti-clock-off"></i>نشستی یافت نشد.</div></td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}

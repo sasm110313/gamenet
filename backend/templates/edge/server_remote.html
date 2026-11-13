@@ -1,0 +1,117 @@
+{% extends "base.html" %}
+{% load gn %}
+
+{% block title %}دسکتاپ سرور (RDP){% endblock %}
+{% block page_title %}دسکتاپ سرور سالن (RDP){% endblock %}
+{% block page_subtitle %}دسترسی Remote Desktop به خودِ سیستم سرور هاب — بدون نیاز به حضور فیزیکی{% endblock %}
+
+{% block content %}
+{% include "edge/_tabs_system.html" with active='remote' %}
+<div class="baz-dash">
+
+  <div class="baz-header mb-2">
+    <div class="baz-title-wrap">
+      <div class="baz-accent-bar"></div>
+      <div>
+        <h1 class="baz-title">اتصال به دسکتاپ سرور سالن</h1>
+        <p class="baz-subtitle">با فایل آماده .rdp از هر ویندوزی در شبکه به دسکتاپ همین سرور وصل شوید</p>
+      </div>
+    </div>
+    <div class="baz-header-actions flex-wrap">
+      {% if rdp.enabled == True %}
+        <span class="gn-chip ok"><span class="dot"></span>RDP فعال است</span>
+      {% elif rdp.enabled == False %}
+        <span class="gn-chip warn"><span class="dot"></span>RDP غیرفعال است</span>
+      {% else %}
+        <span class="gn-chip"><span class="dot"></span>وضعیت نامشخص</span>
+      {% endif %}
+      <a href="{% url 'edge_server_remote_file' %}" class="gn-btn primary sm">
+        <i class="ti ti-download"></i> دانلود فایل اتصال (.rdp)
+      </a>
+    </div>
+  </div>
+
+  <div class="gn-grid cols-2 mb-3">
+    <div class="gn-card">
+      <h6 class="mb-2"><i class="ti ti-network me-1"></i> مشخصات اتصال</h6>
+      <div class="mb-2">
+        <label class="gn-label">آدرس اتصال (LAN)</label>
+        <input class="gn-input num" dir="ltr" readonly value="{{ rdp_host }}:{{ rdp_port }}">
+      </div>
+      <div class="mb-2">
+        <label class="gn-label">نام سیستم</label>
+        <input class="gn-input" dir="ltr" readonly value="{{ server_hostname }}">
+      </div>
+      <div class="mb-3">
+        <label class="gn-label">دستور سریع در ویندوز (Win+R)</label>
+        <input class="gn-input" dir="ltr" readonly value="mstsc /v:{{ rdp_host }}:{{ rdp_port }}">
+      </div>
+
+      {% if rdp.supported %}
+        {% if rdp.enabled == False or rdp.enabled == None %}
+          <form method="post" action="{% url 'edge_server_remote_enable' %}" class="gn-inline-form"
+                data-gn-confirm="آیا از فعال‌سازی Remote Desktop روی سرور سالن مطمئنید؟ پورت 3389 در فایروال باز می‌شود.">
+            {% csrf_token %}
+            <button type="submit" class="gn-btn primary w-100 justify-content-center">
+              <i class="ti ti-toggle-right"></i> فعال‌سازی RDP روی این سرور
+            </button>
+          </form>
+        {% else %}
+          <div class="gn-alert success mb-0" style="font-size:12.5px;">
+            <i class="ti ti-shield-check"></i> RDP روی این سیستم فعال است و پورت {{ rdp_port }} آماده اتصال است.
+          </div>
+        {% endif %}
+      {% else %}
+        <div class="gn-alert warning mb-0" style="font-size:12.5px;">
+          <i class="ti ti-info-circle"></i> این قابلیت فقط روی نسخه ویندوزی سرور سالن در دسترس است.
+        </div>
+      {% endif %}
+    </div>
+
+    <div class="gn-card">
+      <h6 class="mb-2"><i class="ti ti-list-check me-1"></i> راهنمای اتصال</h6>
+      <ol class="gn-muted" style="font-size:12.5px; line-height:2; padding-inline-start:18px;">
+        <li>فایل <strong>.rdp</strong> را دانلود کنید و روی کامپیوتر ویندوزی خود باز کنید.</li>
+        <li>نام کاربری و رمز یک <strong>حساب ویندوزی همین سرور</strong> را وارد کنید.</li>
+        <li>این حساب باید عضو گروه <span dir="ltr" class="mono">Remote Desktop Users</span> باشد (حساب Administrator به‌صورت پیش‌فرض مجاز است).</li>
+        <li>اتصال از داخل سالن/LAN با آدرس بالا انجام می‌شود؛ برای دسترسی از خارج سالن از <strong>VPN/Tailscale</strong> استفاده کنید و پورت 3389 را روی اینترنت باز نکنید.</li>
+      </ol>
+      <div class="gn-alert warning mb-0 mt-2" style="font-size:12px;">
+        <i class="ti ti-alert-triangle"></i>
+        اگر سیستم سرور بدون رمز عبور باشد، ویندوز اجازه اتصال RDP نمی‌دهد. ابتدا یک رمز برای حساب ویندوز تنظیم کنید.
+      </div>
+    </div>
+  </div>
+
+  <div class="gn-card">
+    <h6 class="mb-2"><i class="ti ti-device-desktop me-1"></i> آدرس‌های شبکه این سرور</h6>
+    <div class="gn-table-wrap">
+      <table class="gn-table">
+        <thead>
+          <tr><th>آدرس</th><th>وضعیت</th></tr>
+        </thead>
+        <tbody>
+          {% for ip in rdp_ips %}
+            <tr>
+              <td class="mono" dir="ltr">{{ ip }}</td>
+              <td>
+                {% if ip == rdp_host %}
+                  <span class="gn-chip ok"><span class="dot"></span>آدرس پیشنهادی RDP</span>
+                {% else %}
+                  <span class="gn-chip">شبکه محلی</span>
+                {% endif %}
+              </td>
+            </tr>
+          {% empty %}
+            <tr><td colspan="2" class="gn-muted">آدرس شبکه‌ای شناسایی نشد.</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    <p class="gn-muted mt-2 mb-0" style="font-size:11.5px;">
+      در صورت تغییر IP سرور، فایل .rdp را دوباره دانلود کنید. این صفحه همیشه آدرس فعلی را نشان می‌دهد.
+    </p>
+  </div>
+
+</div>
+{% endblock %}
